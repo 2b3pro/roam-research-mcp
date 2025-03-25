@@ -1,0 +1,25 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - roamApiToken
+      - roamGraphName
+    properties:
+      roamApiToken:
+        type: string
+        description: Your Roam Research API token.
+      roamGraphName:
+        type: string
+        description: The name of your Roam graph.
+      memoriesTag:
+        type: string
+        default: "#[[LLM/Memories]]"
+        description: Tag used for memories, defaults to '#[[LLM/Memories]]'.
+  commandFunction:
+    # A function that produces the CLI command to start the MCP on stdio.
+    |-
+    (config) => ({command: 'node', args: ['build/index.js'], env: {ROAM_API_TOKEN: config.roamApiToken, ROAM_GRAPH_NAME: config.roamGraphName, MEMORIES_TAG: config.memoriesTag}})
