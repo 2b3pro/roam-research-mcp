@@ -4,12 +4,23 @@
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/github/license/2b3pro/roam-research-mcp)](https://github.com/2b3pro/roam-research-mcp/blob/main/LICENSE)
+[![smithery badge](https://smithery.ai/badge/roam-research-mcp)](https://smithery.ai/server/roam-research-mcp)
 
 A Model Context Protocol (MCP) server that provides comprehensive access to Roam Research's API functionality. This server enables AI assistants like Claude to interact with your Roam Research graph through a standardized interface. (A WORK-IN-PROGRESS, personal project not officially endorsed by Roam Research)
 
 <a href="https://glama.ai/mcp/servers/fzfznyaflu"><img width="380" height="200" src="https://glama.ai/mcp/servers/fzfznyaflu/badge" alt="Roam Research MCP server" /></a>
 
 ## Installation
+
+### Installing via Smithery
+
+To install Roam Research MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/roam-research-mcp):
+
+```bash
+npx -y @smithery/cli install roam-research-mcp --client claude
+```
+
+### Installing Manually
 
 You can install the package globally:
 
