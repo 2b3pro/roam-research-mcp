@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/2b3pro-roam-research-mcp-badge.png)](https://mseep.ai/app/2b3pro-roam-research-mcp)
+
 ![](./roam-research-mcp-image.jpeg)
 
 # Roam Research MCP Server
