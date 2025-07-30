@@ -1,6 +1,6 @@
 {
   "name": "roam-research-mcp",
-  "version": "0.30.7",
+  "version": "0.31.1",
   "description": "A Model Context Protocol (MCP) server for Roam Research API integration",
   "private": false,
   "repository": {
@@ -22,17 +22,17 @@
   "homepage": "https://github.com/2b3pro/roam-research-mcp#readme",
   "type": "module",
   "bin": {
-    "roam-research": "./build/index.js"
+    "roam-research": "./build/app.js"
   },
   "files": [
     "build"
   ],
   "scripts": {
-    "build": "tsc && cp Roam_Markdown_Cheatsheet.md build/Roam_Markdown_Cheatsheet.md && chmod 755 build/index.js",
+    "build": "tsc && cp Roam_Markdown_Cheatsheet.md build/Roam_Markdown_Cheatsheet.md && chmod 755 build/app.js",
     "clean": "rm -rf build",
     "watch": "tsc --watch",
-    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "start": "node build/index.js",
+    "inspector": "npx @modelcontextprotocol/inspector build/app.js",
+    "start": "node build/app.js",
     "prepublishOnly": "npm run clean && npm run build",
     "release:patch": "npm version patch && git push origin v$(node -p \"require('./package.json').version\")",
     "release:minor": "npm version minor && git push origin v$(node -p \"require('./package.json').version\")",
