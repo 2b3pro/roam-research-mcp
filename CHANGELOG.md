@@ -1,3 +1,10 @@
+v.0.31.0 (branch: hosted)
+
+- ADDED: Authentication for HTTP and SSE transports.
+  - Added an optional `MCP_SERVER_AUTH_TOKEN` environment variable to enable token-based authentication.
+  - Incoming requests to the HTTP and SSE servers are now validated for a `Bearer` token in the `Authorization` header.
+  - Updated `README.md` to document the new authentication feature.
+
 v.0.30.7
 
 - FIXED: `roam_create_outline` now prevents errors from invalid outline structures by enforcing that outlines must start at level 1 and that subsequent levels cannot increase by more than 1 at a time.

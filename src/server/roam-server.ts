@@ -12,7 +12,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, SSE_PORT } from '../config/environment.js';
+import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, MCP_SERVER_AUTH_TOKEN, SSE_PORT } from '../config/environment.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
 import { readFileSync } from 'node:fs';
@@ -57,6 +57,24 @@ export class RoamServer {
       throw new McpError(ErrorCode.InternalError, 'No tool schemas defined in src/tools/schemas.ts');
     }
     // console.log('RoamServer: Constructor finished.');
+  }
+
+  private authenticate(req: IncomingMessage): boolean {
+    if (!MCP_SERVER_AUTH_TOKEN) {
+      return true; // No token configured, so authentication passes
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return false;
+    }
+
+    const [scheme, token] = authHeader.split(' ');
+    if (scheme !== 'Bearer' || token !== MCP_SERVER_AUTH_TOKEN) {
+      return false;
+    }
+
+    return true;
   }
 
   // Refactored to accept a Server instance
@@ -382,6 +400,11 @@ export class RoamServer {
       // console.log('RoamServer: httpStreamTransport connected.');
 
       const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+        if (!this.authenticate(req)) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
         try {
           await httpStreamTransport.handleRequest(req, res);
         } catch (error) {
@@ -417,6 +440,11 @@ export class RoamServer {
       this.setupRequestHandlers(sseMcpServer);
 
       const sseHttpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+        if (!this.authenticate(req)) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
         const parseBody = (request: IncomingMessage): Promise<any> => {
           return new Promise((resolve, reject) => {
             let body = '';

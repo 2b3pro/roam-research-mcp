@@ -84,6 +84,28 @@ Alternatively, if you have a `.env` file in the project root (which is copied in
 docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 ```
 
+## Authentication
+
+To secure your server when exposing it to the internet, you can set the `MCP_SERVER_AUTH_TOKEN` environment variable. If this variable is set, all incoming requests to the HTTP and SSE servers must include a valid `Authorization` header.
+
+### Configuration
+
+Add the `MCP_SERVER_AUTH_TOKEN` to your `.env` file or your MCP client configuration:
+
+```
+MCP_SERVER_AUTH_TOKEN=your-secret-token
+```
+
+### Client-Side Usage
+
+When making requests to the server, include the token in the `Authorization` header:
+
+```
+Authorization: Bearer your-secret-token
+```
+
+Requests without a valid token will be rejected with a `401 Unauthorized` error. The `stdio` transport does not require authentication.
+
 ## To Test
 
 Run [MCP Inspector](https://github.com/modelcontextprotocol/inspector) after build using the provided npm script:
