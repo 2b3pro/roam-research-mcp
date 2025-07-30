@@ -48,7 +48,7 @@ if (!API_TOKEN || !GRAPH_NAME) {
   );
 }
 
-const HTTP_STREAM_PORT = process.env.HTTP_STREAM_PORT || '8088'; // Default to 8080
+const HTTP_STREAM_PORT = process.env.HTTP_STREAM_PORT || '443'; // Default to 8080
 const SSE_PORT = process.env.SSE_PORT || '8087'; // Default to 8087
 const MCP_SERVER_AUTH_TOKEN = process.env.MCP_SERVER_AUTH_TOKEN;
 
