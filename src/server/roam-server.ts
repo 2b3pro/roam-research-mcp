@@ -12,7 +12,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, MCP_SERVER_AUTH_TOKEN, SSE_PORT } from '../config/environment.js';
+import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, MCP_SERVER_AUTH_TOKEN } from '../config/environment.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
 import { readFileSync } from 'node:fs';
@@ -20,6 +20,7 @@ import { join, dirname } from 'node:path';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { findAvailablePort } from '../utils/net.js';
+import { CORS_ORIGIN } from '../config/environment.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -322,6 +323,17 @@ export class RoamServer {
             };
           }
 
+          case 'roam_fetch_block_with_children': {
+            const { block_uid, depth } = request.params.arguments as {
+              block_uid: string;
+              depth?: number;
+            };
+            const result = await this.toolHandlers.fetchBlockWithChildren(block_uid, depth);
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            };
+          }
+
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
@@ -405,6 +417,18 @@ export class RoamServer {
           res.end(JSON.stringify({ error: 'Unauthorized' }));
           return;
         }
+        // Set CORS headers
+        res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        // Handle preflight OPTIONS requests
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204); // No Content
+          res.end();
+          return;
+        }
+
         try {
           await httpStreamTransport.handleRequest(req, res);
         } catch (error) {
@@ -419,78 +443,6 @@ export class RoamServer {
       const availableHttpPort = await findAvailablePort(parseInt(HTTP_STREAM_PORT));
       httpServer.listen(availableHttpPort, () => {
         // // console.log(`MCP Roam Research server running HTTP Stream on port ${availableHttpPort}`);
-      });
-
-      // SSE Server setup
-      const sseMcpServer = new Server(
-        {
-          name: 'roam-research-sse', // Distinct name for SSE server
-          version: serverVersion,
-        },
-        {
-          capabilities: {
-            tools: {
-              ...Object.fromEntries(
-                (Object.keys(toolSchemas) as Array<keyof typeof toolSchemas>).map((toolName) => [toolName, toolSchemas[toolName].inputSchema])
-              ),
-            },
-          },
-        }
-      );
-      this.setupRequestHandlers(sseMcpServer);
-
-      const sseHttpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-        if (!this.authenticate(req)) {
-          res.writeHead(401, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Unauthorized' }));
-          return;
-        }
-        const parseBody = (request: IncomingMessage): Promise<any> => {
-          return new Promise((resolve, reject) => {
-            let body = '';
-            request.on('data', (chunk: Buffer) => {
-              body += chunk.toString();
-            });
-            request.on('end', () => {
-              try {
-                resolve(body ? JSON.parse(body) : {});
-              } catch (error) {
-                reject(error);
-              }
-            });
-            request.on('error', reject);
-          });
-        };
-
-        try {
-          if (req.url === '/sse') {
-            const sseTransport = new SSEServerTransport('/sse', res);
-            await sseMcpServer.connect(sseTransport);
-            if (req.method === 'GET') {
-              await sseTransport.start();
-            } else if (req.method === 'POST') {
-              const parsedBody = await parseBody(req);
-              await sseTransport.handlePostMessage(req, res, parsedBody);
-            } else {
-              res.writeHead(405, { 'Content-Type': 'text/plain' });
-              res.end('Method Not Allowed');
-            }
-          } else {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
-          }
-        } catch (error) {
-          // // console.error('SSE HTTP Server error:', error);
-          if (!res.headersSent) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Internal Server Error' }));
-          }
-        }
-      });
-
-      const availableSsePort = await findAvailablePort(parseInt(SSE_PORT));
-      sseHttpServer.listen(availableSsePort, () => {
-        // // console.log(`MCP Roam Research server running SSE on port ${availableSsePort}`);
       });
 
     } catch (error: unknown) {

@@ -462,5 +462,25 @@ export const toolSchemas = {
       },
       required: ['actions']
     }
-  }
+  },
+  roam_fetch_block_with_children: {
+    name: 'roam_fetch_block_with_children',
+    description: 'Fetch a block by its UID along with its hierarchical children down to a specified depth.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_uid: {
+          type: 'string',
+          description: 'The UID of the block to fetch.'
+        },
+        depth: {
+          type: 'integer',
+          description: 'Optional: The number of levels deep to fetch children. Defaults to 4.',
+          minimum: 0,
+          maximum: 10
+        }
+      },
+      required: ['block_uid']
+    },
+  },
 };

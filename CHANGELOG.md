@@ -1,9 +1,24 @@
+v.0.32.1 (branch: hosted)
+
+  - Updated with changes from main
+
 v.0.31.0 (branch: hosted)
 
 - ADDED: Authentication for HTTP and SSE transports.
   - Added an optional `MCP_SERVER_AUTH_TOKEN` environment variable to enable token-based authentication.
   - Incoming requests to the HTTP and SSE servers are now validated for a `Bearer` token in the `Authorization` header.
   - Updated `README.md` to document the new authentication feature.
+v.0.30.9
+
+- FIXED: `roam_fetch_block_with_children` tool to use a more efficient batched recursive approach, avoiding "Too many requests" and other API errors.
+- The tool now fetches all children of a block in a single query per level of depth, significantly reducing the number of API calls.
+
+v.0.30.8
+
+- ADDED: `roam_fetch_block_with_children` tool
+  - Fetches a block by its UID along with its hierarchical children down to a specified depth.
+  - Automatically handles Roam's `((UID))` formatting, extracting the raw UID for lookup.
+  - This tool provides a direct and structured way to retrieve specific block content and its nested hierarchy.
 
 v.0.30.7
 

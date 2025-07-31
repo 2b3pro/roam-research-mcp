@@ -1,11 +1,35 @@
-# docker-compose.yml
+version: '3.8'
+
 services:
   roam-mcp:
     image: roam-research-mcp
     build: .
+    container_name: roam-mcp
     ports:
-      - "3000:3000"
-      - "8087:8087"
-      - "8088:8088"
+      - "3010:3000"
+      - "8047:8087"
+      - "8048:8088"
     env_file:
       - .env
+    networks:
+      - n8n-net
+
+  # n8n:
+  #   image: n8nio/n8n:latest
+  #   container_name: n8n
+  #   ports:
+  #     - "5678:5678"
+  #   volumes:
+  #     - ~/.n8n:/home/node/.n8n
+  #   environment:
+  #     - N8N_BASIC_AUTH_ACTIVE=true
+  #     - N8N_BASIC_AUTH_USER=admin
+  #     - N8N_BASIC_AUTH_PASSWORD=hallelujah
+  #   depends_on:
+  #     - roam-mcp
+  #   networks:
+  #     - n8n-net
+
+networks:
+  n8n-net:
+    driver: bridge

@@ -130,21 +130,22 @@ The server provides powerful tools for interacting with Roam Research:
 - Enhanced documentation for Roam Tables in `Roam_Markdown_Cheatsheet.md` for clearer guidance on nesting.
 
 1. `roam_fetch_page_by_title`: Fetch page content by title. Returns content in the specified format.
-2. `roam_create_page`: Create new pages with optional content and headings.
-3. `roam_import_markdown`: Import nested markdown content under a specific block. (Internally uses `roam_process_batch_actions`.)
-4. `roam_add_todo`: Add a list of todo items to today's daily page. (Internally uses `roam_process_batch_actions`.)
-5. `roam_create_outline`: Add a structured outline to an existing page or block, with support for `children_view_type`. Best for simpler, sequential outlines. For complex nesting (e.g., tables), consider `roam_process_batch_actions`. If `page_title_uid` and `block_text_uid` are both blank, content defaults to the daily page. (Internally uses `roam_process_batch_actions`.)
-6. `roam_search_block_refs`: Search for block references within a page or across the entire graph.
-7. `roam_search_hierarchy`: Search for parent or child blocks in the block hierarchy.
-8. `roam_find_pages_modified_today`: Find pages that have been modified today (since midnight).
-9. `roam_search_by_text`: Search for blocks containing specific text.
-10. `roam_search_by_status`: Search for blocks with a specific status (TODO/DONE) across all pages or within a specific page.
-11. `roam_search_by_date`: Search for blocks or pages based on creation or modification dates.
-12. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby.
-13. `roam_remember`: Add a memory or piece of information to remember. (Internally uses `roam_process_batch_actions`.)
-14. `roam_recall`: Retrieve all stored memories.
-15. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools.
-16. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
+2. `roam_fetch_block_with_children`: Fetch a block by its UID along with its hierarchical children down to a specified depth. Automatically handles `((UID))` formatting.
+3. `roam_create_page`: Create new pages with optional content and headings.
+4. `roam_import_markdown`: Import nested markdown content under a specific block. (Internally uses `roam_process_batch_actions`.)
+5. `roam_add_todo`: Add a list of todo items to today's daily page. (Internally uses `roam_process_batch_actions`.)
+6. `roam_create_outline`: Add a structured outline to an existing page or block, with support for `children_view_type`. Best for simpler, sequential outlines. For complex nesting (e.g., tables), consider `roam_process_batch_actions`. If `page_title_uid` and `block_text_uid` are both blank, content defaults to the daily page. (Internally uses `roam_process_batch_actions`.)
+7. `roam_search_block_refs`: Search for block references within a page or across the entire graph.
+8. `roam_search_hierarchy`: Search for parent or child blocks in the block hierarchy.
+9. `roam_find_pages_modified_today`: Find pages that have been modified today (since midnight).
+10. `roam_search_by_text`: Search for blocks containing specific text.
+11. `roam_search_by_status`: Search for blocks with a specific status (TODO/DONE) across all pages or within a specific page.
+12. `roam_search_by_date`: Search for blocks or pages based on creation or modification dates.
+13. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby.
+14. `roam_remember`: Add a memory or piece of information to remember. (Internally uses `roam_process_batch_actions`.)
+15. `roam_recall`: Retrieve all stored memories.
+16. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools.
+17. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
 
 **Deprecated Tools**:
 The following tools have been deprecated as of `v.0.30.0` in favor of the more powerful and flexible `roam_process_batch_actions`:

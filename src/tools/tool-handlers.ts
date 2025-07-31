@@ -4,6 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { PageOperations } from './operations/pages.js';
 import { BlockOperations } from './operations/blocks.js';
+import { BlockRetrievalOperations } from './operations/block-retrieval.js'; // New import
 import { SearchOperations } from './operations/search/index.js';
 import { MemoryOperations } from './operations/memory.js';
 import { TodoOperations } from './operations/todos.js';
@@ -14,6 +15,7 @@ import { DatomicSearchHandlerImpl } from './operations/search/handlers.js';
 export class ToolHandlers {
   private pageOps: PageOperations;
   private blockOps: BlockOperations;
+  private blockRetrievalOps: BlockRetrievalOperations; // New instance
   private searchOps: SearchOperations;
   private memoryOps: MemoryOperations;
   private todoOps: TodoOperations;
@@ -23,6 +25,7 @@ export class ToolHandlers {
   constructor(private graph: Graph) {
     this.pageOps = new PageOperations(graph);
     this.blockOps = new BlockOperations(graph);
+    this.blockRetrievalOps = new BlockRetrievalOperations(graph); // Initialize new instance
     this.searchOps = new SearchOperations(graph);
     this.memoryOps = new MemoryOperations(graph);
     this.todoOps = new TodoOperations(graph);
@@ -44,6 +47,9 @@ export class ToolHandlers {
   }
 
   // Block Operations
+  async fetchBlockWithChildren(block_uid: string, depth?: number) {
+    return this.blockRetrievalOps.fetchBlockWithChildren(block_uid, depth);
+  }
 
   // Search Operations
   async searchByStatus(

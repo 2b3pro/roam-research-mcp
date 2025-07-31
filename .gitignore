@@ -7,6 +7,5 @@ src/test-queries.ts
 test-*
 src/.DS_Store
 .DS_Store
-package-lock.json
 .clinerules
 tests/test_read.sh
