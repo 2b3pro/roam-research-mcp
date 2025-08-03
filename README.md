@@ -73,6 +73,7 @@ docker run -p 3000:3000 -p 8088:8088 -p 8087:8087 \
   -e ROAM_API_TOKEN="your-api-token" \
   -e ROAM_GRAPH_NAME="your-graph-name" \
   -e MEMORIES_TAG="#[[LLM/Memories]]" \
+  -e CUSTOM_INSTRUCTIONS_PATH="/path/to/your/custom_instructions_file.md" \
   -e HTTP_STREAM_PORT="8088" \
   -e SSE_PORT="8087" \
   roam-research-mcp
@@ -128,6 +129,7 @@ The server provides powerful tools for interacting with Roam Research:
 - Efficient batch operations
 - Hierarchical outline creation
 - Enhanced documentation for Roam Tables in `Roam_Markdown_Cheatsheet.md` for clearer guidance on nesting.
+  - Custom instruction appended to the cheat sheet about your specific Roam notes.
 
 1. `roam_fetch_page_by_title`: Fetch page content by title. Returns content in the specified format.
 2. `roam_fetch_block_with_children`: Fetch a block by its UID along with its hierarchical children down to a specified depth. Automatically handles `((UID))` formatting.
@@ -264,6 +266,7 @@ This demonstrates moving a block from one location to another and simultaneously
    ROAM_API_TOKEN=your-api-token
    ROAM_GRAPH_NAME=your-graph-name
    MEMORIES_TAG='#[[LLM/Memories]]'
+   CUSTOM_INSTRUCTIONS_PATH='/path/to/your/custom_instructions_file.md'
    HTTP_STREAM_PORT=8088 # Or your desired port for HTTP Stream communication
    SSE_PORT=8087 # Or your desired port for SSE communication
    ```
@@ -284,6 +287,7 @@ This demonstrates moving a block from one location to another and simultaneously
            "ROAM_API_TOKEN": "your-api-token",
            "ROAM_GRAPH_NAME": "your-graph-name",
            "MEMORIES_TAG": "#[[LLM/Memories]]",
+           "CUSTOM_INSTRUCTIONS_PATH": "/path/to/your/custom_instructions_file.md",
            "HTTP_STREAM_PORT": "8088",
            "SSE_PORT": "8087"
          }
