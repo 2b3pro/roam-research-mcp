@@ -144,6 +144,17 @@ export class ToolHandlers {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const cheatsheetPath = path.join(__dirname, '../../Roam_Markdown_Cheatsheet.md');
-    return fs.readFileSync(cheatsheetPath, 'utf-8');
+    let cheatsheetContent = fs.readFileSync(cheatsheetPath, 'utf-8');
+
+    const customInstructionsPath = process.env.CUSTOM_INSTRUCTIONS_PATH;
+    if (customInstructionsPath && fs.existsSync(customInstructionsPath)) {
+      try {
+        const customInstructionsContent = fs.readFileSync(customInstructionsPath, 'utf-8');
+        cheatsheetContent += `\n\n${customInstructionsContent}`;
+      } catch (error) {
+        console.warn(`Could not read custom instructions file at ${customInstructionsPath}: ${error}`);
+      }
+    }
+    return cheatsheetContent;
   }
 }

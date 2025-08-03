@@ -326,7 +326,7 @@ export const toolSchemas = {
   },
   roam_markdown_cheatsheet: {
     name: 'roam_markdown_cheatsheet',
-    description: 'Provides the content of the Roam Markdown Cheatsheet resource.',
+    description: 'Provides the content of the Roam Markdown Cheatsheet resource, optionally concatenated with custom instructions if CUSTOM_INSTRUCTIONS_PATH is set.',
     inputSchema: {
       type: 'object',
       properties: {},

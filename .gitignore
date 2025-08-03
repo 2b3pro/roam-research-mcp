@@ -7,5 +7,6 @@ src/test-queries.ts
 test-*
 src/.DS_Store
 .DS_Store
-.clinerules
+.clinerules*
 tests/test_read.sh
+.roam/2b3-custom-instructions.md

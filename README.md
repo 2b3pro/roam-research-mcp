@@ -145,7 +145,8 @@ The server provides powerful tools for interacting with Roam Research:
 14. `roam_remember`: Add a memory or piece of information to remember. (Internally uses `roam_process_batch_actions`.)
 15. `roam_recall`: Retrieve all stored memories.
 16. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools.
-17. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
+17. `roam_markdown_cheatsheet`: Provides the content of the Roam Markdown Cheatsheet resource, optionally concatenated with custom instructions if `CUSTOM_INSTRUCTIONS_PATH` environment variable is set.
+18. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
 
 **Deprecated Tools**:
 The following tools have been deprecated as of `v.0.30.0` in favor of the more powerful and flexible `roam_process_batch_actions`:
