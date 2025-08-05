@@ -35,4 +35,11 @@ export interface OutlineItem {
   children_view_type?: 'bullet' | 'document' | 'numbered';
 }
 
+export interface NestedBlock {
+  uid: string;
+  text: string;
+  level: number;
+  children?: NestedBlock[];
+}
+
 export { RoamBlock };

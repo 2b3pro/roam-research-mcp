@@ -9,7 +9,7 @@ import {
   hasMarkdownTable,
   type BatchAction 
 } from '../../markdown-utils.js';
-import type { OutlineItem } from '../types/index.js';
+import type { OutlineItem, NestedBlock } from '../types/index.js';
 
 export class OutlineOperations {
   constructor(private graph: Graph) {}
@@ -28,12 +28,13 @@ export class OutlineOperations {
    *                         no matching block is found, a new block with that text will be created
    *                         on the page to serve as the parent. If a UID is provided and the block
    *                         is not found, an error will be thrown.
+   * @returns An object containing success status, page UID, parent UID, and a nested array of created block UIDs.
    */
   async createOutline(
     outline: Array<OutlineItem>,
     page_title_uid?: string,
     block_text_uid?: string
-  ) {
+  ): Promise<{ success: boolean; page_uid: string; parent_uid: string; created_uids: NestedBlock[] }> {
     // Validate input
     if (!Array.isArray(outline) || outline.length === 0) {
       throw new McpError(
@@ -249,6 +250,59 @@ export class OutlineOperations {
       return typeof str === 'string' && str.length === 9;
     };
 
+    // Helper function to fetch a block and its children recursively
+    const fetchBlockWithChildren = async (blockUid: string, level: number = 1): Promise<NestedBlock | null> => {
+      const query = `
+        [:find ?childUid ?childString ?childOrder
+         :in $ ?parentUid
+         :where
+         [?parentEntity :block/uid ?parentUid]
+         [?parentEntity :block/children ?childEntity] ; This ensures direct children
+         [?childEntity :block/uid ?childUid]
+         [?childEntity :block/string ?childString]
+         [?childEntity :block/order ?childOrder]]
+      `;
+
+      const blockQuery = `
+        [:find ?string
+         :in $ ?uid
+         :where
+         [?e :block/uid ?uid]
+         [?e :block/string ?string]]
+      `;
+
+      try {
+        const blockStringResult = await q(this.graph, blockQuery, [blockUid]) as [string][];
+        if (!blockStringResult || blockStringResult.length === 0) {
+          return null;
+        }
+        const text = blockStringResult[0][0];
+
+        const childrenResults = await q(this.graph, query, [blockUid]) as [string, string, number][];
+        const children: NestedBlock[] = [];
+
+        if (childrenResults && childrenResults.length > 0) {
+          // Sort children by order
+          const sortedChildren = childrenResults.sort((a, b) => a[2] - b[2]);
+
+          for (const childResult of sortedChildren) {
+            const childUid = childResult[0];
+            const nestedChild = await fetchBlockWithChildren(childUid, level + 1);
+            if (nestedChild) {
+              children.push(nestedChild);
+            }
+          }
+        }
+
+        return { uid: blockUid, text, level, children: children.length > 0 ? children : undefined };
+      } catch (error: any) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to fetch block with children for UID "${blockUid}": ${error.message}`
+        );
+      }
+    };
+
     // Get or create the parent block
     let targetParentUid: string;
     if (!block_text_uid) {
@@ -365,14 +419,33 @@ export class OutlineOperations {
       );
     }
 
-    // Get the created block UIDs
-    const createdUids = result?.created_uids || [];
+    // Post-creation verification to get actual UIDs for top-level blocks and their children
+    const createdBlocks: NestedBlock[] = [];
+    // Only query for top-level blocks (level 1) based on the original outline input
+    const topLevelOutlineItems = validOutline.filter(item => item.level === 1);
+
+    for (const item of topLevelOutlineItems) {
+      try {
+        // Assert item.text is a string as it's filtered earlier to be non-undefined and non-empty
+        const foundUid = await findBlockWithRetry(targetParentUid, item.text!);
+        if (foundUid) {
+          const nestedBlock = await fetchBlockWithChildren(foundUid);
+          if (nestedBlock) {
+            createdBlocks.push(nestedBlock);
+          }
+        }
+      } catch (error: any) {
+        // This is a warning because even if one block fails to fetch, others might succeed.
+        // The error will be logged but not re-thrown to allow partial success reporting.
+        // console.warn(`Could not fetch nested block for "${item.text}": ${error.message}`);
+      }
+    }
     
     return {
       success: true,
       page_uid: targetPageUid,
       parent_uid: targetParentUid,
-      created_uids: createdUids
+      created_uids: createdBlocks
     };
   }
 
