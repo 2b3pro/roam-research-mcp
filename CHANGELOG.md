@@ -6,6 +6,10 @@ v.0.35.1 - 2025-08-23 9:33
 
 v.0.35.0 - 2025-08-23 
 
+v.0.32.2
+
+- FIXED: `roam_create_outline` now correctly respects the order of top-level blocks.
+  - Changed the default insertion order for batch actions from 'first' to 'last' in `src/tools/operations/outline.ts` to ensure blocks are added in the intended sequence.
 v.0.32.1 (branch: hosted)
 
 v.0.31.0
@@ -17,7 +21,6 @@ v.0.31.0
   - Corrected the Datomic query used for fetching children to ensure only direct children are retrieved, resolving previous duplication and incorrect nesting issues.
   - Removed `console.log` and `console.warn` statements from `src/tools/operations/outline.ts` to adhere to MCP server stdio communication rules.
 - ADDED: `NestedBlock` interface in `src/tools/types/index.ts` to represent the hierarchical structure of created blocks.
-
 
 v.0.31.0 (branch: hosted)
 

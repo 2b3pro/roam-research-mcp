@@ -385,7 +385,7 @@ export class OutlineOperations {
       }));
 
       // Convert nodes to batch actions
-      const actions = convertToRoamActions(nodes, targetParentUid, 'first');
+      const actions = convertToRoamActions(nodes, targetParentUid, 'last');
 
       if (actions.length === 0) {
         throw new McpError(
