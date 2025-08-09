@@ -111,7 +111,7 @@ The server provides powerful tools for interacting with Roam Research:
 
 1. `roam_fetch_page_by_title`: Fetch page content by title. Returns content in the specified format.
 2. `roam_fetch_block_with_children`: Fetch a block by its UID along with its hierarchical children down to a specified depth. Automatically handles `((UID))` formatting.
-3. `roam_create_page`: Create new pages with optional content and headings.
+3. `roam_create_page`: Create new pages with optional content and headings. Now creates a block on the daily page linking to the newly created page.
 4. `roam_import_markdown`: Import nested markdown content under a specific block. (Internally uses `roam_process_batch_actions`.)
 5. `roam_add_todo`: Add a list of todo items to today's daily page. (Internally uses `roam_process_batch_actions`.)
 6. `roam_create_outline`: Add a structured outline to an existing page or block, with support for `children_view_type`. Best for simpler, sequential outlines. For complex nesting (e.g., tables), consider `roam_process_batch_actions`. If `page_title_uid` and `block_text_uid` are both blank, content defaults to the daily page. (Internally uses `roam_process_batch_actions`.)

@@ -10,6 +10,17 @@ import {
   hasMarkdownTable 
 } from '../../markdown-utils.js';
 
+// Helper to get ordinal suffix for dates
+function getOrdinalSuffix(day: number): string {
+    if (day > 3 && day < 21) return 'th'; // Handles 11th, 12th, 13th
+    switch (day % 10) {
+        case 1: return 'st';
+        case 2: return 'nd';
+        case 3: return 'rd';
+        default: return 'th';
+    }
+}
+
 export class PageOperations {
   constructor(private graph: Graph) {}
 
@@ -158,6 +169,38 @@ export class PageOperations {
       }
     }
     
+    // Add a link to the created page on today's daily page
+    try {
+      const today = new Date();
+      const day = today.getDate();
+      const month = today.toLocaleString('en-US', { month: 'long' });
+      const year = today.getFullYear();
+      const formattedTodayTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
+
+      const dailyPageQuery = `[:find ?uid .
+                              :where [?e :node/title "${formattedTodayTitle}"]
+                                     [?e :block/uid ?uid]]`;
+      const dailyPageResult = await q(this.graph, dailyPageQuery, []);
+      const dailyPageUid = dailyPageResult ? String(dailyPageResult) : null;
+
+      if (dailyPageUid) {
+        await createBlock(this.graph, {
+          action: 'create-block',
+          block: {
+            string: `Created page: [[${pageTitle}]]`
+          },
+          location: {
+            'parent-uid': dailyPageUid,
+            order: 'last'
+          }
+        });
+      } else {
+        console.warn(`Could not find daily page with title: ${formattedTodayTitle}. Link to created page not added.`);
+      }
+    } catch (error) {
+      console.error(`Failed to add link to daily page: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
     return { success: true, uid: pageUid };
   }
 

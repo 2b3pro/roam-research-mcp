@@ -10,6 +10,11 @@ v.0.32.1
   - Removed `console.log` and `console.warn` statements from `src/tools/operations/outline.ts` to adhere to MCP server stdio communication rules.
 - ADDED: `NestedBlock` interface in `src/tools/types/index.ts` to represent the hierarchical structure of created blocks.
 
+v.0.32.3
+
+- ENHANCED: `roam_create_page` tool
+  - Now creates a block on the daily page linking to the newly created page, formatted as `Create [[Page Title]]`.
+
 v.0.32.2
 
 - FIXED: `roam_create_outline` now correctly respects the order of top-level blocks.
