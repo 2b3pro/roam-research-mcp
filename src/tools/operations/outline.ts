@@ -378,11 +378,14 @@ export class OutlineOperations {
       // Parse markdown into hierarchical structure
       // We pass the original OutlineItem properties (heading, children_view_type)
       // along with the parsed content to the nodes.
-      const nodes = parseMarkdown(convertedContent).map((node, index) => ({
-        ...node,
-        ...(validOutline[index].heading && { heading_level: validOutline[index].heading }),
-        ...(validOutline[index].children_view_type && { children_view_type: validOutline[index].children_view_type })
-      }));
+      const nodes = parseMarkdown(convertedContent).map((node, index) => {
+        const outlineItem = validOutline[index];
+        return {
+          ...node,
+          ...(outlineItem?.heading && { heading_level: outlineItem.heading }),
+          ...(outlineItem?.children_view_type && { children_view_type: outlineItem.children_view_type })
+        };
+      });
 
       // Convert nodes to batch actions
       const actions = convertToRoamActions(nodes, targetParentUid, 'last');
