@@ -122,10 +122,25 @@ function convertToRoamMarkdown(text: string): string {
 }
 
 function parseMarkdown(markdown: string): MarkdownNode[] {
-  // Convert markdown syntax first
   markdown = convertToRoamMarkdown(markdown);
   
-  const lines = markdown.split('\n');
+  const originalLines = markdown.split('\n');
+  const processedLines: string[] = [];
+
+  // Pre-process lines to handle mid-line code blocks without splice
+  for (const line of originalLines) {
+    const trimmedLine = line.trimEnd();
+    const codeStartIndex = trimmedLine.indexOf('```');
+    
+    if (codeStartIndex > 0) {
+      const indentationWhitespace = line.match(/^\s*/)?.[0] ?? '';
+      processedLines.push(indentationWhitespace + trimmedLine.substring(0, codeStartIndex));
+      processedLines.push(indentationWhitespace + trimmedLine.substring(codeStartIndex));
+    } else {
+      processedLines.push(line);
+    }
+  }
+
   const rootNodes: MarkdownNode[] = [];
   const stack: MarkdownNode[] = [];
   let inCodeBlock = false;
@@ -133,69 +148,52 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
   let codeBlockIndentation = 0;
   let codeBlockParentLevel = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = 0; i < processedLines.length; i++) {
+    const line = processedLines[i];
     const trimmedLine = line.trimEnd();
     
-    // Handle code blocks
     if (trimmedLine.match(/^(\s*)```/)) {
       if (!inCodeBlock) {
-        // Start of code block
         inCodeBlock = true;
-        // Store the opening backticks without indentation
         codeBlockContent = trimmedLine.trimStart() + '\n';
         codeBlockIndentation = line.match(/^\s*/)?.[0].length ?? 0;
-        // Save current parent level
         codeBlockParentLevel = stack.length;
       } else {
-        // End of code block
         inCodeBlock = false;
-        // Add closing backticks without indentation
         codeBlockContent += trimmedLine.trimStart();
         
-        // Process the code block content to fix indentation
-        const lines = codeBlockContent.split('\n');
+        const linesInCodeBlock = codeBlockContent.split('\n');
         
-        // Find the first non-empty code line to determine base indentation
         let baseIndentation = '';
-        let codeStartIndex = -1;
-        for (let i = 1; i < lines.length - 1; i++) {
-          const line = lines[i];
-          if (line.trim().length > 0) {
-            const indentMatch = line.match(/^[\t ]*/);
+        for (let j = 1; j < linesInCodeBlock.length - 1; j++) {
+          const codeLine = linesInCodeBlock[j];
+          if (codeLine.trim().length > 0) {
+            const indentMatch = codeLine.match(/^[\t ]*/);
             if (indentMatch) {
               baseIndentation = indentMatch[0];
-              codeStartIndex = i;
               break;
             }
           }
         }
 
-        // Process lines maintaining relative indentation from the first code line
-        const processedLines = lines.map((line, index) => {
-          // Keep backticks as is
-          if (index === 0 || index === lines.length - 1) return line.trimStart();
+        const processedCodeLines = linesInCodeBlock.map((codeLine, index) => {
+          if (index === 0 || index === linesInCodeBlock.length - 1) return codeLine.trimStart();
           
-          // Empty lines should be completely trimmed
-          if (line.trim().length === 0) return '';
+          if (codeLine.trim().length === 0) return '';
           
-          // For code lines, remove only the base indentation
-          if (line.startsWith(baseIndentation)) {
-            return line.slice(baseIndentation.length);
+          if (codeLine.startsWith(baseIndentation)) {
+            return codeLine.slice(baseIndentation.length);
           }
-          // If line has less indentation than base, trim all leading whitespace
-          return line.trimStart();
+          return codeLine.trimStart();
         });
         
-        // Create node for the entire code block
         const level = Math.floor(codeBlockIndentation / 2);
         const node: MarkdownNode = {
-          content: processedLines.join('\n'),
+          content: processedCodeLines.join('\n'),
           level,
           children: []
         };
 
-        // Restore to code block's parent level
         while (stack.length > codeBlockParentLevel) {
           stack.pop();
         }
@@ -224,42 +222,35 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
       continue;
     }
 
-    // Skip truly empty lines (no spaces)
     if (trimmedLine === '') {
       continue;
     }
 
-    // Calculate indentation level (2 spaces = 1 level)
     const indentation = line.match(/^\s*/)?.[0].length ?? 0;
     let level = Math.floor(indentation / 2);
 
     let contentToParse: string;
     const bulletMatch = trimmedLine.match(/^(\s*)[-*+]\s+/);
     if (bulletMatch) {
-      // If it's a bullet point, adjust level based on bullet indentation
       level = Math.floor(bulletMatch[1].length / 2);
-      contentToParse = trimmedLine.substring(bulletMatch[0].length); // Content after bullet
+      contentToParse = trimmedLine.substring(bulletMatch[0].length);
     } else {
-      contentToParse = trimmedLine; // No bullet, use trimmed line
+      contentToParse = trimmedLine;
     }
     
-    // Now, from the content after bullet/initial indentation, check for heading
     const { heading_level, content: finalContent } = parseMarkdownHeadingLevel(contentToParse);
     
-    // Create node
     const node: MarkdownNode = {
-      content: finalContent, // Use content after heading parsing
-      level, // Use level derived from bullet/indentation
+      content: finalContent,
+      level,
       ...(heading_level > 0 && { heading_level }),
       children: []
     };
 
-    // Pop stack until we find the parent level
     while (stack.length > level) {
       stack.pop();
     }
     
-    // Add to appropriate parent
     if (level === 0 || !stack[level - 1]) {
       rootNodes.push(node);
       stack[0] = node;
