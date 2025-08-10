@@ -169,8 +169,6 @@ export class OutlineOperations {
         // Exponential backoff
         const delay = initialDelay * Math.pow(2, retry);
         await new Promise(resolve => setTimeout(resolve, delay));
-        
-        console.log(`Retry ${retry + 1}/${maxRetries} finding block "${blockString}" under "${pageUid}"`);
       }
 
       throw new McpError(
@@ -225,7 +223,7 @@ export class OutlineOperations {
             return await findBlockWithRetry(parentUid, content);
           } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            console.log(`Failed to find block on attempt ${retry + 1}: ${errorMessage}`);
+            // console.log(`Failed to find block on attempt ${retry + 1}: ${errorMessage}`); // Removed console.log
             if (retry === maxRetries - 1) throw error;
           }
         }
@@ -239,7 +237,7 @@ export class OutlineOperations {
         if (isRetry) throw error;
 
         // Otherwise, try one more time with a clean slate
-        console.log(`Retrying block creation for "${content}" with fresh attempt`);
+        // console.log(`Retrying block creation for "${content}" with fresh attempt`); // Removed console.log
         await new Promise(resolve => setTimeout(resolve, initialDelay * 2));
         return createAndVerifyBlock(content, parentUid, maxRetries, initialDelay, true);
       }
@@ -368,7 +366,9 @@ export class OutlineOperations {
           const indent = '  '.repeat(item.level - 1);
           // If the item text starts with a markdown heading (e.g., #, ##, ###),
           // treat it as a direct heading without adding a bullet or outline indentation.
-          return `${indent}- ${item.text?.trim()}`;
+          // NEW CHANGE: Handle standalone code blocks - do not prepend bullet
+          const isCodeBlock = item.text?.startsWith('```') && item.text.endsWith('```') && item.text.includes('\n');
+          return isCodeBlock ? `${indent}${item.text?.trim()}` : `${indent}- ${item.text?.trim()}`;
         })
         .join('\n');
 
