@@ -1,4 +1,4 @@
-import type { 
+import type {
   RoamCreateBlock,
   RoamCreatePage,
   RoamUpdateBlock,
@@ -7,12 +7,12 @@ import type {
   RoamMoveBlock
 } from '@roam-research/roam-api-sdk';
 
-export type BatchAction = 
-  | RoamCreateBlock 
-  | RoamCreatePage 
-  | RoamUpdateBlock 
-  | RoamDeleteBlock 
-  | RoamDeletePage 
+export type BatchAction =
+  | RoamCreateBlock
+  | RoamCreatePage
+  | RoamUpdateBlock
+  | RoamDeleteBlock
+  | RoamDeletePage
   | RoamMoveBlock;
 
 interface MarkdownNode {
@@ -46,7 +46,7 @@ function convertTableToRoamFormat(text: string) {
 
   const rows = lines
     .filter((_, index) => index !== 1)
-    .map(line => 
+    .map(line =>
       line.trim()
         .replace(/^\||\|$/g, '')
         .split('|')
@@ -54,13 +54,13 @@ function convertTableToRoamFormat(text: string) {
     );
 
   let roamTable = '{{[[table]]}}\n';
-  
+
   // First row becomes column headers
   const headers = rows[0];
   for (let i = 0; i < headers.length; i++) {
     roamTable += `${'  '.repeat(i + 1)}- ${headers[i]}\n`;
   }
-  
+
   // Remaining rows become nested under each column
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex++) {
     const row = rows[rowIndex];
@@ -75,11 +75,11 @@ function convertTableToRoamFormat(text: string) {
 function convertAllTables(text: string) {
   return text.replaceAll(
     /(^\|([^|]+\|)+\s*$\n\|(\s*:?-+:?\s*\|)+\s*$\n(\|([^|]+\|)+\s*$\n*)+)/gm,
-          (match) => {
+    (match) => {
       return '\n' + convertTableToRoamFormat(match) + '\n';
-          }
-        );
-      }
+    }
+  );
+}
 
 /**
  * Parse markdown heading syntax (e.g. "### Heading") and return the heading level (1-3) and content.
@@ -103,27 +103,27 @@ function parseMarkdownHeadingLevel(text: string): { heading_level: number; conte
 function convertToRoamMarkdown(text: string): string {
   // Handle double asterisks/underscores (bold)
   text = text.replace(/\*\*(.+?)\*\*/g, '**$1**');  // Preserve double asterisks
-  
+
   // Handle single asterisks/underscores (italic)
   text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '__$1__');  // Single asterisk to double underscore
   text = text.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '__$1__');        // Single underscore to double underscore
-  
+
   // Handle highlights
   text = text.replace(/==(.+?)==/g, '^^$1^^');
-  
+
   // Convert tasks
   text = text.replace(/- \[ \]/g, '- {{[[TODO]]}}');
   text = text.replace(/- \[x\]/g, '- {{[[DONE]]}}');
-  
+
   // Convert tables
   text = convertAllTables(text);
-  
+
   return text;
 }
 
 function parseMarkdown(markdown: string): MarkdownNode[] {
   markdown = convertToRoamMarkdown(markdown);
-  
+
   const originalLines = markdown.split('\n');
   const processedLines: string[] = [];
 
@@ -131,7 +131,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
   for (const line of originalLines) {
     const trimmedLine = line.trimEnd();
     const codeStartIndex = trimmedLine.indexOf('```');
-    
+
     if (codeStartIndex > 0) {
       const indentationWhitespace = line.match(/^\s*/)?.[0] ?? '';
       processedLines.push(indentationWhitespace + trimmedLine.substring(0, codeStartIndex));
@@ -151,7 +151,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
   for (let i = 0; i < processedLines.length; i++) {
     const line = processedLines[i];
     const trimmedLine = line.trimEnd();
-    
+
     if (trimmedLine.match(/^(\s*)```/)) {
       if (!inCodeBlock) {
         inCodeBlock = true;
@@ -161,9 +161,9 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
       } else {
         inCodeBlock = false;
         codeBlockContent += trimmedLine.trimStart();
-        
+
         const linesInCodeBlock = codeBlockContent.split('\n');
-        
+
         let baseIndentation = '';
         for (let j = 1; j < linesInCodeBlock.length - 1; j++) {
           const codeLine = linesInCodeBlock[j];
@@ -178,15 +178,15 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
 
         const processedCodeLines = linesInCodeBlock.map((codeLine, index) => {
           if (index === 0 || index === linesInCodeBlock.length - 1) return codeLine.trimStart();
-          
+
           if (codeLine.trim().length === 0) return '';
-          
+
           if (codeLine.startsWith(baseIndentation)) {
             return codeLine.slice(baseIndentation.length);
           }
           return codeLine.trimStart();
         });
-        
+
         const level = Math.floor(codeBlockIndentation / 2);
         const node: MarkdownNode = {
           content: processedCodeLines.join('\n'),
@@ -211,7 +211,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
           }
           stack[level] = node;
         }
-        
+
         codeBlockContent = '';
       }
       continue;
@@ -237,9 +237,9 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     } else {
       contentToParse = trimmedLine;
     }
-    
+
     const { heading_level, content: finalContent } = parseMarkdownHeadingLevel(contentToParse);
-    
+
     const node: MarkdownNode = {
       content: finalContent,
       level,
@@ -250,7 +250,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     while (stack.length > level) {
       stack.pop();
     }
-    
+
     if (level === 0 || !stack[level - 1]) {
       rootNodes.push(node);
       stack[0] = node;
@@ -336,7 +336,7 @@ function convertNodesToBlocks(nodes: MarkdownNode[]): BlockInfo[] {
 }
 
 function convertToRoamActions(
-  nodes: MarkdownNode[], 
+  nodes: MarkdownNode[],
   parentUid: string,
   order: 'first' | 'last' | number = 'last'
 ): BatchAction[] {
@@ -346,13 +346,14 @@ function convertToRoamActions(
 
   // Helper function to recursively create actions
   function createBlockActions(blocks: BlockInfo[], parentUid: string, order: 'first' | 'last' | number): void {
-    for (const block of blocks) {
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
       // Create the current block
       const action: RoamCreateBlock = {
         action: 'create-block',
         location: {
           'parent-uid': parentUid,
-          order
+          order: typeof order === 'number' ? order + i : i
         },
         block: {
           uid: block.uid,
@@ -361,7 +362,7 @@ function convertToRoamActions(
           ...(block.children_view_type && { 'children-view-type': block.children_view_type })
         }
       };
-      
+
       actions.push(action);
 
       // Create child blocks if any
@@ -373,7 +374,7 @@ function convertToRoamActions(
 
   // Create all block actions
   createBlockActions(blocks, parentUid, order);
-  
+
   return actions;
 }
 

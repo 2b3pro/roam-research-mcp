@@ -21,7 +21,7 @@ export interface BlockUpdateResult {
 export interface BlockUpdate {
   block_uid: string;
   content?: string;
-  transform?: { 
+  transform?: {
     find: string;
     replace: string;
     global?: boolean;
@@ -39,6 +39,7 @@ export interface NestedBlock {
   uid: string;
   text: string;
   level: number;
+  order: number;
   children?: NestedBlock[];
 }
 

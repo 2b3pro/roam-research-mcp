@@ -1,5 +1,13 @@
 # Changelog
 
+v.0.35.0
+
+- ENHANCED: `roam_import_markdown` tool
+  - Now returns a nested object structure for `created_uids`, reflecting the hierarchy of the imported content, including `uid`, `text`, `order`, and `children`.
+  - If a `parent_string` is provided and the block does not exist, it will be created automatically.
+- FIXED: Block ordering issue in `roam_import_markdown` and `roam_create_outline`. Nested outlines are now created in the correct order.
+- FIXED: Duplication issue in the response of `roam_fetch_block_with_children`.
+
 v.0.32.4
 
 - FIXED: Memory allocation issue (`FATAL ERROR: invalid array length Allocation failed - JavaScript heap out of memory`)

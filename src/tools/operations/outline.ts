@@ -1,18 +1,236 @@
 import { Graph, q, createPage, createBlock, batchActions } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { formatRoamDate } from '../../utils/helpers.js';
-import { capitalizeWords } from '../helpers/text.js';
-import { 
-  parseMarkdown, 
+import { capitalizeWords, getNestedUids, getNestedUidsByText } from '../helpers/text.js';
+import {
+  parseMarkdown,
   convertToRoamActions,
   convertToRoamMarkdown,
   hasMarkdownTable,
-  type BatchAction 
+  type BatchAction
 } from '../../markdown-utils.js';
 import type { OutlineItem, NestedBlock } from '../types/index.js';
 
 export class OutlineOperations {
-  constructor(private graph: Graph) {}
+  constructor(private graph: Graph) { }
+
+  /**
+   * Helper function to find block with improved relationship checks
+   */
+  private async findBlockWithRetry(pageUid: string, blockString: string, maxRetries = 5, initialDelay = 1000): Promise<string> {
+    // Try multiple query strategies
+    const queries = [
+      // Strategy 1: Direct page and string match
+      `[:find ?b-uid ?order
+          :where [?p :block/uid "${pageUid}"]
+                 [?b :block/page ?p]
+                 [?b :block/string "${blockString}"]
+                 [?b :block/order ?order]
+                 [?b :block/uid ?b-uid]]`,
+
+      // Strategy 2: Parent-child relationship
+      `[:find ?b-uid ?order
+          :where [?p :block/uid "${pageUid}"]
+                 [?b :block/parents ?p]
+                 [?b :block/string "${blockString}"]
+                 [?b :block/order ?order]
+                 [?b :block/uid ?b-uid]]`,
+
+      // Strategy 3: Broader page relationship
+      `[:find ?b-uid ?order
+          :where [?p :block/uid "${pageUid}"]
+                 [?b :block/page ?page]
+                 [?p :block/page ?page]
+                 [?b :block/string "${blockString}"]
+                 [?b :block/order ?order]
+                 [?b :block/uid ?b-uid]]`
+    ];
+
+    for (let retry = 0; retry < maxRetries; retry++) {
+      // Try each query strategy
+      for (const queryStr of queries) {
+        const blockResults = await q(this.graph, queryStr, []) as [string, number][];
+        if (blockResults && blockResults.length > 0) {
+          // Use the most recently created block
+          const sorted = blockResults.sort((a, b) => b[1] - a[1]);
+          return sorted[0][0];
+        }
+      }
+
+      // Exponential backoff
+      const delay = initialDelay * Math.pow(2, retry);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Failed to find block "${blockString}" under page "${pageUid}" after trying multiple strategies`
+    );
+  };
+
+  /**
+   * Helper function to create and verify block with improved error handling
+   */
+  private async createAndVerifyBlock(
+    content: string,
+    parentUid: string,
+    maxRetries = 5,
+    initialDelay = 1000,
+    isRetry = false
+  ): Promise<string> {
+    try {
+      // Initial delay before any operations
+      if (!isRetry) {
+        await new Promise(resolve => setTimeout(resolve, initialDelay));
+      }
+
+      for (let retry = 0; retry < maxRetries; retry++) {
+        console.log(`Attempt ${retry + 1}/${maxRetries} to create block "${content}" under "${parentUid}"`);
+
+        // Create block using batchActions
+        const batchResult = await batchActions(this.graph, {
+          action: 'batch-actions',
+          actions: [{
+            action: 'create-block',
+            location: {
+              'parent-uid': parentUid,
+              order: 'last'
+            },
+            block: { string: content }
+          }]
+        });
+
+        if (!batchResult) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to create block "${content}" via batch action`
+          );
+        }
+
+        // Wait with exponential backoff
+        const delay = initialDelay * Math.pow(2, retry);
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        try {
+          // Try to find the block using our improved findBlockWithRetry
+          return await this.findBlockWithRetry(parentUid, content);
+        } catch (error: any) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          // console.log(`Failed to find block on attempt ${retry + 1}: ${errorMessage}`); // Removed console.log
+          if (retry === maxRetries - 1) throw error;
+        }
+      }
+
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to create and verify block "${content}" after ${maxRetries} attempts`
+      );
+    } catch (error) {
+      // If this is already a retry, throw the error
+      if (isRetry) throw error;
+
+      // Otherwise, try one more time with a clean slate
+      // console.log(`Retrying block creation for "${content}" with fresh attempt`); // Removed console.log
+      await new Promise(resolve => setTimeout(resolve, initialDelay * 2));
+      return this.createAndVerifyBlock(content, parentUid, maxRetries, initialDelay, true);
+    }
+  };
+
+  /**
+   * Helper function to check if string is a valid Roam UID (9 characters)
+   */
+  private isValidUid = (str: string): boolean => {
+    return typeof str === 'string' && str.length === 9;
+  };
+
+  /**
+   * Helper function to fetch a block and its children recursively
+   */
+  private async fetchBlockWithChildren(blockUid: string, level: number = 1): Promise<NestedBlock | null> {
+    const query = `
+        [:find ?childUid ?childString ?childOrder
+         :in $ ?parentUid
+         :where
+         [?parentEntity :block/uid ?parentUid]
+         [?parentEntity :block/children ?childEntity] ; This ensures direct children
+         [?childEntity :block/uid ?childUid]
+         [?childEntity :block/string ?childString]
+         [?childEntity :block/order ?childOrder]]
+      `;
+
+    const blockQuery = `
+        [:find ?string
+         :in $ ?uid
+         :where
+         [?e :block/uid ?uid]
+         [?e :block/string ?string]]
+      `;
+
+    try {
+      const blockStringResult = await q(this.graph, blockQuery, [blockUid]) as [string][];
+      if (!blockStringResult || blockStringResult.length === 0) {
+        return null;
+      }
+      const text = blockStringResult[0][0];
+
+      const childrenResults = await q(this.graph, query, [blockUid]) as [string, string, number][];
+      const children: NestedBlock[] = [];
+
+      if (childrenResults && childrenResults.length > 0) {
+        // Sort children by order
+        const sortedChildren = childrenResults.sort((a, b) => a[2] - b[2]);
+
+        for (const childResult of sortedChildren) {
+          const childUid = childResult[0];
+          const nestedChild = await this.fetchBlockWithChildren(childUid, level + 1);
+          if (nestedChild) {
+            children.push(nestedChild);
+          }
+        }
+      }
+
+      // The order of the root block is not available from this query, so we set it to 0
+      return { uid: blockUid, text, level, order: 0, children: children.length > 0 ? children : undefined };
+    } catch (error: any) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to fetch block with children for UID "${blockUid}": ${error.message}`
+      );
+    }
+  };
+
+  /**
+   * Recursively fetches a nested structure of blocks under a given root block UID.
+   */
+  private async fetchNestedStructure(rootUid: string): Promise<NestedBlock[]> {
+    const query = `[:find ?child-uid ?child-string ?child-order
+                    :in $ ?parent-uid
+                    :where
+                      [?parent :block/uid ?parent-uid]
+                      [?parent :block/children ?child]
+                      [?child :block/uid ?child-uid]
+                      [?child :block/string ?child-string]
+                      [?child :block/order ?child-order]]`;
+    const directChildrenResult = await q(this.graph, query, [rootUid]) as [string, string, number][];
+
+    if (directChildrenResult.length === 0) {
+      return [];
+    }
+
+    const nestedBlocks: NestedBlock[] = [];
+    for (const [childUid, childString, childOrder] of directChildrenResult) {
+      const children = await this.fetchNestedStructure(childUid);
+      nestedBlocks.push({
+        uid: childUid,
+        text: childString,
+        level: 0, // Level is not easily determined here, so we set it to 0
+        children: children,
+        order: childOrder
+      });
+    }
+
+    return nestedBlocks.sort((a, b) => a.order - b.order);
+  }
 
   /**
    * Creates an outline structure on a Roam Research page, optionally under a specific block.
@@ -53,14 +271,14 @@ export class OutlineOperations {
     }
 
     // Validate outline structure
-    const invalidItems = validOutline.filter(item => 
-      typeof item.level !== 'number' || 
-      item.level < 1 || 
+    const invalidItems = validOutline.filter(item =>
+      typeof item.level !== 'number' ||
+      item.level < 1 ||
       item.level > 10 ||
       typeof item.text !== 'string' ||
       item.text.trim().length === 0
     );
-    
+
     if (invalidItems.length > 0) {
       throw new McpError(
         ErrorCode.InvalidRequest,
@@ -125,195 +343,19 @@ export class OutlineOperations {
       page_title_uid || formatRoamDate(new Date())
     );
 
-    // Helper function to find block with improved relationship checks
-    const findBlockWithRetry = async (pageUid: string, blockString: string, maxRetries = 5, initialDelay = 1000): Promise<string> => {
-      // Try multiple query strategies
-      const queries = [
-        // Strategy 1: Direct page and string match
-        `[:find ?b-uid ?order
-          :where [?p :block/uid "${pageUid}"]
-                 [?b :block/page ?p]
-                 [?b :block/string "${blockString}"]
-                 [?b :block/order ?order]
-                 [?b :block/uid ?b-uid]]`,
-        
-        // Strategy 2: Parent-child relationship
-        `[:find ?b-uid ?order
-          :where [?p :block/uid "${pageUid}"]
-                 [?b :block/parents ?p]
-                 [?b :block/string "${blockString}"]
-                 [?b :block/order ?order]
-                 [?b :block/uid ?b-uid]]`,
-        
-        // Strategy 3: Broader page relationship
-        `[:find ?b-uid ?order
-          :where [?p :block/uid "${pageUid}"]
-                 [?b :block/page ?page]
-                 [?p :block/page ?page]
-                 [?b :block/string "${blockString}"]
-                 [?b :block/order ?order]
-                 [?b :block/uid ?b-uid]]`
-      ];
-
-      for (let retry = 0; retry < maxRetries; retry++) {
-        // Try each query strategy
-        for (const queryStr of queries) {
-          const blockResults = await q(this.graph, queryStr, []) as [string, number][];
-          if (blockResults && blockResults.length > 0) {
-            // Use the most recently created block
-            const sorted = blockResults.sort((a, b) => b[1] - a[1]);
-            return sorted[0][0];
-          }
-        }
-
-        // Exponential backoff
-        const delay = initialDelay * Math.pow(2, retry);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to find block "${blockString}" under page "${pageUid}" after trying multiple strategies`
-      );
-    };
-
-    // Helper function to create and verify block with improved error handling
-    const createAndVerifyBlock = async (
-      content: string,
-      parentUid: string,
-      maxRetries = 5,
-      initialDelay = 1000,
-      isRetry = false
-    ): Promise<string> => {
-      try {
-        // Initial delay before any operations
-        if (!isRetry) {
-          await new Promise(resolve => setTimeout(resolve, initialDelay));
-        }
-
-        for (let retry = 0; retry < maxRetries; retry++) {
-          console.log(`Attempt ${retry + 1}/${maxRetries} to create block "${content}" under "${parentUid}"`);
-
-          // Create block using batchActions
-          const batchResult = await batchActions(this.graph, {
-            action: 'batch-actions',
-            actions: [{
-              action: 'create-block',
-              location: {
-                'parent-uid': parentUid,
-                order: 'last'
-              },
-              block: { string: content }
-            }]
-          });
-
-          if (!batchResult) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              `Failed to create block "${content}" via batch action`
-            );
-          }
-
-          // Wait with exponential backoff
-          const delay = initialDelay * Math.pow(2, retry);
-          await new Promise(resolve => setTimeout(resolve, delay));
-
-          try {
-            // Try to find the block using our improved findBlockWithRetry
-            return await findBlockWithRetry(parentUid, content);
-          } catch (error: any) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            // console.log(`Failed to find block on attempt ${retry + 1}: ${errorMessage}`); // Removed console.log
-            if (retry === maxRetries - 1) throw error;
-          }
-        }
-
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Failed to create and verify block "${content}" after ${maxRetries} attempts`
-        );
-      } catch (error) {
-        // If this is already a retry, throw the error
-        if (isRetry) throw error;
-
-        // Otherwise, try one more time with a clean slate
-        // console.log(`Retrying block creation for "${content}" with fresh attempt`); // Removed console.log
-        await new Promise(resolve => setTimeout(resolve, initialDelay * 2));
-        return createAndVerifyBlock(content, parentUid, maxRetries, initialDelay, true);
-      }
-    };
-
-    // Helper function to check if string is a valid Roam UID (9 characters)
-    const isValidUid = (str: string): boolean => {
-      return typeof str === 'string' && str.length === 9;
-    };
-
-    // Helper function to fetch a block and its children recursively
-    const fetchBlockWithChildren = async (blockUid: string, level: number = 1): Promise<NestedBlock | null> => {
-      const query = `
-        [:find ?childUid ?childString ?childOrder
-         :in $ ?parentUid
-         :where
-         [?parentEntity :block/uid ?parentUid]
-         [?parentEntity :block/children ?childEntity] ; This ensures direct children
-         [?childEntity :block/uid ?childUid]
-         [?childEntity :block/string ?childString]
-         [?childEntity :block/order ?childOrder]]
-      `;
-
-      const blockQuery = `
-        [:find ?string
-         :in $ ?uid
-         :where
-         [?e :block/uid ?uid]
-         [?e :block/string ?string]]
-      `;
-
-      try {
-        const blockStringResult = await q(this.graph, blockQuery, [blockUid]) as [string][];
-        if (!blockStringResult || blockStringResult.length === 0) {
-          return null;
-        }
-        const text = blockStringResult[0][0];
-
-        const childrenResults = await q(this.graph, query, [blockUid]) as [string, string, number][];
-        const children: NestedBlock[] = [];
-
-        if (childrenResults && childrenResults.length > 0) {
-          // Sort children by order
-          const sortedChildren = childrenResults.sort((a, b) => a[2] - b[2]);
-
-          for (const childResult of sortedChildren) {
-            const childUid = childResult[0];
-            const nestedChild = await fetchBlockWithChildren(childUid, level + 1);
-            if (nestedChild) {
-              children.push(nestedChild);
-            }
-          }
-        }
-
-        return { uid: blockUid, text, level, children: children.length > 0 ? children : undefined };
-      } catch (error: any) {
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Failed to fetch block with children for UID "${blockUid}": ${error.message}`
-        );
-      }
-    };
-
     // Get or create the parent block
     let targetParentUid: string;
     if (!block_text_uid) {
       targetParentUid = targetPageUid;
     } else {
       try {
-        if (isValidUid(block_text_uid)) {
+        if (this.isValidUid(block_text_uid)) {
           // First try to find block by UID
           const uidQuery = `[:find ?uid
                            :where [?e :block/uid "${block_text_uid}"]
                                   [?e :block/uid ?uid]]`;
           const uidResult = await q(this.graph, uidQuery, []) as [string][];
-          
+
           if (uidResult && uidResult.length > 0) {
             // Use existing block if found
             targetParentUid = uidResult[0][0];
@@ -325,13 +367,13 @@ export class OutlineOperations {
           }
         } else {
           // Create header block and get its UID if not a valid UID
-          targetParentUid = await createAndVerifyBlock(block_text_uid, targetPageUid);
+          targetParentUid = await this.createAndVerifyBlock(block_text_uid, targetPageUid);
         }
       } catch (error: any) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         throw new McpError(
           ErrorCode.InternalError,
-          `Failed to ${isValidUid(block_text_uid) ? 'find' : 'create'} block "${block_text_uid}": ${errorMessage}`
+          `Failed to ${this.isValidUid(block_text_uid) ? 'find' : 'create'} block "${block_text_uid}": ${errorMessage}`
         );
       }
     }
@@ -347,7 +389,7 @@ export class OutlineOperations {
           'Invalid outline structure - the first item must be at level 1'
         );
       }
-      
+
       let prevLevel = 0;
       for (const item of validOutline) {
         // Level should not increase by more than 1 at a time
@@ -430,9 +472,9 @@ export class OutlineOperations {
     for (const item of topLevelOutlineItems) {
       try {
         // Assert item.text is a string as it's filtered earlier to be non-undefined and non-empty
-        const foundUid = await findBlockWithRetry(targetParentUid, item.text!);
+        const foundUid = await this.findBlockWithRetry(targetParentUid, item.text!);
         if (foundUid) {
-          const nestedBlock = await fetchBlockWithChildren(foundUid);
+          const nestedBlock = await this.fetchBlockWithChildren(foundUid);
           if (nestedBlock) {
             createdBlocks.push(nestedBlock);
           }
@@ -443,7 +485,7 @@ export class OutlineOperations {
         // console.warn(`Could not fetch nested block for "${item.text}": ${error.message}`);
       }
     }
-    
+
     return {
       success: true,
       page_uid: targetPageUid,
@@ -458,15 +500,15 @@ export class OutlineOperations {
     page_title?: string,
     parent_uid?: string,
     parent_string?: string,
-    order: 'first' | 'last' = 'first'
-  ): Promise<{ success: boolean; page_uid: string; parent_uid: string; created_uids?: string[] }> {
+    order: 'first' | 'last' = 'last'
+  ): Promise<{ success: boolean; page_uid: string; parent_uid: string; created_uids: NestedBlock[] }> {
     // First get the page UID
     let targetPageUid = page_uid;
-    
+
     if (!targetPageUid && page_title) {
       const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
       const findResults = await q(this.graph, findQuery, [page_title]) as [string][];
-      
+
       if (findResults && findResults.length > 0) {
         targetPageUid = findResults[0][0];
       } else {
@@ -481,10 +523,10 @@ export class OutlineOperations {
     if (!targetPageUid) {
       const today = new Date();
       const dateStr = formatRoamDate(today);
-      
+
       const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
       const findResults = await q(this.graph, findQuery, [dateStr]) as [string][];
-      
+
       if (findResults && findResults.length > 0) {
         targetPageUid = findResults[0][0];
       } else {
@@ -524,20 +566,20 @@ export class OutlineOperations {
       }
 
       // Find block by exact string match within the page
-      const findBlockQuery = `[:find ?uid
-                             :where [?p :block/uid "${targetPageUid}"]
+      const findBlockQuery = `[:find ?b-uid
+                             :in $ ?page-uid ?block-string
+                             :where [?p :block/uid ?page-uid]
                                     [?b :block/page ?p]
-                                    [?b :block/string "${parent_string}"]]`;
-      const blockResults = await q(this.graph, findBlockQuery, []) as [string][];
-      
-      if (!blockResults || blockResults.length === 0) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          `Block with content "${parent_string}" not found on specified page`
-        );
+                                    [?b :block/string ?block-string]
+                                    [?b :block/uid ?b-uid]]`;
+      const blockResults = await q(this.graph, findBlockQuery, [targetPageUid, parent_string]) as [string][];
+
+      if (blockResults && blockResults.length > 0) {
+        targetParentUid = blockResults[0][0];
+      } else {
+        // If parent_string block doesn't exist, create it
+        targetParentUid = await this.createAndVerifyBlock(parent_string, targetPageUid);
       }
-      
-      targetParentUid = blockResults[0][0];
     }
 
     // If no parent specified, use page as parent
@@ -547,7 +589,7 @@ export class OutlineOperations {
 
     // Always use parseMarkdown for content with multiple lines or any markdown formatting
     const isMultilined = content.includes('\n');
-    
+
     if (isMultilined) {
       // Parse markdown into hierarchical structure
       const convertedContent = convertToRoamMarkdown(content);
@@ -569,10 +611,10 @@ export class OutlineOperations {
         );
       }
 
-      // Get the created block UIDs
-      const createdUids = result.created_uids || [];
-      
-      return { 
+      // After successful batch action, get all nested UIDs under the parent
+      const createdUids = await this.fetchNestedStructure(targetParentUid);
+
+      return {
         success: true,
         page_uid: targetPageUid,
         parent_uid: targetParentUid,
@@ -582,25 +624,18 @@ export class OutlineOperations {
       // Create a simple block for non-nested content using batchActions
       const actions = [{
         action: 'create-block',
-        location: { 
+        location: {
           "parent-uid": targetParentUid,
-          order
+          "order": order
         },
         block: { string: content }
       }];
 
       try {
-        const result = await batchActions(this.graph, {
+        await batchActions(this.graph, {
           action: 'batch-actions',
           actions
         });
-
-        if (!result) {
-          throw new McpError(
-            ErrorCode.InternalError,
-            'Failed to create content block via batch action'
-          );
-        }
       } catch (error) {
         throw new McpError(
           ErrorCode.InternalError,
@@ -608,10 +643,29 @@ export class OutlineOperations {
         );
       }
 
-      return { 
+      // For single-line content, we still need to fetch the UID and construct a NestedBlock
+      const createdUids: NestedBlock[] = [];
+      try {
+        const foundUid = await this.findBlockWithRetry(targetParentUid, content);
+        if (foundUid) {
+          createdUids.push({
+            uid: foundUid,
+            text: content,
+            level: 0,
+            order: 0,
+            children: []
+          });
+        }
+      } catch (error: any) {
+        // Log warning but don't re-throw, as the block might be created, just not immediately verifiable
+        // console.warn(`Could not verify single block creation for "${content}": ${error.message}`);
+      }
+
+      return {
         success: true,
         page_uid: targetPageUid,
-        parent_uid: targetParentUid
+        parent_uid: targetParentUid,
+        created_uids: createdUids
       };
     }
   }
