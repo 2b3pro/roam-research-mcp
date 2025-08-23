@@ -3,7 +3,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { RoamBlock } from '../../types/roam.js';
 
 export class BlockRetrievalOperations {
-  constructor(private graph: Graph) {}
+  constructor(private graph: Graph) { }
 
   async fetchBlockWithChildren(block_uid_raw: string, depth: number = 4): Promise<RoamBlock | null> {
     if (!block_uid_raw) {
@@ -20,7 +20,7 @@ export class BlockRetrievalOperations {
       const childrenQuery = `[:find ?parentUid ?childUid ?childString ?childOrder ?childHeading
                               :in $ [?parentUid ...]
                               :where [?parent :block/uid ?parentUid]
-                                     [?child :block/parents ?parent]
+                                     [?parent :block/children ?child]
                                      [?child :block/uid ?childUid]
                                      [?child :block/string ?childString]
                                      [?child :block/order ?childOrder]

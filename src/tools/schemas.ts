@@ -131,7 +131,7 @@ export const toolSchemas = {
   },
   roam_import_markdown: {
     name: 'roam_import_markdown',
-    description: 'Import nested markdown content into Roam under a specific block. Can locate the parent block by UID (preferred) or by exact string match within a specific page.\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
+    description: 'Import nested markdown content into Roam under a specific block. Can locate the parent block by UID (preferred) or by exact string match within a specific page. If a `parent_string` is provided and the block does not exist, it will be created. Returns a nested structure of the created blocks.\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -153,7 +153,7 @@ export const toolSchemas = {
         },
         parent_string: {
           type: 'string',
-          description: 'Optional: Exact string content of the parent block to add content under (used if parent_uid is not provided; requires page_uid or page_title).'
+          description: 'Optional: Exact string content of an existing parent block to add content under (used if parent_uid is not provided; requires page_uid or page_title). If the block does not exist, it will be created.'
         },
         order: {
           type: 'string',
@@ -269,7 +269,7 @@ export const toolSchemas = {
           type: 'integer',
           description: 'Max number of pages to retrieve (default: 50)',
           default: 50
-        },        
+        },
       }
     }
   },
@@ -420,23 +420,23 @@ export const toolSchemas = {
                 description: 'The content for the block, used in "create-block" and "update-block" actions.'
               },
               "open": {
-                  type: "boolean",
-                  description: "Optional: Sets the open/closed state of a block, used in 'update-block' or 'create-block'. Defaults to true."
+                type: "boolean",
+                description: "Optional: Sets the open/closed state of a block, used in 'update-block' or 'create-block'. Defaults to true."
               },
               "heading": {
-                  type: "integer",
-                  description: "Optional: The heading level (1, 2, or 3) for 'create-block' or 'update-block'.",
-                  enum: [1, 2, 3]
+                type: "integer",
+                description: "Optional: The heading level (1, 2, or 3) for 'create-block' or 'update-block'.",
+                enum: [1, 2, 3]
               },
               "text-align": {
-                  type: "string",
-                  description: "Optional: The text alignment for 'create-block' or 'update-block'.",
-                  enum: ["left", "center", "right", "justify"]
+                type: "string",
+                description: "Optional: The text alignment for 'create-block' or 'update-block'.",
+                enum: ["left", "center", "right", "justify"]
               },
               "children-view-type": {
-                  type: "string",
-                  description: "Optional: The view type for children of the block, for 'create-block' or 'update-block'.",
-                  enum: ["bullet", "document", "numbered"]
+                type: "string",
+                description: "Optional: The view type for children of the block, for 'create-block' or 'update-block'.",
+                enum: ["bullet", "document", "numbered"]
               },
               "location": {
                 type: 'object',
@@ -448,8 +448,8 @@ export const toolSchemas = {
                   },
                   "order": {
                     oneOf: [
-                        { type: 'integer', description: 'Zero-indexed position.' },
-                        { type: 'string', enum: ['first', 'last'], description: 'Position keyword.' }
+                      { type: 'integer', description: 'Zero-indexed position.' },
+                      { type: 'string', enum: ['first', 'last'], description: 'Position keyword.' }
                     ],
                     description: 'The position of the block under its parent (e.g., 0, 1, 2) or a keyword ("first", "last").'
                   }
@@ -465,7 +465,7 @@ export const toolSchemas = {
   },
   roam_fetch_block_with_children: {
     name: 'roam_fetch_block_with_children',
-    description: 'Fetch a block by its UID along with its hierarchical children down to a specified depth.',
+    description: 'Fetch a block by its UID along with its hierarchical children down to a specified depth. Returns a nested object structure containing the block\'s UID, text, order, and an array of its children.',
     inputSchema: {
       type: 'object',
       properties: {

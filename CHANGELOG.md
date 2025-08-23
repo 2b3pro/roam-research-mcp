@@ -4,6 +4,14 @@ v.0.35.1 - 2025-08-23 9:33
 
 - ENHANCED: `roam_create_page` and `roam_create_outline` tool descriptions in `src/tools/schemas.ts` for improved clarity and to guide users toward the most efficient workflow.
 
+v.0.35.0
+
+- ENHANCED: `roam_import_markdown` tool
+  - Now returns a nested object structure for `created_uids`, reflecting the hierarchy of the imported content, including `uid`, `text`, `order`, and `children`.
+  - If a `parent_string` is provided and the block does not exist, it will be created automatically.
+- FIXED: Block ordering issue in `roam_import_markdown` and `roam_create_outline`. Nested outlines are now created in the correct order.
+- FIXED: Duplication issue in the response of `roam_fetch_block_with_children`.
+
 v.0.35.0 - 2025-08-23 
 
 v.0.32.4

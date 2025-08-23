@@ -15,6 +15,7 @@
 - {{[[TODO]]}} todo text
 - {{[[DONE]]}} todo text
 - LaTeX: `$$E=mc^2$$` or `$$\sum_{i=1}^{n} i = \frac{n(n+1)}{2}$$`
+- Bullet points use dashes not asterisks.
 
 ## Roam-specific Markdown:
 
