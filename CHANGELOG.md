@@ -1,6 +1,11 @@
-v.0.32.1 (branch: hosted)
 
-  - Updated with changes from main
+v.0.35.1 - 2025-08-23 9:33
+
+- ENHANCED: `roam_create_page` and `roam_create_outline` tool descriptions in `src/tools/schemas.ts` for improved clarity and to guide users toward the most efficient workflow.
+
+v.0.35.0 - 2025-08-23 
+
+v.0.32.1 (branch: hosted)
 
 v.0.31.0 (branch: hosted)
 
