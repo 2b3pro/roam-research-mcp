@@ -351,3 +351,9 @@ This will:
 ## License
 
 MIT License
+
+---
+
+## About the Author
+
+This project is maintained by [Ian Shen](https://github.com/2b3pro).
