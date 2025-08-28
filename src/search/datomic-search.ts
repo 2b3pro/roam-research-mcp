@@ -6,6 +6,9 @@ import { BaseSearchHandler, SearchResult } from './types.js';
 export interface DatomicSearchParams {
   query: string;
   inputs?: unknown[];
+  regexFilter?: string;
+  regexFlags?: string;
+  regexTargetField?: string[];
 }
 
 export class DatomicSearchHandler extends BaseSearchHandler {
@@ -19,7 +22,45 @@ export class DatomicSearchHandler extends BaseSearchHandler {
   async execute(): Promise<SearchResult> {
     try {
       // Execute the datomic query using the Roam API
-      const results = await q(this.graph, this.params.query, this.params.inputs || []) as unknown[];
+      let results = await q(this.graph, this.params.query, this.params.inputs || []) as unknown[];
+
+      if (this.params.regexFilter) {
+        let regex: RegExp;
+        try {
+          regex = new RegExp(this.params.regexFilter, this.params.regexFlags);
+        } catch (e) {
+          return {
+            success: false,
+            matches: [],
+            message: `Invalid regex filter provided: ${e instanceof Error ? e.message : String(e)}`
+          };
+        }
+
+        results = results.filter(result => {
+          if (this.params.regexTargetField && this.params.regexTargetField.length > 0) {
+            for (const field of this.params.regexTargetField) {
+              // Access nested fields if path is provided (e.g., "prop.nested")
+              const fieldPath = field.split('.');
+              let value: any = result;
+              for (const part of fieldPath) {
+                if (typeof value === 'object' && value !== null && part in value) {
+                  value = value[part];
+                } else {
+                  value = undefined; // Field not found
+                  break;
+                }
+              }
+              if (typeof value === 'string' && regex.test(value)) {
+                return true;
+              }
+            }
+            return false;
+          } else {
+            // Default to stringifying the whole result if no target field is specified
+            return regex.test(JSON.stringify(result));
+          }
+        });
+      }
 
       return {
         success: true,

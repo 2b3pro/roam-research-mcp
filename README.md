@@ -124,12 +124,12 @@ The server provides powerful tools for interacting with Roam Research:
 13. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag. This tool supports pagination via the `limit` and `offset` parameters.
 14. `roam_remember`: Add a memory or piece of information to remember. (Internally uses `roam_process_batch_actions`.)
 15. `roam_recall`: Retrieve all stored memories.
-16. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. Optimal for regex search, highly complex boolean logic, arbitrary sorting criteria, and proximity search.
+16. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. Now supports client-side regex filtering for enhanced post-query processing. Optimal for complex filtering (including regex), highly complex boolean logic, arbitrary sorting criteria, and proximity search.
 17. `roam_markdown_cheatsheet`: Provides the content of the Roam Markdown Cheatsheet resource, optionally concatenated with custom instructions if `CUSTOM_INSTRUCTIONS_PATH` environment variable is set.
 18. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
 
 **Deprecated Tools**:
-The following tools have been deprecated as of `v0.36.1` in favor of the more powerful and flexible `roam_process_batch_actions`:
+The following tools have been deprecated as of `v0.36.2` in favor of the more powerful and flexible `roam_process_batch_actions`:
 
 - `roam_create_block`: Use `roam_process_batch_actions` with the `create-block` action.
 - `roam_update_block`: Use `roam_process_batch_actions` with the `update-block` action.

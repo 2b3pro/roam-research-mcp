@@ -416,7 +416,7 @@ export const toolSchemas = {
   },
   roam_datomic_query: {
     name: 'roam_datomic_query',
-    description: 'Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. This provides direct access to Roam\'s query engine. Note: Roam graph is case-sensitive.\n\n__Optimal Use Cases for `roam_datomic_query`:__\n- __Regex Search:__ Use for scenarios requiring regex, as Datalog does not natively support full regular expressions. It can fetch broader results for client-side post-processing.\n- __Highly Complex Boolean Logic:__ Ideal for intricate combinations of "AND", "OR", and "NOT" conditions across multiple terms or attributes.\n- __Arbitrary Sorting Criteria:__ The go-to for highly customized sorting needs beyond default options.\n- __Proximity Search:__ For advanced search capabilities involving proximity, which are difficult to implement efficiently with simpler tools.\n\nList of some of Roam\'s data model Namespaces and Attributes: ancestor (descendants), attrs (lookup), block (children, heading, open, order, page, parents, props, refs, string, text-align, uid), children (view-type), create (email, time), descendant (ancestors), edit (email, seen-by, time), entity (attrs), log (id), node (title), page (uid, title), refs (text).\nPredicates (clojure.string/includes?, clojure.string/starts-with?, clojure.string/ends-with?, <, >, <=, >=, =, not=, !=).\nAggregates (distinct, count, sum, max, min, avg, limit).\nTips: Use :block/parents for all ancestor levels, :block/children for direct descendants only; combine clojure.string for complex matching, use distinct to deduplicate, leverage Pull patterns for hierarchies, handle case-sensitivity carefully, and chain ancestry rules for multi-level queries.',
+    description: 'Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. This provides direct access to Roam\'s query engine. Note: Roam graph is case-sensitive.\n\n__Optimal Use Cases for `roam_datomic_query`:__\n- __Advanced Filtering (including Regex):__ Use for scenarios requiring complex filtering, including regex matching on results post-query, which Datalog does not natively support for all data types. It can fetch broader results for client-side post-processing.\n- __Highly Complex Boolean Logic:__ Ideal for intricate combinations of "AND", "OR", and "NOT" conditions across multiple terms or attributes.\n- __Arbitrary Sorting Criteria:__ The go-to for highly customized sorting needs beyond default options.\n- __Proximity Search:__ For advanced search capabilities involving proximity, which are difficult to implement efficiently with simpler tools.\n\nList of some of Roam\'s data model Namespaces and Attributes: ancestor (descendants), attrs (lookup), block (children, heading, open, order, page, parents, props, refs, string, text-align, uid), children (view-type), create (email, time), descendant (ancestors), edit (email, seen-by, time), entity (attrs), log (id), node (title), page (uid, title), refs (text).\nPredicates (clojure.string/includes?, clojure.string/starts-with?, clojure.string/ends-with?, <, >, <=, >=, =, not=, !=).\nAggregates (distinct, count, sum, max, min, avg, limit).\nTips: Use :block/parents for all ancestor levels, :block/children for direct descendants only; combine clojure.string for complex matching, use distinct to deduplicate, leverage Pull patterns for hierarchies, handle case-sensitivity carefully, and chain ancestry rules for multi-level queries.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -430,6 +430,21 @@ export const toolSchemas = {
           items: {
             type: 'string'
           }
+        },
+        regexFilter: {
+          type: 'string',
+          description: 'Optional: A regex pattern to filter the results client-side after the Datomic query. Applied to JSON.stringify(result) or specific fields if regexTargetField is provided.'
+        },
+        regexFlags: {
+          type: 'string',
+          description: 'Optional: Flags for the regex filter (e.g., "i" for case-insensitive, "g" for global).',
+        },
+        regexTargetField: {
+          type: 'array',
+          items: {
+            type: 'string'
+          },
+          description: 'Optional: An array of field paths (e.g., ["block_string", "page_title"]) within each Datomic result object to apply the regex filter to. If not provided, the regex is applied to the stringified full result.'
         }
       },
       required: ['query']

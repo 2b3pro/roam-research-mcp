@@ -1,5 +1,11 @@
 # Changelog
 
+v0.36.2 - 2025-08-28
+
+- ENHANCED: `roam_datomic_query` tool
+  - Added `regexFilter`, `regexFlags`, and `regexTargetField` parameters for client-side regex filtering of results.
+  - Updated description to reflect enhanced filtering capabilities.
+
 v0.36.1 - 2025-08-28
 
 - ENHANCED: `roam_find_pages_modified_today` tool
