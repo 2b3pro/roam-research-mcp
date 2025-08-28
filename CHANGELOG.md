@@ -1,5 +1,10 @@
 # Changelog
 
+v0.36.1 - 2025-08-28
+
+- ENHANCED: `roam_find_pages_modified_today` tool
+  - Added `limit`, `offset`, and `sort_order` parameters for pagination and sorting.
+
 v1.36.0 - 2025-08-28
 
 - ENHANCED: `roam_search_for_tag` and `roam_search_by_text` tools

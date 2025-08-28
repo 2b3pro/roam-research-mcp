@@ -117,7 +117,7 @@ The server provides powerful tools for interacting with Roam Research:
 6. `roam_create_outline`: Add a structured outline to an existing page or block, with support for `children_view_type`. Best for simpler, sequential outlines. For complex nesting (e.g., tables), consider `roam_process_batch_actions`. If `page_title_uid` and `block_text_uid` are both blank, content defaults to the daily page. (Internally uses `roam_process_batch_actions`.)
 7. `roam_search_block_refs`: Search for block references within a page or across the entire graph.
 8. `roam_search_hierarchy`: Search for parent or child blocks in the block hierarchy.
-9. `roam_find_pages_modified_today`: Find pages that have been modified today (since midnight).
+9. `roam_find_pages_modified_today`: Find pages that have been modified today (since midnight), with pagination and sorting options.
 10. `roam_search_by_text`: Search for blocks containing specific text across all pages or within a specific page. This tool supports pagination via the `limit` and `offset` parameters.
 11. `roam_search_by_status`: Search for blocks with a specific status (TODO/DONE) across all pages or within a specific page.
 12. `roam_search_by_date`: Search for blocks or pages based on creation or modification dates.
@@ -129,7 +129,7 @@ The server provides powerful tools for interacting with Roam Research:
 18. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
 
 **Deprecated Tools**:
-The following tools have been deprecated as of `v1.36.0` in favor of the more powerful and flexible `roam_process_batch_actions`:
+The following tools have been deprecated as of `v0.36.1` in favor of the more powerful and flexible `roam_process_batch_actions`:
 
 - `roam_create_block`: Use `roam_process_batch_actions` with the `create-block` action.
 - `roam_update_block`: Use `roam_process_batch_actions` with the `update-block` action.

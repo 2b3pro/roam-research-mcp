@@ -190,8 +190,8 @@ export const toolSchemas = {
         },
         limit: {
           type: 'integer',
-          description: 'Optional: The maximum number of results to return. Defaults to 1. Use -1 for no limit.',
-          default: 1
+          description: 'Optional: The maximum number of results to return. Defaults to 50. Use -1 for no limit, but be aware that very large results sets can impact performance.',
+          default: 50
         },
         offset: {
           type: 'integer',
@@ -276,15 +276,26 @@ export const toolSchemas = {
   },
   roam_find_pages_modified_today: {
     name: 'roam_find_pages_modified_today',
-    description: 'Find pages that have been modified today (since midnight), with limit.',
+    description: 'Find pages that have been modified today (since midnight), with pagination and sorting options.',
     inputSchema: {
       type: 'object',
       properties: {
-        max_num_pages: {
+        limit: {
           type: 'integer',
-          description: 'Max number of pages to retrieve (default: 50)',
+          description: 'The maximum number of pages to retrieve (default: 50). Use -1 for no limit, but be aware that very large result sets can impact performance.',
           default: 50
         },
+        offset: {
+          type: 'integer',
+          description: 'The number of pages to skip before returning matches. Useful for pagination. Defaults to 0.',
+          default: 0
+        },
+        sort_order: {
+          type: 'string',
+          description: 'Sort order for pages based on modification date. "desc" for most recent first, "asc" for oldest first.',
+          enum: ['asc', 'desc'],
+          default: 'desc'
+        }
       }
     }
   },
@@ -309,8 +320,8 @@ export const toolSchemas = {
         },
         limit: {
           type: 'integer',
-          description: 'Optional: The maximum number of results to return. Defaults to 1. Use -1 for no limit.',
-          default: 1
+          description: 'Optional: The maximum number of results to return. Defaults to 50. Use -1 for no limit, but be aware that very large results sets can impact performance.',
+          default: 50
         },
         offset: {
           type: 'integer',

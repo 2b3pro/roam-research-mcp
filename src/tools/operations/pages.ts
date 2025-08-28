@@ -3,28 +3,28 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { capitalizeWords } from '../helpers/text.js';
 import { resolveRefs } from '../helpers/refs.js';
 import type { RoamBlock } from '../types/index.js';
-import { 
-  parseMarkdown, 
+import {
+  parseMarkdown,
   convertToRoamActions,
   convertToRoamMarkdown,
-  hasMarkdownTable 
+  hasMarkdownTable
 } from '../../markdown-utils.js';
 
 // Helper to get ordinal suffix for dates
 function getOrdinalSuffix(day: number): string {
-    if (day > 3 && day < 21) return 'th'; // Handles 11th, 12th, 13th
-    switch (day % 10) {
-        case 1: return 'st';
-        case 2: return 'nd';
-        case 3: return 'rd';
-        default: return 'th';
-    }
+  if (day > 3 && day < 21) return 'th'; // Handles 11th, 12th, 13th
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
 }
 
 export class PageOperations {
-  constructor(private graph: Graph) {}
+  constructor(private graph: Graph) { }
 
-  async findPagesModifiedToday(max_num_pages: number = 50) {
+  async findPagesModifiedToday(limit: number = 50, offset: number = 0, sort_order: 'asc' | 'desc' = 'desc') {
     // Define ancestor rule for traversing block hierarchy
     const ancestorRule = `[
       [ (ancestor ?b ?a)
@@ -39,19 +39,27 @@ export class PageOperations {
     startOfDay.setHours(0, 0, 0, 0);
 
     try {
-      // Query for pages modified today
-      const results = await q(
-        this.graph,
-        `[:find ?title
+      // Query for pages modified today, including modification time for sorting
+      let query = `[:find ?title ?time
           :in $ ?start_of_day %
           :where
           [?page :node/title ?title]
           (ancestor ?block ?page)
           [?block :edit/time ?time]
-          [(> ?time ?start_of_day)]]
-          :limit ${max_num_pages}`,
+          [(> ?time ?start_of_day)]]`;
+
+      if (limit !== -1) {
+        query += ` :limit ${limit}`;
+      }
+      if (offset > 0) {
+        query += ` :offset ${offset}`;
+      }
+
+      const results = await q(
+        this.graph,
+        query,
         [startOfDay.getTime(), ancestorRule]
-      ) as [string][];
+      ) as [string, number][];
 
       if (!results || results.length === 0) {
         return {
@@ -61,7 +69,16 @@ export class PageOperations {
         };
       }
 
-      // Extract unique page titles
+      // Sort results by modification time
+      results.sort((a, b) => {
+        if (sort_order === 'desc') {
+          return b[1] - a[1]; // Newest first
+        } else {
+          return a[1] - b[1]; // Oldest first
+        }
+      });
+
+      // Extract unique page titles from sorted results
       const uniquePages = Array.from(new Set(results.map(([title]) => title)));
 
       return {
@@ -77,17 +94,17 @@ export class PageOperations {
     }
   }
 
-  async createPage(title: string, content?: Array<{text: string; level: number; heading?: number}>): Promise<{ success: boolean; uid: string }> {
+  async createPage(title: string, content?: Array<{ text: string; level: number; heading?: number }>): Promise<{ success: boolean; uid: string }> {
     // Ensure title is properly formatted
     const pageTitle = String(title).trim();
-    
+
     // First try to find if the page exists
     const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
     type FindResult = [string];
     const findResults = await q(this.graph, findQuery, [pageTitle]) as FindResult[];
-    
+
     let pageUid: string | undefined;
-    
+
     if (findResults && findResults.length > 0) {
       // Page exists, use its UID
       pageUid = findResults[0][0];
@@ -114,7 +131,7 @@ export class PageOperations {
         );
       }
     }
-    
+
     // If content is provided, create blocks using batch operations
     if (content && content.length > 0) {
       try {
@@ -125,11 +142,11 @@ export class PageOperations {
           ...(block.heading && { heading_level: block.heading }),
           children: []
         }));
-        
+
         // Create hierarchical structure based on levels
         const rootNodes: any[] = [];
-        const levelMap: {[level: number]: any} = {};
-        
+        const levelMap: { [level: number]: any } = {};
+
         for (const node of nodes) {
           if (node.level === 1) {
             rootNodes.push(node);
@@ -137,26 +154,26 @@ export class PageOperations {
           } else {
             const parentLevel = node.level - 1;
             const parent = levelMap[parentLevel];
-            
+
             if (!parent) {
               throw new Error(`Invalid block hierarchy: level ${node.level} block has no parent`);
             }
-            
+
             parent.children.push(node);
             levelMap[node.level] = node;
           }
         }
-        
+
         // Generate batch actions for all blocks
         const actions = convertToRoamActions(rootNodes, pageUid, 'last');
-        
+
         // Execute batch operation
         if (actions.length > 0) {
           const batchResult = await batchActions(this.graph, {
             action: 'batch-actions',
             actions
           });
-          
+
           if (!batchResult) {
             throw new Error('Failed to create blocks');
           }
@@ -168,7 +185,7 @@ export class PageOperations {
         );
       }
     }
-    
+
     // Add a link to the created page on today's daily page
     try {
       const today = new Date();
@@ -272,7 +289,7 @@ export class PageOperations {
                                  [?block :block/heading ?heading]
                                  (ancestor ?block ?page)]`;
     const headings = await q(this.graph, headingsQuery, [ancestorRule, title]);
-    
+
     // Create a map of block UIDs to heading levels
     const headingMap = new Map<string, number>();
     if (headings) {
@@ -296,9 +313,9 @@ export class PageOperations {
         children: []
       };
       blockMap.set(blockUid, block);
-      
+
       // If no parent or parent is the page itself, it's a root block
-      if (!parentUid || parentUid === uid) {        
+      if (!parentUid || parentUid === uid) {
         rootBlocks.push(block);
       }
     }

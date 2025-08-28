@@ -34,11 +34,11 @@ export class ToolHandlers {
   }
 
   // Page Operations
-  async findPagesModifiedToday(max_num_pages: number = 50) {
-    return this.pageOps.findPagesModifiedToday(max_num_pages);
+  async findPagesModifiedToday(limit: number = 50, offset: number = 0, sort_order: 'asc' | 'desc' = 'desc') {
+    return this.pageOps.findPagesModifiedToday(limit, offset, sort_order);
   }
 
-  async createPage(title: string, content?: Array<{text: string; level: number; heading?: number}>) {
+  async createPage(title: string, content?: Array<{ text: string; level: number; heading?: number }>) {
     return this.pageOps.createPage(title, content);
   }
 
@@ -73,7 +73,7 @@ export class ToolHandlers {
     return this.searchOps.searchBlockRefs(params);
   }
 
-  async searchHierarchy(params: { 
+  async searchHierarchy(params: {
     parent_uid?: string;
     child_uid?: string;
     page_title_uid?: string;
@@ -120,7 +120,7 @@ export class ToolHandlers {
   }
 
   // Outline Operations
-  async createOutline(outline: Array<{text: string | undefined; level: number}>, page_title_uid?: string, block_text_uid?: string) {
+  async createOutline(outline: Array<{ text: string | undefined; level: number }>, page_title_uid?: string, block_text_uid?: string) {
     return this.outlineOps.createOutline(outline, page_title_uid, block_text_uid);
   }
 
