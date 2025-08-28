@@ -167,7 +167,7 @@ export const toolSchemas = {
   },
   roam_search_for_tag: {
     name: 'roam_search_for_tag',
-    description: 'Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby. Example: Use this to search for memories that are tagged with the MEMORIES_TAG.',
+    description: 'Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag. This tool supports pagination via the `limit` and `offset` parameters. Use this tool to search for memories tagged with the MEMORIES_TAG.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -182,6 +182,21 @@ export const toolSchemas = {
         near_tag: {
           type: 'string',
           description: 'Optional: Another tag to filter results by - will only return blocks where both tags appear',
+        },
+        case_sensitive: {
+          type: 'boolean',
+          description: 'Optional: Whether the search should be case-sensitive. If false, it will search for the provided tag, capitalized versions, and first word capitalized versions.',
+          default: false
+        },
+        limit: {
+          type: 'integer',
+          description: 'Optional: The maximum number of results to return. Defaults to 1. Use -1 for no limit.',
+          default: 1
+        },
+        offset: {
+          type: 'integer',
+          description: 'Optional: The number of results to skip before returning matches. Useful for pagination. Defaults to 0.',
+          default: 0
         }
       },
       required: ['primary_tag']
@@ -275,7 +290,7 @@ export const toolSchemas = {
   },
   roam_search_by_text: {
     name: 'roam_search_by_text',
-    description: 'Search for blocks containing specific text across all pages or within a specific page.',
+    description: 'Search for blocks containing specific text across all pages or within a specific page. This tool supports pagination via the `limit` and `offset` parameters.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -286,6 +301,21 @@ export const toolSchemas = {
         page_title_uid: {
           type: 'string',
           description: 'Optional: Title or UID of the page to search in (UID is preferred for accuracy). If not provided, searches across all pages.'
+        },
+        case_sensitive: {
+          type: 'boolean',
+          description: 'Optional: Whether the search should be case-sensitive. If false, it will search for the provided text, capitalized versions, and first word capitalized versions.',
+          default: false
+        },
+        limit: {
+          type: 'integer',
+          description: 'Optional: The maximum number of results to return. Defaults to 1. Use -1 for no limit.',
+          default: 1
+        },
+        offset: {
+          type: 'integer',
+          description: 'Optional: The number of results to skip before returning matches. Useful for pagination. Defaults to 0.',
+          default: 0
         }
       },
       required: ['text']
@@ -356,7 +386,7 @@ export const toolSchemas = {
   },
   roam_recall: {
     name: 'roam_recall',
-    description: 'Retrieve all stored memories on page titled MEMORIES_TAG, or tagged block content with the same name. Returns a combined, deduplicated list of memories. Optionally filter blcoks with a specified tag and sort by creation date.',
+    description: 'Retrieve all stored memories on page titled MEMORIES_TAG, or tagged block content with the same name. Returns a combined, deduplicated list of memories. Optionally filter blcoks with a specific tag and sort by creation date.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -375,13 +405,13 @@ export const toolSchemas = {
   },
   roam_datomic_query: {
     name: 'roam_datomic_query',
-    description: 'Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. This provides direct access to Roam\'s query engine. Note: Roam graph is case-sensitive.\nList of some of Roam\'s data model Namespaces and Attributes: ancestor (descendants), attrs (lookup), block (children, heading, open, order, page, parents, props, refs, string, text-align, uid), children (view-type), create (email, time), descendant (ancestors), edit (email, seen-by, time), entity (attrs), log (id), node (title), page (uid, title), refs (text).\nPredicates (clojure.string/includes?, clojure.string/starts-with?, clojure.string/ends-with?, <, >, <=, >=, =, not=, !=).\nAggregates (distinct, count, sum, max, min, avg, limit).\nTips: Use :block/parents for all ancestor levels, :block/children for direct descendants only; combine clojure.string for complex matching, use distinct to deduplicate, leverage Pull patterns for hierarchies, handle case-sensitivity carefully, and chain ancestry rules for multi-level queries.',
+    description: 'Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. This provides direct access to Roam\'s query engine. Note: Roam graph is case-sensitive.\n\n__Optimal Use Cases for `roam_datomic_query`:__\n- __Regex Search:__ Use for scenarios requiring regex, as Datalog does not natively support full regular expressions. It can fetch broader results for client-side post-processing.\n- __Highly Complex Boolean Logic:__ Ideal for intricate combinations of "AND", "OR", and "NOT" conditions across multiple terms or attributes.\n- __Arbitrary Sorting Criteria:__ The go-to for highly customized sorting needs beyond default options.\n- __Proximity Search:__ For advanced search capabilities involving proximity, which are difficult to implement efficiently with simpler tools.\n\nList of some of Roam\'s data model Namespaces and Attributes: ancestor (descendants), attrs (lookup), block (children, heading, open, order, page, parents, props, refs, string, text-align, uid), children (view-type), create (email, time), descendant (ancestors), edit (email, seen-by, time), entity (attrs), log (id), node (title), page (uid, title), refs (text).\nPredicates (clojure.string/includes?, clojure.string/starts-with?, clojure.string/ends-with?, <, >, <=, >=, =, not=, !=).\nAggregates (distinct, count, sum, max, min, avg, limit).\nTips: Use :block/parents for all ancestor levels, :block/children for direct descendants only; combine clojure.string for complex matching, use distinct to deduplicate, leverage Pull patterns for hierarchies, handle case-sensitivity carefully, and chain ancestry rules for multi-level queries.',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'The Datomic query to execute (in Datalog syntax)'
+          description: 'The Datomic query to execute (in Datalog syntax). Example: `[:find ?block-string :where [?block :block/string ?block-string] (or [(clojure.string/includes? ?block-string "hypnosis")] [(clojure.string/includes? ?block-string "trance")] [(clojure.string/includes? ?block-string "suggestion")]) :limit 25]`'
         },
         inputs: {
           type: 'array',
@@ -447,10 +477,7 @@ export const toolSchemas = {
                     description: 'The UID of the parent block or page.'
                   },
                   "order": {
-                    oneOf: [
-                      { type: 'integer', description: 'Zero-indexed position.' },
-                      { type: 'string', enum: ['first', 'last'], description: 'Position keyword.' }
-                    ],
+                    type: ['integer', 'string'],
                     description: 'The position of the block under its parent (e.g., 0, 1, 2) or a keyword ("first", "last").'
                   }
                 }

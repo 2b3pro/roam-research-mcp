@@ -9,6 +9,7 @@ export interface SearchResult {
     [key: string]: any;  // Additional context-specific fields
   }>;
   message: string;
+  total_count?: number; // Added for total count of matches
 }
 
 export interface SearchHandler {
@@ -21,10 +22,22 @@ export interface TagSearchParams {
   page_title_uid?: string;
   near_tag?: string;
   exclude_tag?: string;
+  case_sensitive?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+// Text Search Types
+export interface TextSearchParams {
+  text: string;
+  page_title_uid?: string;
+  case_sensitive?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 // Base class for all search handlers
 export abstract class BaseSearchHandler implements SearchHandler {
-  constructor(protected graph: Graph) {}
+  constructor(protected graph: Graph) { }
   abstract execute(): Promise<SearchResult>;
 }

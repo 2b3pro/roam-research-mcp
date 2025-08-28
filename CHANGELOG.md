@@ -1,5 +1,14 @@
 # Changelog
 
+v1.36.0 - 2025-08-28
+
+- ENHANCED: `roam_search_for_tag` and `roam_search_by_text` tools
+  - Added `offset` parameter for pagination support.
+- ENHANCED: `roam_search_for_tag` tool
+  - Implemented `near_tag` and `exclude_tag` parameters for more precise tag-based filtering.
+- ENHANCED: `roam_datomic_query` tool
+  - Updated description to clarify optimal use cases (Regex, Complex Boolean Logic, Arbitrary Sorting, Proximity Search).
+
 v.0.35.1 - 2025-08-23 9:33
 
 - ENHANCED: `roam_create_page` and `roam_create_outline` tool descriptions in `src/tools/schemas.ts` for improved clarity and to guide users toward the most efficient workflow.

@@ -121,7 +121,7 @@ The server provides powerful tools for interacting with Roam Research:
 10. `roam_search_by_text`: Search for blocks containing specific text.
 11. `roam_search_by_status`: Search for blocks with a specific status (TODO/DONE) across all pages or within a specific page.
 12. `roam_search_by_date`: Search for blocks or pages based on creation or modification dates.
-13. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby.
+13. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag.
 14. `roam_remember`: Add a memory or piece of information to remember. (Internally uses `roam_process_batch_actions`.)
 15. `roam_recall`: Retrieve all stored memories.
 16. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools.
@@ -129,7 +129,7 @@ The server provides powerful tools for interacting with Roam Research:
 18. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
 
 **Deprecated Tools**:
-The following tools have been deprecated as of `v.0.30.0` in favor of the more powerful and flexible `roam_process_batch_actions`:
+The following tools have been deprecated as of `v1.36.0` in favor of the more powerful and flexible `roam_process_batch_actions`:
 
 - `roam_create_block`: Use `roam_process_batch_actions` with the `create-block` action.
 - `roam_update_block`: Use `roam_process_batch_actions` with the `update-block` action.
@@ -173,6 +173,20 @@ Prefer:
 
 **Caveat Regarding Heading Formatting:**
 Please note that while the `roam_process_batch_actions` tool can set block headings (H1, H2, H3), directly **removing** an existing heading (i.e., reverting a heading block to a plain text block) through this tool is not currently supported by the Roam API. The `heading` attribute persists its value once set, and attempting to remove it by setting `heading` to `0`, `null`, or omitting the property will not unset the heading.
+
+---
+
+## Propose Improvements
+
+### Pagination for Search Tools
+
+The `roam_search_for_tag` and `roam_search_by_text` tools now support `limit` and `offset` parameters, enabling basic pagination. To achieve full, robust pagination (e.g., retrieving "page 2" of results), the client consuming these tools would need to:
+
+1.  Make an initial call with `limit` and `offset=0` to get the first set of results and the `total_count`.
+2.  Calculate the total number of pages based on `total_count` and the desired `limit`.
+3.  Make subsequent calls, incrementing the `offset` by `limit` for each "page" of results.
+
+Example: To get the second page of 10 results, the call would be `roam_search_by_text(text: "your query", limit: 10, offset: 10)`.
 
 ---
 
