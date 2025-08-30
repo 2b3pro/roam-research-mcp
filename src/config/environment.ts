@@ -34,7 +34,7 @@ if (!API_TOKEN || !GRAPH_NAME) {
     '     "mcpServers": {\n' +
     '       "roam-research": {\n' +
     '         "command": "node",\n' +
-    '         "args": ["/path/to/roam-research/build/index.js"],\n' +
+    '         "args": ["/path/to/roam-research-mcp/build/index.js"],\n' +
     '         "env": {\n' +
     '           "ROAM_API_TOKEN": "your-api-token",\n' +
     '           "ROAM_GRAPH_NAME": "your-graph-name"\n' +

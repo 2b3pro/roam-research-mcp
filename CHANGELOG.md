@@ -1,5 +1,10 @@
 # Changelog
 
+v0.36.3 - 2025-08-30
+
+- FEATURE: Implemented `prompts/list` method for MCP server, returning an empty array of prompts.
+- FIXED: Removed `roam-markdown-cheatsheet.md` from advertised resources in MCP server capabilities to align with its tool-only access.
+
 v0.36.2 - 2025-08-28
 
 - ENHANCED: `roam_datomic_query` tool

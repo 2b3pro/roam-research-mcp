@@ -10,6 +10,7 @@ import {
   McpError,
   Resource,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
 import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, SSE_PORT } from '../config/environment.js';
@@ -52,7 +53,7 @@ export class RoamServer {
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new McpError(ErrorCode.InternalError, `Failed to initialize tool handlers: ${errorMessage}`);
     }
-    
+
     // Ensure toolSchemas is not empty before proceeding
     if (Object.keys(toolSchemas).length === 0) {
       throw new McpError(ErrorCode.InternalError, 'No tool schemas defined in src/tools/schemas.ts');
@@ -76,6 +77,11 @@ export class RoamServer {
     // Access resource - no resources handled directly here anymore
     mcpServer.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       throw new McpError(ErrorCode.InternalError, `Resource not found: ${request.params.uri}`);
+    });
+
+    // List available prompts
+    mcpServer.setRequestHandler(ListPromptsRequestSchema, async () => {
+      return { prompts: [] };
     });
 
     // Handle tool calls
@@ -111,8 +117,8 @@ export class RoamServer {
           }
 
           case 'roam_create_page': {
-            const { title, content } = request.params.arguments as { 
-              title: string; 
+            const { title, content } = request.params.arguments as {
+              title: string;
               content?: Array<{
                 text: string;
                 level: number;
@@ -126,7 +132,7 @@ export class RoamServer {
 
 
           case 'roam_import_markdown': {
-            const { 
+            const {
               content,
               page_uid,
               page_title,
@@ -164,7 +170,7 @@ export class RoamServer {
 
           case 'roam_create_outline': {
             const { outline, page_title_uid, block_text_uid } = request.params.arguments as {
-              outline: Array<{text: string | undefined; level: number}>;
+              outline: Array<{ text: string | undefined; level: number }>;
               page_title_uid?: string;
               block_text_uid?: string;
             };
@@ -221,7 +227,7 @@ export class RoamServer {
               page_title_uid?: string;
               max_depth?: number;
             };
-            
+
             // Validate that either parent_uid or child_uid is provided, but not both
             if ((!params.parent_uid && !params.child_uid) || (params.parent_uid && params.child_uid)) {
               throw new McpError(
@@ -229,7 +235,7 @@ export class RoamServer {
                 'Either parent_uid or child_uid must be provided, but not both'
               );
             }
-            
+
             const result = await this.toolHandlers.searchHierarchy(params);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -351,9 +357,8 @@ export class RoamServer {
                 (Object.keys(toolSchemas) as Array<keyof typeof toolSchemas>).map((toolName) => [toolName, toolSchemas[toolName].inputSchema])
               ),
             },
-            resources: { // Add resources capability
-              'roam-markdown-cheatsheet.md': {}
-            }
+            resources: {}, // No resources exposed via capabilities
+            prompts: {}, // No prompts exposed via capabilities
           },
         }
       );
@@ -377,9 +382,9 @@ export class RoamServer {
                 (Object.keys(toolSchemas) as Array<keyof typeof toolSchemas>).map((toolName) => [toolName, toolSchemas[toolName].inputSchema])
               ),
             },
-            resources: { // Add resources capability
-              'roam-markdown-cheatsheet.md': {}
-            }
+            resources: { // No resources exposed via capabilities
+            },
+            prompts: {}, // No prompts exposed via capabilities
           },
         }
       );
