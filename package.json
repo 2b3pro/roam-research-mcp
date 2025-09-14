@@ -22,7 +22,7 @@
   "homepage": "https://github.com/2b3pro/roam-research-mcp#readme",
   "type": "module",
   "bin": {
-    "roam-research": "./build/index.js"
+    "roam-research-mcp": "./build/index.js"
   },
   "files": [
     "build"
