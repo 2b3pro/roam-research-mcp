@@ -7,18 +7,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/github/license/2b3pro/roam-research-mcp)](https://github.com/2b3pro/roam-research-mcp/blob/main/LICENSE)
 
-A Model Context Protocol (MCP) server that provides comprehensive access to Roam Research's API functionality. This server enables AI assistants like Claude to interact with your Roam Research graph through a standardized interface. It supports standard input/output (stdio), HTTP Stream, and Server-Sent Events (SSE) communication. (A WORK-IN-PROGRESS, personal project not officially endorsed by Roam Research)
+A Model Context Protocol (MCP) server that provides comprehensive access to Roam Research's API functionality. This server enables AI assistants like Claude to interact with your Roam Research graph through a standardized interface. It supports standard input/output (stdio) and HTTP Stream communication. (A WORK-IN-PROGRESS, personal project not officially endorsed by Roam Research)
 
 <a href="https://glama.ai/mcp/servers/fzfznyaflu"><img width="380" height="200" src="https://glama.ai/mcp/servers/fzfznyaflu/badge" alt="Roam Research MCP server" /></a>
 <a href="https://mseep.ai/app/2b3pro-roam-research-mcp"><img width="380" height="200" src="https://mseep.net/pr/2b3pro-roam-research-mcp-badge.png" alt="MseeP.ai Security Assessment Badge" /></a>
 
 ## Installation and Usage
 
-This MCP server supports three primary communication methods:
+This MCP server supports two primary communication methods:
 
 1.  **Stdio (Standard Input/Output):** Ideal for local inter-process communication, command-line tools, and direct integration with applications running on the same machine. This is the default communication method when running the server directly.
 2.  **HTTP Stream:** Provides network-based communication, suitable for web-based clients, remote applications, or scenarios requiring real-time updates over HTTP. The HTTP Stream endpoint runs on port `8088` by default.
-3.  **SSE (Server-Sent Events):** A transport for legacy clients that require SSE. The SSE endpoint runs on port `8087` by default. (NOTE: ⚠️ DEPRECATED: The SSE Transport has been deprecated as of MCP specification version 2025-03-26. HTTP Stream Transport preferred.)
 
 ### Running with Stdio
 
@@ -41,16 +40,16 @@ npm start
 
 ### Running with HTTP Stream
 
-To run the server with HTTP Stream or SSE support, you can either:
+To run the server with HTTP Stream support, you can either:
 
-1.  **Use the default ports:** Run `npm start` after building (as shown above). The server will automatically listen on port `8088` for HTTP Stream and `8087` for SSE.
-2.  **Specify custom ports:** Set the `HTTP_STREAM_PORT` and/or `SSE_PORT` environment variables before starting the server.
+1.  **Use the default ports:** Run `npm start` after building (as shown above). The server will automatically listen on port `8088` for HTTP Stream.
+2.  **Specify custom ports:** Set the `HTTP_STREAM_PORT` environment variable before starting the server.
 
     ```bash
-    HTTP_STREAM_PORT=9000 SSE_PORT=9001 npm start
+    HTTP_STREAM_PORT=9000 npm start
     ```
 
-    Or, if using a `.env` file, add `HTTP_STREAM_PORT=9000` and/or `SSE_PORT=9001` to it.
+    Or, if using a `.env` file, add `HTTP_STREAM_PORT=9000` to it.
 
 ## Docker
 
@@ -66,16 +65,15 @@ docker build -t roam-research-mcp .
 
 ### Run the Docker Container
 
-To run the Docker container and map the necessary ports, you must also provide the required environment variables. Use the `-e` flag to pass `ROAM_API_TOKEN`, `ROAM_GRAPH_NAME`, and optionally `MEMORIES_TAG`, `HTTP_STREAM_PORT`, and `SSE_PORT`:
+To run the Docker container and map the necessary ports, you must also provide the required environment variables. Use the `-e` flag to pass `ROAM_API_TOKEN`, `ROAM_GRAPH_NAME`, and optionally `MEMORIES_TAG` and `HTTP_STREAM_PORT`:
 
 ```bash
-docker run -p 3000:3000 -p 8088:8088 -p 8087:8087 \
+docker run -p 3000:3000 -p 8088:8088 \
   -e ROAM_API_TOKEN="your-api-token" \
   -e ROAM_GRAPH_NAME="your-graph-name" \
   -e MEMORIES_TAG="#[[LLM/Memories]]" \
   -e CUSTOM_INSTRUCTIONS_PATH="/path/to/your/custom_instructions_file.md" \
   -e HTTP_STREAM_PORT="8088" \
-  -e SSE_PORT="8087" \
   roam-research-mcp
 ```
 
@@ -246,7 +244,6 @@ This demonstrates moving a block from one location to another and simultaneously
    MEMORIES_TAG='#[[LLM/Memories]]'
    CUSTOM_INSTRUCTIONS_PATH='/path/to/your/custom_instructions_file.md'
    HTTP_STREAM_PORT=8088 # Or your desired port for HTTP Stream communication
-   SSE_PORT=8087 # Or your desired port for SSE communication
    ```
 
    Option 2: Using MCP settings (Alternative method)
@@ -266,8 +263,7 @@ This demonstrates moving a block from one location to another and simultaneously
            "ROAM_GRAPH_NAME": "your-graph-name",
            "MEMORIES_TAG": "#[[LLM/Memories]]",
            "CUSTOM_INSTRUCTIONS_PATH": "/path/to/your/custom_instructions_file.md",
-           "HTTP_STREAM_PORT": "8088",
-           "SSE_PORT": "8087"
+           "HTTP_STREAM_PORT": "8088"
          }
        }
      }

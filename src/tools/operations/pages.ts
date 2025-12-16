@@ -230,21 +230,22 @@ export class PageOperations {
     }
 
     // Try different case variations
+    // Generate variations to check
     const variations = [
       title, // Original
       capitalizeWords(title), // Each word capitalized
       title.toLowerCase() // All lowercase
     ];
 
-    let uid: string | null = null;
-    for (const variation of variations) {
-      const searchQuery = `[:find ?uid .
-                          :where [?e :node/title "${variation}"]
-                                 [?e :block/uid ?uid]]`;
-      const result = await q(this.graph, searchQuery, []);
-      uid = (result === null || result === undefined) ? null : String(result);
-      if (uid) break;
-    }
+    // Create OR clause for query
+    const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
+
+    const searchQuery = `[:find ?uid .
+                        :where [?e :block/uid ?uid]
+                               (or ${orClause})]`;
+
+    const result = await q(this.graph, searchQuery, []);
+    const uid = (result === null || result === undefined) ? null : String(result);
 
     if (!uid) {
       throw new McpError(

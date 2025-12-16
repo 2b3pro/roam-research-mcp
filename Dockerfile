@@ -38,9 +38,8 @@ COPY --from=builder /app/package-lock.json /app/package-lock.json
 # This keeps the final image small and secure by omitting development dependencies
 RUN npm ci --ignore-scripts --omit-dev
 
-# Expose the ports the app runs on (3000 for standard, 8087 for SSE, 8088 for HTTP Stream)
+# Expose the ports the app runs on (3000 for standard, 8088 for HTTP Stream)
 EXPOSE 3000
-EXPOSE 8087
 EXPOSE 8088
 
 # Run the application

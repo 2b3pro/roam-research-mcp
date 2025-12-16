@@ -1,5 +1,23 @@
 # Changelog
 
+v1.0.0 - 2025-12-16
+
+- OPTIMIZED: Server performance and reliability
+  - Removed deprecated and non-functional SSE (Server-Sent Events) server implementation.
+  - Implemented async file reading and caching for Roam Markdown Cheatsheet and custom instructions to avoid blocking the event loop.
+  - Optimized `roam_fetch_page_by_title` to use a single Datomic query for all title variations (original, capitalized, lowercase) instead of sequential queries.
+  - Replaced insecure `Math.random` with `crypto.randomBytes` for more robust block UID generation.
+  - Added error logging to stderr for better debugging of server startup failures.
+  - Refactored `RoamServer` to reduce code duplication in server initialization.
+
+v0.36.4 - 2025-10-03
+
+- FIXED: SSE server implementation on port 8087
+  - Added missing SSE server setup in `src/server/roam-server.ts` that was previously imported but never instantiated
+  - SSE server now properly creates its own MCP server instance with full tool capabilities
+  - Configured CORS headers and preflight OPTIONS request handling for SSE endpoint
+  - SSE server listens on port 8087 (or next available port) with proper error handling
+
 v0.36.3 - 2025-08-30
 
 - FEATURE: Implemented `prompts/list` method for MCP server, returning an empty array of prompts.

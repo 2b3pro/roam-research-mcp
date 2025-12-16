@@ -1,7 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -13,7 +12,7 @@ import {
   ListPromptsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, SSE_PORT } from '../config/environment.js';
+import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT } from '../config/environment.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
 import { readFileSync } from 'node:fs';
@@ -36,7 +35,7 @@ export class RoamServer {
   private graph: Graph;
 
   constructor() {
-    // console.log('RoamServer: Constructor started.');
+
     try {
       this.graph = initializeGraph({
         token: API_TOKEN,
@@ -58,7 +57,30 @@ export class RoamServer {
     if (Object.keys(toolSchemas).length === 0) {
       throw new McpError(ErrorCode.InternalError, 'No tool schemas defined in src/tools/schemas.ts');
     }
-    // console.log('RoamServer: Constructor finished.');
+
+  }
+
+  // Helper to create and configure MCP server instance
+  private createMcpServer(nameSuffix: string = '') {
+    const server = new Server(
+      {
+        name: `roam-research${nameSuffix}`,
+        version: serverVersion,
+      },
+      {
+        capabilities: {
+          tools: {
+            ...Object.fromEntries(
+              (Object.keys(toolSchemas) as Array<keyof typeof toolSchemas>).map((toolName) => [toolName, toolSchemas[toolName].inputSchema])
+            ),
+          },
+          resources: {}, // No resources exposed via capabilities
+          prompts: {}, // No prompts exposed via capabilities
+        },
+      }
+    );
+    this.setupRequestHandlers(server);
+    return server;
   }
 
   // Refactored to accept a Server instance
@@ -342,61 +364,20 @@ export class RoamServer {
   }
 
   async run() {
-    // console.log('RoamServer: run() method started.');
-    try {
-      // console.log('RoamServer: Attempting to create stdioMcpServer...');
-      const stdioMcpServer = new Server(
-        {
-          name: 'roam-research',
-          version: serverVersion,
-        },
-        {
-          capabilities: {
-            tools: {
-              ...Object.fromEntries(
-                (Object.keys(toolSchemas) as Array<keyof typeof toolSchemas>).map((toolName) => [toolName, toolSchemas[toolName].inputSchema])
-              ),
-            },
-            resources: {}, // No resources exposed via capabilities
-            prompts: {}, // No prompts exposed via capabilities
-          },
-        }
-      );
-      // console.log('RoamServer: stdioMcpServer created. Setting up request handlers...');
-      this.setupRequestHandlers(stdioMcpServer);
-      // console.log('RoamServer: stdioMcpServer handlers setup complete. Connecting transport...');
 
+    try {
+
+      const stdioMcpServer = this.createMcpServer();
       const stdioTransport = new StdioServerTransport();
       await stdioMcpServer.connect(stdioTransport);
-      // console.log('RoamServer: stdioTransport connected. Attempting to create httpMcpServer...');
 
-      const httpMcpServer = new Server(
-        {
-          name: 'roam-research-http', // A distinct name for the HTTP server
-          version: serverVersion,
-        },
-        {
-          capabilities: {
-            tools: {
-              ...Object.fromEntries(
-                (Object.keys(toolSchemas) as Array<keyof typeof toolSchemas>).map((toolName) => [toolName, toolSchemas[toolName].inputSchema])
-              ),
-            },
-            resources: { // No resources exposed via capabilities
-            },
-            prompts: {}, // No prompts exposed via capabilities
-          },
-        }
-      );
-      // console.log('RoamServer: httpMcpServer created. Setting up request handlers...');
-      this.setupRequestHandlers(httpMcpServer);
-      // console.log('RoamServer: httpMcpServer handlers setup complete. Connecting transport...');
 
+      const httpMcpServer = this.createMcpServer('-http');
       const httpStreamTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
       });
       await httpMcpServer.connect(httpStreamTransport);
-      // console.log('RoamServer: httpStreamTransport connected.');
+
 
       const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
         // Set CORS headers
@@ -414,7 +395,7 @@ export class RoamServer {
         try {
           await httpStreamTransport.handleRequest(req, res);
         } catch (error) {
-          // // console.error('HTTP Stream Server error:', error);
+
           if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Internal Server Error' }));
@@ -424,8 +405,10 @@ export class RoamServer {
 
       const availableHttpPort = await findAvailablePort(parseInt(HTTP_STREAM_PORT));
       httpServer.listen(availableHttpPort, () => {
-        // // console.log(`MCP Roam Research server running HTTP Stream on port ${availableHttpPort}`);
+
       });
+
+
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);

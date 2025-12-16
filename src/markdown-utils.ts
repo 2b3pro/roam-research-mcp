@@ -6,6 +6,7 @@ import type {
   RoamDeletePage,
   RoamMoveBlock
 } from '@roam-research/roam-api-sdk';
+import { randomBytes } from 'crypto';
 
 export type BatchAction =
   | RoamCreateBlock
@@ -309,11 +310,13 @@ function parseTableRows(lines: string[]): MarkdownNode[] {
 }
 
 function generateBlockUid(): string {
-  // Generate a random string of 9 characters (Roam's format)
+  // Generate a random string of 9 characters (Roam's format) using crypto for better randomness
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
+  // 64 chars, which divides 256 evenly (256 = 64 * 4), so simple modulo is unbiased
+  const bytes = randomBytes(9);
   let uid = '';
   for (let i = 0; i < 9; i++) {
-    uid += chars.charAt(Math.floor(Math.random() * chars.length));
+    uid += chars[bytes[i] % 64];
   }
   return uid;
 }

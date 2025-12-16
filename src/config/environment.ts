@@ -49,7 +49,6 @@ if (!API_TOKEN || !GRAPH_NAME) {
 }
 
 const HTTP_STREAM_PORT = process.env.HTTP_STREAM_PORT || '8088'; // Default to 8088
-const SSE_PORT = process.env.SSE_PORT || '8087'; // Default to 8087
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5678';
 
-export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, SSE_PORT, CORS_ORIGIN };
+export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, CORS_ORIGIN };

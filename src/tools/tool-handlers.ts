@@ -21,6 +21,7 @@ export class ToolHandlers {
   private todoOps: TodoOperations;
   private outlineOps: OutlineOperations;
   private batchOps: BatchOperations;
+  private cachedCheatsheet: string | null = null;
 
   constructor(private graph: Graph) {
     this.pageOps = new PageOperations(graph);
@@ -141,20 +142,36 @@ export class ToolHandlers {
   }
 
   async getRoamMarkdownCheatsheet() {
+    if (this.cachedCheatsheet) {
+      return this.cachedCheatsheet;
+    }
+
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const cheatsheetPath = path.join(__dirname, '../../Roam_Markdown_Cheatsheet.md');
-    let cheatsheetContent = fs.readFileSync(cheatsheetPath, 'utf-8');
 
-    const customInstructionsPath = process.env.CUSTOM_INSTRUCTIONS_PATH;
-    if (customInstructionsPath && fs.existsSync(customInstructionsPath)) {
-      try {
-        const customInstructionsContent = fs.readFileSync(customInstructionsPath, 'utf-8');
-        cheatsheetContent += `\n\n${customInstructionsContent}`;
-      } catch (error) {
-        console.warn(`Could not read custom instructions file at ${customInstructionsPath}: ${error}`);
+    try {
+      let cheatsheetContent = await fs.promises.readFile(cheatsheetPath, 'utf-8');
+
+      const customInstructionsPath = process.env.CUSTOM_INSTRUCTIONS_PATH;
+      if (customInstructionsPath) {
+        try {
+          // Check if file exists asynchronously
+          await fs.promises.access(customInstructionsPath);
+          const customInstructionsContent = await fs.promises.readFile(customInstructionsPath, 'utf-8');
+          cheatsheetContent += `\n\n${customInstructionsContent}`;
+        } catch (error) {
+          // File doesn't exist or is not readable, ignore custom instructions
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.warn(`Could not read custom instructions file at ${customInstructionsPath}: ${error}`);
+          }
+        }
       }
+
+      this.cachedCheatsheet = cheatsheetContent;
+      return cheatsheetContent;
+    } catch (error) {
+      throw new Error(`Failed to read cheatsheet: ${error}`);
     }
-    return cheatsheetContent;
   }
 }
