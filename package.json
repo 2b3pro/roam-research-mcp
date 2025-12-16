@@ -1,0 +1,51 @@
+{
+  "name": "roam-research-mcp",
+  "version": "1.0.0",
+  "description": "A Model Context Protocol (MCP) server for Roam Research API integration",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/2b3pro/roam-research-mcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "roam-research",
+    "api",
+    "claude",
+    "model-context-protocol"
+  ],
+  "author": "Ian Shen / 2B3 PRODUCTIONS LLC",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/2b3pro/roam-research-mcp/issues"
+  },
+  "homepage": "https://github.com/2b3pro/roam-research-mcp#readme",
+  "type": "module",
+  "bin": {
+    "roam-research-mcp": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "echo \"Using custom instructions: .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md\" && tsc && cat Roam_Markdown_Cheatsheet.md .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md > build/Roam_Markdown_Cheatsheet.md && chmod 755 build/index.js",
+    "clean": "rm -rf build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "start": "node build/index.js",
+    "prepublishOnly": "npm run clean && npm run build",
+    "release:patch": "npm version patch && git push origin v$(node -p \"require('./package.json').version\")",
+    "release:minor": "npm version minor && git push origin v$(node -p \"require('./package.json').version\")",
+    "release:major": "npm version major && git push origin v$(node -p \"require('./package.json').version\")"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.2",
+    "@roam-research/roam-api-sdk": "^0.10.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

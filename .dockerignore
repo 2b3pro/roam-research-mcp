@@ -1,0 +1,38 @@
+# Ignore node_modules, as they will be installed in the container
+node_modules/
+
+# Ignore build directory, as it's created inside the container
+build/
+
+# Ignore log files
+*.log
+
+# Ignore environment files
+.env*
+
+# Ignore TypeScript cache
+typescript/
+
+# Ignore test files
+src/test-queries.ts
+test-*
+tests/test_read.sh
+
+# Ignore OS-specific files
+src/.DS_Store
+.DS_Store
+
+# Ignore Git directory
+.git
+
+# Ignore Docker related files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Ignore the project's license and documentation
+LICENSE
+README.md
+CHANGELOG.md
+Roam Import JSON Schema.md
+Roam_Research_Datalog_Cheatsheet.md
