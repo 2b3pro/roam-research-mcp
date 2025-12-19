@@ -12,3 +12,5 @@ tests/test_read.sh
 .roam/2b3-custom-instructions.md
 .roam/ias-custom-instructions.md
 .cline*
+CLAUDE.md
+AGENT.md

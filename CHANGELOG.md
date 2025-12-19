@@ -1,5 +1,16 @@
 # Changelog
 
+v1.1.0 - 2025-12-19
+
+- ADDED: `roam-import` standalone CLI tool for importing markdown to Roam
+  - Reads markdown from stdin and creates a new page with the specified title
+  - Automatically links the new page from today's daily page
+  - Usage: `cat document.md | roam-import "Page Title"` or `pbpaste | roam-import "Ideas"`
+  - If page exists, content is appended to it
+- FIXED: Markdown parser now handles variable indentation (2 spaces, 4 spaces, tabs)
+  - Previously assumed 2-space indentation, causing nested items to flatten to root
+  - Now dynamically detects indentation levels from the document
+
 v1.0.0 - 2025-12-16
 
 - OPTIMIZED: Server performance and reliability

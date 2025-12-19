@@ -142,6 +142,53 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     }
   }
 
+  // First pass: collect all unique indentation values to build level mapping
+  const indentationSet = new Set<number>();
+  indentationSet.add(0); // Always include level 0
+
+  let inCodeBlockFirstPass = false;
+  for (const line of processedLines) {
+    const trimmedLine = line.trimEnd();
+    if (trimmedLine.match(/^(\s*)```/)) {
+      inCodeBlockFirstPass = !inCodeBlockFirstPass;
+      if (!inCodeBlockFirstPass) continue; // Skip closing ```
+      const indent = line.match(/^\s*/)?.[0].length ?? 0;
+      indentationSet.add(indent);
+      continue;
+    }
+    if (inCodeBlockFirstPass || trimmedLine === '') continue;
+
+    const bulletMatch = trimmedLine.match(/^(\s*)[-*+]\s+/);
+    if (bulletMatch) {
+      indentationSet.add(bulletMatch[1].length);
+    } else {
+      const indent = line.match(/^\s*/)?.[0].length ?? 0;
+      indentationSet.add(indent);
+    }
+  }
+
+  // Create sorted array of indentation values and map to sequential levels
+  const sortedIndents = Array.from(indentationSet).sort((a, b) => a - b);
+  const indentToLevel = new Map<number, number>();
+  sortedIndents.forEach((indent, index) => {
+    indentToLevel.set(indent, index);
+  });
+
+  // Helper to get level from indentation, finding closest match
+  function getLevel(indent: number): number {
+    if (indentToLevel.has(indent)) {
+      return indentToLevel.get(indent)!;
+    }
+    // Find the closest smaller indentation
+    let closestLevel = 0;
+    for (const [ind, lvl] of indentToLevel) {
+      if (ind <= indent && lvl > closestLevel) {
+        closestLevel = lvl;
+      }
+    }
+    return closestLevel;
+  }
+
   const rootNodes: MarkdownNode[] = [];
   const stack: MarkdownNode[] = [];
   let inCodeBlock = false;
@@ -188,7 +235,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
           return codeLine.trimStart();
         });
 
-        const level = Math.floor(codeBlockIndentation / 2);
+        const level = getLevel(codeBlockIndentation);
         const node: MarkdownNode = {
           content: processedCodeLines.join('\n'),
           level,
@@ -227,18 +274,18 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
       continue;
     }
 
-    const indentation = line.match(/^\s*/)?.[0].length ?? 0;
-    let level = Math.floor(indentation / 2);
-
+    let indentation: number;
     let contentToParse: string;
     const bulletMatch = trimmedLine.match(/^(\s*)[-*+]\s+/);
     if (bulletMatch) {
-      level = Math.floor(bulletMatch[1].length / 2);
+      indentation = bulletMatch[1].length;
       contentToParse = trimmedLine.substring(bulletMatch[0].length);
     } else {
+      indentation = line.match(/^\s*/)?.[0].length ?? 0;
       contentToParse = trimmedLine;
     }
 
+    const level = getLevel(indentation);
     const { heading_level, content: finalContent } = parseMarkdownHeadingLevel(contentToParse);
 
     const node: MarkdownNode = {

@@ -83,6 +83,59 @@ Alternatively, if you have a `.env` file in the project root (which is copied in
 docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 ```
 
+## Standalone CLI: roam-import
+
+A standalone command-line tool for importing markdown content directly into Roam Research, without running the MCP server.
+
+### Usage
+
+```bash
+# From a file
+cat document.md | roam-import "Meeting Notes"
+
+# From clipboard (macOS)
+pbpaste | roam-import "Ideas"
+
+# From here-doc
+roam-import "Quick Note" << EOF
+# Heading
+- Item 1
+- Item 2
+  - Nested item
+EOF
+```
+
+### Features
+
+- Reads markdown from stdin
+- Creates a new page with the specified title (or appends to existing page)
+- Automatically links the new page from today's daily page
+- Converts standard markdown to Roam-flavored markdown (bold, italic, highlights, tasks, code blocks)
+
+### Installation
+
+After building the project, make the command globally available:
+
+```bash
+npm link
+```
+
+Or run directly without linking:
+
+```bash
+cat document.md | node build/cli/import-markdown.js "Page Title"
+```
+
+### Requirements
+
+Same environment variables as the MCP server:
+- `ROAM_API_TOKEN`: Your Roam Research API token
+- `ROAM_GRAPH_NAME`: Your Roam graph name
+
+Configure via `.env` file in the project root or set as environment variables.
+
+---
+
 ## To Test
 
 Run [MCP Inspector](https://github.com/modelcontextprotocol/inspector) after build using the provided npm script:
