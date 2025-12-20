@@ -1,5 +1,8 @@
 # Changelog
 
+v1.2.1 - 2025-12-20
+- ENHANCED: `roam_create_outline` tool to not create empty blocks
+
 v1.2.0 - 2025-12-20
 
 - ADDED: Server-side UID placeholder system for batch operations

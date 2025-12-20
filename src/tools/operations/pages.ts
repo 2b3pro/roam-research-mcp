@@ -145,8 +145,34 @@ export class PageOperations {
     // If content is provided, create blocks using batch operations
     if (content && content.length > 0) {
       try {
+        // Filter out empty blocks (empty or whitespace-only text) to prevent creating visual linebreaks
+        const nonEmptyContent = content.filter(block => block.text && block.text.trim().length > 0);
+
+        if (nonEmptyContent.length === 0) {
+          // All blocks were empty, just return the page without content
+          return { success: true, uid: pageUid };
+        }
+
+        // Normalize levels to prevent gaps after filtering (e.g., if level 2 was empty, level 3 becomes orphaned)
+        // Each block's level should not exceed previous block's level + 1
+        const normalizedContent: Array<{ text: string; level: number; heading?: number }> = [];
+        for (let i = 0; i < nonEmptyContent.length; i++) {
+          const block = nonEmptyContent[i];
+          if (i === 0) {
+            // First block should always be level 1
+            normalizedContent.push({ ...block, level: 1 });
+          } else {
+            const prevLevel = normalizedContent[i - 1].level;
+            const maxAllowedLevel = prevLevel + 1;
+            normalizedContent.push({
+              ...block,
+              level: Math.min(block.level, maxAllowedLevel)
+            });
+          }
+        }
+
         // Convert content array to MarkdownNode format expected by convertToRoamActions
-        const nodes = content.map(block => ({
+        const nodes = normalizedContent.map(block => ({
           content: convertToRoamMarkdown(block.text.replace(/^#+\s*/, '')),
           level: block.level,
           ...(block.heading && { heading_level: block.heading }),
