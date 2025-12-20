@@ -1,5 +1,23 @@
 # Changelog
 
+v1.2.0 - 2025-12-20
+
+- ADDED: Page UID cache to reduce redundant API queries
+  - Server-side in-memory cache for page title → UID mappings
+  - Eliminates repeated lookups for the same pages across operations
+- OPTIMIZED: Reduced API calls during verification after batch operations
+  - Conditional verification based on batch size (threshold: 5 items)
+  - For large batches, skips recursive child fetching to minimize queries
+  - Reduced retry attempts in block lookup from 15 to 2 per block
+- ENHANCED: Tool descriptions with rate-limit efficiency guidance
+  - `roam_process_batch_actions`: Marked as most API-efficient for multiple operations
+  - `roam_create_outline` / `roam_import_markdown`: Added API usage notes
+  - `roam_create_page`: Added efficiency tips
+- ENHANCED: `Roam_Markdown_Cheatsheet.md` with API Efficiency Guidelines section
+  - Tool efficiency ranking (best to worst)
+  - Best practices for intensive operations and page revisions
+  - UID caching tips for LLM usage
+
 v1.1.0 - 2025-12-19
 
 - ADDED: `roam-import` standalone CLI tool for importing markdown to Roam

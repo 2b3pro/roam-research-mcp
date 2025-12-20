@@ -197,6 +197,51 @@ CREATING CONTENT IN ROAM:
 
 ---
 
+## API Efficiency Guidelines (Rate Limit Avoidance)
+
+The Roam API has rate limits. Follow these guidelines to minimize API calls:
+
+### Tool Efficiency Ranking (Best to Worst)
+1. **`roam_process_batch_actions`** - Single API call for multiple operations (MOST EFFICIENT)
+2. **`roam_create_page`** - Batches content with page creation
+3. **`roam_create_outline` / `roam_import_markdown`** - Include verification queries (use for smaller operations)
+4. **Multiple sequential tool calls** - Each call = multiple API requests (AVOID)
+
+### Best Practices for Intensive Operations
+
+#### When Updating/Revising a Page:
+1. Fetch the page content ONCE at the start
+2. Plan ALL changes needed (creates, updates, deletes)
+3. Execute ALL changes in a SINGLE `roam_process_batch_actions` call
+4. Do NOT fetch-modify-fetch-modify in a loop
+
+#### When Creating Large Content:
+- For 10+ blocks: Use `roam_process_batch_actions` with nested structure
+- For simple outlines (<10 blocks): `roam_create_outline` is fine
+
+#### UID Caching:
+- Save UIDs from previous operations - don't re-query for them
+- Use `page_uid` instead of `page_title` when available (avoids lookup query)
+- Use `block_uid` instead of `block_text_uid` when you have it
+
+### Example: Efficient Page Revision
+
+**Instead of:**
+```
+1. roam_fetch_page_by_title → get content
+2. roam_create_outline → add section 1
+3. roam_create_outline → add section 2
+4. roam_import_markdown → add more content
+```
+
+**Do this:**
+```
+1. roam_fetch_page_by_title → get page UID and content
+2. roam_process_batch_actions → ALL creates/updates in one call
+```
+
+---
+
 ## Structural Defaults
 
 When unsure how to structure output:

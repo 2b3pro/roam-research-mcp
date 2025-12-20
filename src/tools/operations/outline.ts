@@ -10,61 +10,45 @@ import {
   type BatchAction
 } from '../../markdown-utils.js';
 import type { OutlineItem, NestedBlock } from '../types/index.js';
+import { pageUidCache } from '../../cache/page-uid-cache.js';
+
+// Threshold for skipping child fetch during verification
+const VERIFICATION_THRESHOLD = 5;
 
 export class OutlineOperations {
   constructor(private graph: Graph) { }
 
   /**
-   * Helper function to find block with improved relationship checks
+   * Helper function to find block with reduced retries for rate limit efficiency.
+   * Uses only the most reliable query strategy with 2 retries max.
    */
-  private async findBlockWithRetry(pageUid: string, blockString: string, maxRetries = 5, initialDelay = 1000): Promise<string> {
-    // Try multiple query strategies
-    const queries = [
-      // Strategy 1: Direct page and string match
-      `[:find ?b-uid ?order
-          :where [?p :block/uid "${pageUid}"]
-                 [?b :block/page ?p]
-                 [?b :block/string "${blockString}"]
-                 [?b :block/order ?order]
-                 [?b :block/uid ?b-uid]]`,
-
-      // Strategy 2: Parent-child relationship
-      `[:find ?b-uid ?order
-          :where [?p :block/uid "${pageUid}"]
-                 [?b :block/parents ?p]
-                 [?b :block/string "${blockString}"]
-                 [?b :block/order ?order]
-                 [?b :block/uid ?b-uid]]`,
-
-      // Strategy 3: Broader page relationship
-      `[:find ?b-uid ?order
-          :where [?p :block/uid "${pageUid}"]
-                 [?b :block/page ?page]
-                 [?p :block/page ?page]
-                 [?b :block/string "${blockString}"]
-                 [?b :block/order ?order]
-                 [?b :block/uid ?b-uid]]`
-    ];
+  private async findBlockWithRetry(pageUid: string, blockString: string, maxRetries = 2, initialDelay = 1000): Promise<string> {
+    // Use only the most reliable query strategy (direct page and string match)
+    const query = `[:find ?b-uid ?order
+        :where [?p :block/uid "${pageUid}"]
+               [?b :block/page ?p]
+               [?b :block/string "${blockString}"]
+               [?b :block/order ?order]
+               [?b :block/uid ?b-uid]]`;
 
     for (let retry = 0; retry < maxRetries; retry++) {
-      // Try each query strategy
-      for (const queryStr of queries) {
-        const blockResults = await q(this.graph, queryStr, []) as [string, number][];
-        if (blockResults && blockResults.length > 0) {
-          // Use the most recently created block
-          const sorted = blockResults.sort((a, b) => b[1] - a[1]);
-          return sorted[0][0];
-        }
+      const blockResults = await q(this.graph, query, []) as [string, number][];
+      if (blockResults && blockResults.length > 0) {
+        // Use the most recently created block (highest order)
+        const sorted = blockResults.sort((a, b) => b[1] - a[1]);
+        return sorted[0][0];
       }
 
-      // Exponential backoff
-      const delay = initialDelay * Math.pow(2, retry);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      // Exponential backoff between retries
+      if (retry < maxRetries - 1) {
+        const delay = initialDelay * Math.pow(2, retry);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
 
     throw new McpError(
       ErrorCode.InternalError,
-      `Failed to find block "${blockString}" under page "${pageUid}" after trying multiple strategies`
+      `Failed to find block "${blockString}" under page "${pageUid}" after ${maxRetries} attempts`
     );
   };
 
@@ -286,22 +270,33 @@ export class OutlineOperations {
       );
     }
 
-    // Helper function to find or create page with retries
+    // Helper function to find or create page with retries and caching
     const findOrCreatePage = async (titleOrUid: string, maxRetries = 3, delayMs = 500): Promise<string> => {
-      // First try to find by title
-      const titleQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
       const variations = [
         titleOrUid, // Original
         capitalizeWords(titleOrUid), // Each word capitalized
         titleOrUid.toLowerCase() // All lowercase
       ];
 
+      // Check cache first for any variation
+      for (const variation of variations) {
+        const cachedUid = pageUidCache.get(variation);
+        if (cachedUid) {
+          return cachedUid;
+        }
+      }
+
+      const titleQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
+
       for (let retry = 0; retry < maxRetries; retry++) {
         // Try each case variation
         for (const variation of variations) {
           const findResults = await q(this.graph, titleQuery, [variation]) as [string][];
           if (findResults && findResults.length > 0) {
-            return findResults[0][0];
+            const uid = findResults[0][0];
+            // Cache the result
+            pageUidCache.set(titleOrUid, uid);
+            return uid;
           }
         }
 
@@ -329,6 +324,16 @@ export class OutlineOperations {
 
         if (retry < maxRetries - 1) {
           await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
+
+      // One more attempt to find and cache after creation attempts
+      for (const variation of variations) {
+        const findResults = await q(this.graph, titleQuery, [variation]) as [string][];
+        if (findResults && findResults.length > 0) {
+          const uid = findResults[0][0];
+          pageUidCache.onPageCreated(titleOrUid, uid);
+          return uid;
         }
       }
 
@@ -464,19 +469,28 @@ export class OutlineOperations {
       );
     }
 
-    // Post-creation verification to get actual UIDs for top-level blocks and their children
+    // Post-creation verification to get actual UIDs for top-level blocks
     const createdBlocks: NestedBlock[] = [];
     // Only query for top-level blocks (level 1) based on the original outline input
     const topLevelOutlineItems = validOutline.filter(item => item.level === 1);
+
+    // Skip recursive child fetching for large batches to reduce API calls
+    const skipChildFetch = topLevelOutlineItems.length > VERIFICATION_THRESHOLD;
 
     for (const item of topLevelOutlineItems) {
       try {
         // Assert item.text is a string as it's filtered earlier to be non-undefined and non-empty
         const foundUid = await this.findBlockWithRetry(targetParentUid, item.text!);
         if (foundUid) {
-          const nestedBlock = await this.fetchBlockWithChildren(foundUid);
-          if (nestedBlock) {
-            createdBlocks.push(nestedBlock);
+          if (skipChildFetch) {
+            // Large batch: just return parent UID, skip recursive child queries
+            createdBlocks.push({ uid: foundUid, text: item.text!, level: 1, order: 0 });
+          } else {
+            // Small batch: full verification with children (current behavior)
+            const nestedBlock = await this.fetchBlockWithChildren(foundUid);
+            if (nestedBlock) {
+              createdBlocks.push(nestedBlock);
+            }
           }
         }
       } catch (error: any) {
@@ -506,16 +520,23 @@ export class OutlineOperations {
     let targetPageUid = page_uid;
 
     if (!targetPageUid && page_title) {
-      const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
-      const findResults = await q(this.graph, findQuery, [page_title]) as [string][];
-
-      if (findResults && findResults.length > 0) {
-        targetPageUid = findResults[0][0];
+      // Check cache first
+      const cachedUid = pageUidCache.get(page_title);
+      if (cachedUid) {
+        targetPageUid = cachedUid;
       } else {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          `Page with title "${page_title}" not found`
-        );
+        const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
+        const findResults = await q(this.graph, findQuery, [page_title]) as [string][];
+
+        if (findResults && findResults.length > 0) {
+          targetPageUid = findResults[0][0];
+          pageUidCache.set(page_title, targetPageUid);
+        } else {
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            `Page with title "${page_title}" not found`
+          );
+        }
       }
     }
 
@@ -524,32 +545,40 @@ export class OutlineOperations {
       const today = new Date();
       const dateStr = formatRoamDate(today);
 
-      const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
-      const findResults = await q(this.graph, findQuery, [dateStr]) as [string][];
-
-      if (findResults && findResults.length > 0) {
-        targetPageUid = findResults[0][0];
+      // Check cache for today's page
+      const cachedDailyUid = pageUidCache.get(dateStr);
+      if (cachedDailyUid) {
+        targetPageUid = cachedDailyUid;
       } else {
-        // Create today's page
-        try {
-          await createPage(this.graph, {
-            action: 'create-page',
-            page: { title: dateStr }
-          });
+        const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
+        const findResults = await q(this.graph, findQuery, [dateStr]) as [string][];
 
-          const results = await q(this.graph, findQuery, [dateStr]) as [string][];
-          if (!results || results.length === 0) {
+        if (findResults && findResults.length > 0) {
+          targetPageUid = findResults[0][0];
+          pageUidCache.set(dateStr, targetPageUid);
+        } else {
+          // Create today's page
+          try {
+            await createPage(this.graph, {
+              action: 'create-page',
+              page: { title: dateStr }
+            });
+
+            const results = await q(this.graph, findQuery, [dateStr]) as [string][];
+            if (!results || results.length === 0) {
+              throw new McpError(
+                ErrorCode.InternalError,
+                'Could not find created today\'s page'
+              );
+            }
+            targetPageUid = results[0][0];
+            pageUidCache.onPageCreated(dateStr, targetPageUid);
+          } catch (error) {
             throw new McpError(
               ErrorCode.InternalError,
-              'Could not find created today\'s page'
+              `Failed to create today's page: ${error instanceof Error ? error.message : String(error)}`
             );
           }
-          targetPageUid = results[0][0];
-        } catch (error) {
-          throw new McpError(
-            ErrorCode.InternalError,
-            `Failed to create today's page: ${error instanceof Error ? error.message : String(error)}`
-          );
         }
       }
     }
@@ -611,7 +640,20 @@ export class OutlineOperations {
         );
       }
 
-      // After successful batch action, get all nested UIDs under the parent
+      // Skip nested structure fetch for large imports to reduce API calls
+      const skipNestedFetch = actions.length > VERIFICATION_THRESHOLD;
+
+      if (skipNestedFetch) {
+        // Large import: return success with block count, skip recursive queries
+        return {
+          success: true,
+          page_uid: targetPageUid,
+          parent_uid: targetParentUid,
+          created_uids: []
+        };
+      }
+
+      // Small import: get all nested UIDs under the parent (current behavior)
       const createdUids = await this.fetchNestedStructure(targetParentUid);
 
       return {

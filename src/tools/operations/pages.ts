@@ -9,6 +9,7 @@ import {
   convertToRoamMarkdown,
   hasMarkdownTable
 } from '../../markdown-utils.js';
+import { pageUidCache } from '../../cache/page-uid-cache.js';
 
 // Helper to get ordinal suffix for dates
 function getOrdinalSuffix(day: number): string {
@@ -98,37 +99,46 @@ export class PageOperations {
     // Ensure title is properly formatted
     const pageTitle = String(title).trim();
 
-    // First try to find if the page exists
-    const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
-    type FindResult = [string];
-    const findResults = await q(this.graph, findQuery, [pageTitle]) as FindResult[];
-
     let pageUid: string | undefined;
 
-    if (findResults && findResults.length > 0) {
-      // Page exists, use its UID
-      pageUid = findResults[0][0];
+    // Check cache first to avoid unnecessary query
+    const cachedUid = pageUidCache.get(pageTitle);
+    if (cachedUid) {
+      pageUid = cachedUid;
     } else {
-      // Create new page
-      try {
-        await createRoamPage(this.graph, {
-          action: 'create-page',
-          page: {
-            title: pageTitle
-          }
-        });
+      // First try to find if the page exists
+      const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
+      type FindResult = [string];
+      const findResults = await q(this.graph, findQuery, [pageTitle]) as FindResult[];
 
-        // Get the new page's UID
-        const results = await q(this.graph, findQuery, [pageTitle]) as FindResult[];
-        if (!results || results.length === 0) {
-          throw new Error('Could not find created page');
+      if (findResults && findResults.length > 0) {
+        // Page exists, use its UID and cache it
+        pageUid = findResults[0][0];
+        pageUidCache.set(pageTitle, pageUid);
+      } else {
+        // Create new page
+        try {
+          await createRoamPage(this.graph, {
+            action: 'create-page',
+            page: {
+              title: pageTitle
+            }
+          });
+
+          // Get the new page's UID
+          const results = await q(this.graph, findQuery, [pageTitle]) as FindResult[];
+          if (!results || results.length === 0) {
+            throw new Error('Could not find created page');
+          }
+          pageUid = results[0][0];
+          // Cache the newly created page
+          pageUidCache.onPageCreated(pageTitle, pageUid);
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to create page: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
-        pageUid = results[0][0];
-      } catch (error) {
-        throw new McpError(
-          ErrorCode.InternalError,
-          `Failed to create page: ${error instanceof Error ? error.message : String(error)}`
-        );
       }
     }
 
@@ -194,11 +204,18 @@ export class PageOperations {
       const year = today.getFullYear();
       const formattedTodayTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
 
-      const dailyPageQuery = `[:find ?uid .
-                              :where [?e :node/title "${formattedTodayTitle}"]
-                                     [?e :block/uid ?uid]]`;
-      const dailyPageResult = await q(this.graph, dailyPageQuery, []);
-      const dailyPageUid = dailyPageResult ? String(dailyPageResult) : null;
+      // Check cache for daily page
+      let dailyPageUid: string | undefined = pageUidCache.get(formattedTodayTitle);
+      if (!dailyPageUid) {
+        const dailyPageQuery = `[:find ?uid .
+                                :where [?e :node/title "${formattedTodayTitle}"]
+                                       [?e :block/uid ?uid]]`;
+        const dailyPageResult = await q(this.graph, dailyPageQuery, []);
+        dailyPageUid = dailyPageResult ? String(dailyPageResult) : undefined;
+        if (dailyPageUid) {
+          pageUidCache.set(formattedTodayTitle, dailyPageUid);
+        }
+      }
 
       if (dailyPageUid) {
         await createBlock(this.graph, {
@@ -230,22 +247,37 @@ export class PageOperations {
     }
 
     // Try different case variations
-    // Generate variations to check
     const variations = [
       title, // Original
       capitalizeWords(title), // Each word capitalized
       title.toLowerCase() // All lowercase
     ];
 
-    // Create OR clause for query
-    const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
+    // Check cache first for any variation
+    let uid: string | null = null;
+    for (const variation of variations) {
+      const cachedUid = pageUidCache.get(variation);
+      if (cachedUid) {
+        uid = cachedUid;
+        break;
+      }
+    }
 
-    const searchQuery = `[:find ?uid .
-                        :where [?e :block/uid ?uid]
-                               (or ${orClause})]`;
+    // If not cached, query the database
+    if (!uid) {
+      const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
+      const searchQuery = `[:find ?uid .
+                          :where [?e :block/uid ?uid]
+                                 (or ${orClause})]`;
 
-    const result = await q(this.graph, searchQuery, []);
-    const uid = (result === null || result === undefined) ? null : String(result);
+      const result = await q(this.graph, searchQuery, []);
+      uid = (result === null || result === undefined) ? null : String(result);
+
+      // Cache the result for the original title
+      if (uid) {
+        pageUidCache.set(title, uid);
+      }
+    }
 
     if (!uid) {
       throw new McpError(

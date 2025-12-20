@@ -4,6 +4,7 @@ import { formatRoamDate } from '../../utils/helpers.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { SearchOperations } from './search/index.js';
 import type { SearchResult } from '../types/index.js';
+import { pageUidCache } from '../../cache/page-uid-cache.js';
 
 export class MemoryOperations {
   private searchOps: SearchOperations;
@@ -16,37 +17,45 @@ export class MemoryOperations {
     // Get today's date
     const today = new Date();
     const dateStr = formatRoamDate(today);
-    
-    // Try to find today's page
-    const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
-    const findResults = await q(this.graph, findQuery, [dateStr]) as [string][];
-    
-    let pageUid: string;
-    
-    if (findResults && findResults.length > 0) {
-      pageUid = findResults[0][0];
-    } else {
-      // Create today's page if it doesn't exist
-      try {
-        await createPage(this.graph, {
-          action: 'create-page',
-          page: { title: dateStr }
-        });
 
-        // Get the new page's UID
-        const results = await q(this.graph, findQuery, [dateStr]) as [string][];
-        if (!results || results.length === 0) {
+    let pageUid: string;
+
+    // Check cache first for today's page
+    const cachedUid = pageUidCache.get(dateStr);
+    if (cachedUid) {
+      pageUid = cachedUid;
+    } else {
+      // Try to find today's page
+      const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
+      const findResults = await q(this.graph, findQuery, [dateStr]) as [string][];
+
+      if (findResults && findResults.length > 0) {
+        pageUid = findResults[0][0];
+        pageUidCache.set(dateStr, pageUid);
+      } else {
+        // Create today's page if it doesn't exist
+        try {
+          await createPage(this.graph, {
+            action: 'create-page',
+            page: { title: dateStr }
+          });
+
+          // Get the new page's UID
+          const results = await q(this.graph, findQuery, [dateStr]) as [string][];
+          if (!results || results.length === 0) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Could not find created today\'s page'
+            );
+          }
+          pageUid = results[0][0];
+          pageUidCache.onPageCreated(dateStr, pageUid);
+        } catch (error) {
           throw new McpError(
             ErrorCode.InternalError,
-            'Could not find created today\'s page'
+            'Failed to create today\'s page'
           );
         }
-        pageUid = results[0][0];
-      } catch (error) {
-        throw new McpError(
-          ErrorCode.InternalError,
-          'Failed to create today\'s page'
-        );
       }
     }
 
