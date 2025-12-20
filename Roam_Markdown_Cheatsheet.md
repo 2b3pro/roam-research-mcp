@@ -224,21 +224,30 @@ The Roam API has rate limits. Follow these guidelines to minimize API calls:
 - Use `page_uid` instead of `page_title` when available (avoids lookup query)
 - Use `block_uid` instead of `block_text_uid` when you have it
 
-#### Generating Temporary UIDs for Batch Operations:
-When using `roam_process_batch_actions` to create nested blocks, you may need to generate temporary UIDs to reference parent blocks within the same batch.
+#### UID Placeholders for Nested Blocks:
+When using `roam_process_batch_actions` to create nested blocks, use **placeholder tokens** instead of generating UIDs yourself. The server generates proper random UIDs and returns a mapping.
 
-**UID Format Requirements:**
-- Exactly **9 characters** long
-- Use only characters from: `a-z`, `A-Z`, `0-9`, `-`, `_`
-- Must be **random/unique** — no human-readable patterns
+**Syntax:** `{{uid:name}}` where `name` is any identifier you choose.
 
-| ✅ Valid UIDs | ❌ Invalid UIDs |
-|---------------|-----------------|
-| `Xk7mN2pQ9` | `my-block` (human-readable) |
-| `aB3-dE_fG` | `section-1` (semantic) |
-| `9Qw2Er5Ty` | `parent` (too short, readable) |
+**Example:**
+```json
+[
+  { "action": "create-block", "uid": "{{uid:parent}}", "string": "Parent Block", "location": { "parent-uid": "pageUid123", "order": 0 } },
+  { "action": "create-block", "string": "Child Block", "location": { "parent-uid": "{{uid:parent}}", "order": 0 } }
+]
+```
 
-**Why this matters:** Roam stores whatever UID you provide. Human-readable UIDs like `layer-map` or `intro-block` work initially but cause issues later if reused or confused with actual content.
+**Response includes UID mapping:**
+```json
+{
+  "success": true,
+  "uid_map": {
+    "parent": "Xk7mN2pQ9"
+  }
+}
+```
+
+**Why placeholders?** LLMs are not reliable random generators. The server uses cryptographically secure randomness to generate proper 9-character Roam UIDs.
 
 ### Example: Efficient Page Revision
 

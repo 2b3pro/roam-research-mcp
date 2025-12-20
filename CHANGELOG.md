@@ -2,10 +2,11 @@
 
 v1.2.0 - 2025-12-20
 
-- FIXED: LLM-generated block UIDs now follow Roam's format
-  - Updated `roam_process_batch_actions` tool description with UID format requirements
-  - Added UID format guidance to cheatsheet (9 random alphanumeric chars from [a-zA-Z0-9-_])
-  - Prevents human-readable UIDs like "my-block" which cause uniqueness issues
+- ADDED: Server-side UID placeholder system for batch operations
+  - Use `{{uid:name}}` syntax in batch actions; server generates proper random UIDs
+  - Returns `uid_map` in response showing placeholder → generated UID mappings
+  - Solves LLM random generation unreliability (LLMs can't generate truly random strings)
+  - Exported `generateBlockUid()` function for use across modules
 - ADDED: Page UID cache to reduce redundant API queries
   - Server-side in-memory cache for page title → UID mappings
   - Eliminates repeated lookups for the same pages across operations

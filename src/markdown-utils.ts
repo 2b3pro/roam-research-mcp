@@ -356,7 +356,7 @@ function parseTableRows(lines: string[]): MarkdownNode[] {
   return tableNodes;
 }
 
-function generateBlockUid(): string {
+export function generateBlockUid(): string {
   // Generate a random string of 9 characters (Roam's format) using crypto for better randomness
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
   // 64 chars, which divides 256 evenly (256 = 64 * 4), so simple modulo is unbiased
