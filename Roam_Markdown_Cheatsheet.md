@@ -224,6 +224,22 @@ The Roam API has rate limits. Follow these guidelines to minimize API calls:
 - Use `page_uid` instead of `page_title` when available (avoids lookup query)
 - Use `block_uid` instead of `block_text_uid` when you have it
 
+#### Generating Temporary UIDs for Batch Operations:
+When using `roam_process_batch_actions` to create nested blocks, you may need to generate temporary UIDs to reference parent blocks within the same batch.
+
+**UID Format Requirements:**
+- Exactly **9 characters** long
+- Use only characters from: `a-z`, `A-Z`, `0-9`, `-`, `_`
+- Must be **random/unique** — no human-readable patterns
+
+| ✅ Valid UIDs | ❌ Invalid UIDs |
+|---------------|-----------------|
+| `Xk7mN2pQ9` | `my-block` (human-readable) |
+| `aB3-dE_fG` | `section-1` (semantic) |
+| `9Qw2Er5Ty` | `parent` (too short, readable) |
+
+**Why this matters:** Roam stores whatever UID you provide. Human-readable UIDs like `layer-map` or `intro-block` work initially but cause issues later if reused or confused with actual content.
+
 ### Example: Efficient Page Revision
 
 **Instead of:**
