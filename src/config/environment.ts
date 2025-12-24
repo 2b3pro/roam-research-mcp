@@ -49,6 +49,8 @@ if (!API_TOKEN || !GRAPH_NAME) {
 }
 
 const HTTP_STREAM_PORT = process.env.HTTP_STREAM_PORT || '8088'; // Default to 8088
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5678';
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:5678,https://roamresearch.com')
+  .split(',')
+  .map(origin => origin.trim());
 
-export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, CORS_ORIGIN };
+export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, CORS_ORIGINS };

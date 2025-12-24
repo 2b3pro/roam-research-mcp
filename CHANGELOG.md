@@ -1,5 +1,12 @@
 # Changelog
 
+v1.2.2 - 2025-12-24
+- ENHANCED: CORS support for HTTP streaming endpoint
+  - Now supports multiple CORS origins (comma-separated in `CORS_ORIGIN` env var)
+  - Default origins include `http://localhost:5678` and `https://roamresearch.com`
+  - Enables browser-based MCP clients (like Roam extensions) to connect to the server
+  - Added `Access-Control-Allow-Credentials` header for authenticated requests
+
 v1.2.1 - 2025-12-20
 - ENHANCED: `roam_create_outline` tool to not create empty blocks
 

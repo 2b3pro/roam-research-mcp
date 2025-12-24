@@ -20,7 +20,7 @@ import { join, dirname } from 'node:path';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { findAvailablePort } from '../utils/net.js';
-import { CORS_ORIGIN } from '../config/environment.js';
+import { CORS_ORIGINS } from '../config/environment.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -380,10 +380,16 @@ export class RoamServer {
 
 
       const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-        // Set CORS headers
-        res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
+        // Set CORS headers dynamically based on request origin
+        const requestOrigin = req.headers.origin;
+        if (requestOrigin && CORS_ORIGINS.includes(requestOrigin)) {
+          res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+        } else if (CORS_ORIGINS.includes('*')) {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+        }
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
 
         // Handle preflight OPTIONS requests
         if (req.method === 'OPTIONS') {
