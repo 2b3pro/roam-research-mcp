@@ -14,3 +14,4 @@ tests/test_read.sh
 .cline*
 CLAUDE.md
 AGENT.md
+docs*

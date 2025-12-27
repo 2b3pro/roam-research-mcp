@@ -372,12 +372,8 @@ export class RoamServer {
       await stdioMcpServer.connect(stdioTransport);
 
 
-      const httpMcpServer = this.createMcpServer('-http');
-      const httpStreamTransport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
-      });
-      await httpMcpServer.connect(httpStreamTransport);
-
+      // Track active transports by session ID for proper session management
+      const activeSessions = new Map<string, StreamableHTTPServerTransport>();
 
       const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
         // Set CORS headers dynamically based on request origin
@@ -387,8 +383,9 @@ export class RoamServer {
         } else if (CORS_ORIGINS.includes('*')) {
           res.setHeader('Access-Control-Allow-Origin', '*');
         }
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id');
+        res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
 
         // Handle preflight OPTIONS requests
@@ -398,10 +395,55 @@ export class RoamServer {
           return;
         }
 
+        // Check for existing session ID in header
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+        // Handle session termination (DELETE request)
+        if (req.method === 'DELETE' && sessionId) {
+          const transport = activeSessions.get(sessionId);
+          if (transport) {
+            await transport.close();
+            activeSessions.delete(sessionId);
+            res.writeHead(200);
+            res.end();
+          } else {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Session not found' }));
+          }
+          return;
+        }
+
         try {
+          // If we have an existing session, use that transport
+          if (sessionId && activeSessions.has(sessionId)) {
+            const transport = activeSessions.get(sessionId)!;
+            await transport.handleRequest(req, res);
+            return;
+          }
+
+          // Create new transport and server for new sessions
+          const httpMcpServer = this.createMcpServer('-http');
+          const httpStreamTransport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
+            onsessioninitialized: (newSessionId) => {
+              activeSessions.set(newSessionId, httpStreamTransport);
+            }
+          });
+
+          // Clean up session when transport closes
+          httpStreamTransport.onclose = () => {
+            const entries = activeSessions.entries();
+            for (const [key, value] of entries) {
+              if (value === httpStreamTransport) {
+                activeSessions.delete(key);
+                break;
+              }
+            }
+          };
+
+          await httpMcpServer.connect(httpStreamTransport);
           await httpStreamTransport.handleRequest(req, res);
         } catch (error) {
-
           if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Internal Server Error' }));
