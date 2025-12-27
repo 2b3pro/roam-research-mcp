@@ -1,5 +1,26 @@
 # Changelog
 
+v1.3.0 - 2025-12-26
+
+- ADDED: `roam_create_table` tool
+  - Abstracts Roam's complex nested table structure into simple headers/rows input
+  - Validates row/column consistency before execution
+  - Converts empty cells to spaces (required by Roam)
+  - Returns table_uid on success
+- ADDED: Pre-validation for batch actions
+  - Validates all actions before API execution, catching errors early
+  - Checks action types, UIDs, strings, locations, and placeholder references
+  - Returns structured error details with action index and field info
+- FIXED: Transaction reporting accuracy
+  - `uid_map` only returned on successful transactions (was incorrectly returned on failure)
+  - Prevents LLMs from using invalid UIDs for failed operations
+- ENHANCED: Structured error responses
+  - New error codes: VALIDATION_ERROR, RATE_LIMIT, TRANSACTION_FAILED
+  - Includes recovery suggestions and retry timing for rate limits
+- ADDED: Rate limit retry with exponential backoff
+  - Up to 3 retries with configurable delays (1s initial, 2x multiplier, 60s max)
+  - Automatic handling of 429 responses from Roam API
+
 v1.2.2 - 2025-12-24
 - ENHANCED: CORS support for HTTP streaming endpoint
   - Now supports multiple CORS origins (comma-separated in `CORS_ORIGIN` env var)

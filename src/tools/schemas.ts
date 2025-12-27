@@ -536,4 +536,52 @@ export const toolSchemas = {
       required: ['block_uid']
     },
   },
+  roam_create_table: {
+    name: 'roam_create_table',
+    description: 'Create a table in Roam with specified headers and rows. This tool abstracts the complex nested structure that Roam tables require, making it much easier to create properly formatted tables.\n\n**Why use this tool:**\n- Roam tables require precise nested block structures that are error-prone to create manually\n- Automatically handles the {{[[table]]}} container and nested column structure\n- Validates row/column consistency before execution\n- Converts empty cells to spaces (required by Roam)\n\n**Example:** A table with headers ["", "Column A", "Column B"] and rows [{label: "Row 1", cells: ["A1", "B1"]}] creates a 2x3 table.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        parent_uid: {
+          type: 'string',
+          description: 'The UID of the parent block or page where the table should be created.'
+        },
+        order: {
+          type: ['integer', 'string'],
+          description: 'Optional: Position under the parent. Can be a number (0-based) or "first"/"last". Defaults to "last".',
+          default: 'last'
+        },
+        headers: {
+          type: 'array',
+          description: 'Column headers for the table. The first header is typically empty (for the row label column). Example: ["", "Option A", "Option B"]',
+          items: {
+            type: 'string'
+          },
+          minItems: 1
+        },
+        rows: {
+          type: 'array',
+          description: 'Data rows for the table. Each row has a label (first column) and cells (remaining columns).',
+          items: {
+            type: 'object',
+            properties: {
+              label: {
+                type: 'string',
+                description: 'The row label (first column content). Use empty string for blank.'
+              },
+              cells: {
+                type: 'array',
+                description: 'Cell values for this row. Must have exactly (headers.length - 1) items.',
+                items: {
+                  type: 'string'
+                }
+              }
+            },
+            required: ['label', 'cells']
+          }
+        }
+      },
+      required: ['parent_uid', 'headers', 'rows']
+    }
+  },
 };

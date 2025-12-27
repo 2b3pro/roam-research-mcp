@@ -344,6 +344,24 @@ export class RoamServer {
             };
           }
 
+          case 'roam_create_table': {
+            const { parent_uid, order, headers, rows } = request.params.arguments as {
+              parent_uid: string;
+              order?: number | 'first' | 'last';
+              headers: string[];
+              rows: Array<{ label: string; cells: string[] }>;
+            };
+            const result = await this.toolHandlers.createTable({
+              parent_uid,
+              order,
+              headers,
+              rows
+            });
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            };
+          }
+
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,

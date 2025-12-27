@@ -4,34 +4,37 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { PageOperations } from './operations/pages.js';
 import { BlockOperations } from './operations/blocks.js';
-import { BlockRetrievalOperations } from './operations/block-retrieval.js'; // New import
+import { BlockRetrievalOperations } from './operations/block-retrieval.js';
 import { SearchOperations } from './operations/search/index.js';
 import { MemoryOperations } from './operations/memory.js';
 import { TodoOperations } from './operations/todos.js';
 import { OutlineOperations } from './operations/outline.js';
 import { BatchOperations } from './operations/batch.js';
+import { TableOperations, type TableInput } from './operations/table.js';
 import { DatomicSearchHandlerImpl } from './operations/search/handlers.js';
 
 export class ToolHandlers {
   private pageOps: PageOperations;
   private blockOps: BlockOperations;
-  private blockRetrievalOps: BlockRetrievalOperations; // New instance
+  private blockRetrievalOps: BlockRetrievalOperations;
   private searchOps: SearchOperations;
   private memoryOps: MemoryOperations;
   private todoOps: TodoOperations;
   private outlineOps: OutlineOperations;
   private batchOps: BatchOperations;
+  private tableOps: TableOperations;
   private cachedCheatsheet: string | null = null;
 
   constructor(private graph: Graph) {
     this.pageOps = new PageOperations(graph);
     this.blockOps = new BlockOperations(graph);
-    this.blockRetrievalOps = new BlockRetrievalOperations(graph); // Initialize new instance
+    this.blockRetrievalOps = new BlockRetrievalOperations(graph);
     this.searchOps = new SearchOperations(graph);
     this.memoryOps = new MemoryOperations(graph);
     this.todoOps = new TodoOperations(graph);
     this.outlineOps = new OutlineOperations(graph);
     this.batchOps = new BatchOperations(graph);
+    this.tableOps = new TableOperations(graph);
   }
 
   // Page Operations
@@ -139,6 +142,11 @@ export class ToolHandlers {
   // Batch Operations
   async processBatch(actions: any[]) {
     return this.batchOps.processBatch(actions);
+  }
+
+  // Table Operations
+  async createTable(input: TableInput) {
+    return this.tableOps.createTable(input);
   }
 
   async getRoamMarkdownCheatsheet() {
