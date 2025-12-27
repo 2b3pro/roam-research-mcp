@@ -168,6 +168,20 @@ export class PageOperations {
     // If content is provided, create blocks using batch operations
     if (content && content.length > 0) {
       try {
+        // Idempotency check: If page already has content, skip adding more
+        // This prevents duplicate content when the tool is called twice
+        const existingBlocksQuery = `[:find (count ?b) .
+                                      :where [?p :block/uid "${pageUid}"]
+                                             [?p :block/children ?b]]`;
+        const existingBlockCountResult = await q(this.graph, existingBlocksQuery, []);
+        const existingBlockCount = typeof existingBlockCountResult === 'number' ? existingBlockCountResult : 0;
+
+        if (existingBlockCount && existingBlockCount > 0) {
+          // Page already has content - this might be a duplicate call
+          // Return success without adding duplicate content
+          return { success: true, uid: pageUid };
+        }
+
         // Separate text content from table content, maintaining order
         const textItems: TextContentItem[] = [];
         const tableItems: { index: number; item: TableContentItem }[] = [];

@@ -1,5 +1,22 @@
 # Changelog
 
+v1.3.2 - 2025-12-27
+
+- FIXED: Content duplication bug in `roam_create_page`
+  - Added idempotency check to prevent duplicate content when tool is called multiple times
+  - Root cause: Duplicate tool invocations (e.g., SSE transport retries, client timeouts) caused content to be created twice
+  - If page already has child blocks, subsequent calls return success without adding duplicate content
+  - Added test script: `scripts/test-create-page-duplication.ts`
+
+v1.3.1 - 2025-12-27
+
+- ENHANCED: `Roam_Markdown_Cheatsheet.md` attribute usage guidance
+  - Added clear rules for when to use `::` attribute syntax vs bold formatting
+  - Attributes are for queryable metadata across the graph (Type::, Author::, Status::)
+  - Bold formatting (`**Label:**`) should be used for page-specific labels (Step 1:, Summary:)
+  - Added "The Test" decision guide: "Will I ever query for this across my graph?"
+  - Added attribute anti-pattern to the DON'T DO THIS section
+
 v1.3.0 - 2025-12-26
 
 - ADDED: `roam_create_table` tool

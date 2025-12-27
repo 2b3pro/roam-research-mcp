@@ -568,7 +568,7 @@ export const toolSchemas = {
   },
   roam_create_table: {
     name: 'roam_create_table',
-    description: 'Create a table in Roam with specified headers and rows. This tool abstracts the complex nested structure that Roam tables require, making it much easier to create properly formatted tables.\n\n**Why use this tool:**\n- Roam tables require precise nested block structures that are error-prone to create manually\n- Automatically handles the {{[[table]]}} container and nested column structure\n- Validates row/column consistency before execution\n- Converts empty cells to spaces (required by Roam)\n\n**Example:** A table with headers ["", "Column A", "Column B"] and rows [{label: "Row 1", cells: ["A1", "B1"]}] creates a 2x3 table.',
+    description: 'Create a table in Roam with specified headers and rows. This tool abstracts the complex nested structure that Roam tables require, making it much easier to create properly formatted tables.\n\n**Why use this tool:**\n- Roam tables require precise nested block structures that are error-prone to create manually\n- Automatically handles the {{[[table]]}} container and nested column structure\n- Validates row/column consistency before execution\n- Converts empty cells to spaces (required by Roam)\n\n**Example:** A table with headers ["", "Column A", "Column B"] and rows [{label: "Row 1", cells: ["A1", "B1"]}] creates a 2x3 table.\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
     inputSchema: {
       type: 'object',
       properties: {

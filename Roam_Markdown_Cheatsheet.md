@@ -53,7 +53,27 @@ Author:: [[Person Name]]
 Rating:: 4/5
 Source:: https://example.com
 ```
-Attributes create structured metadata queryable across your graph.
+
+**Purpose**: Attributes create structured metadata that is **queryable across your entire graph**. The attribute name becomes a page reference, so only use `::` when the attribute is a reusable property that applies to multiple pages or concepts.
+
+**When to USE attributes:**
+| Attribute | Why It's Good |
+|-----------|---------------|
+| `Type:: Book` | Reusable across all media you consume |
+| `Author:: [[Person]]` | Links to author page, queryable |
+| `Status:: In Progress` | Standard project states, queryable |
+| `Source:: URL` | Consistent sourcing across notes |
+| `Date:: [[January 1st, 2025]]` | Enables date-based queries |
+
+**When NOT to use attributes:**
+| ❌ Wrong | ✅ Use Instead | Why |
+|----------|----------------|-----|
+| `Step 1:: Do this thing` | `**Step 1:** Do this thing` | Step numbers are page-specific, not queryable concepts |
+| `Note:: Some observation` | Just write the text, or use `#note` | One-off labels don't need attribute syntax |
+| `Summary:: The main point` | `**Summary:** The main point` | Section headers are formatting, not metadata |
+| `Definition:: Some text` | `**Term**:: Definition` | Only use for actual definitions you want to query |
+
+⚠️ **The Test**: Ask yourself: "Will I ever query for all blocks with this attribute across my graph?" If no, use **bold formatting** (`**Label:**`) instead of `::` syntax.
 
 ---
 
@@ -149,6 +169,7 @@ Tables use nested indentation. Each column header/cell nests ONE LEVEL DEEPER th
 
 | ❌ Wrong | ✅ Correct | Why |
 |----------|-----------|-----|
+| `Step 1:: Do this` | `**Step 1:** Do this` | `::` creates queryable attributes; use bold for page-specific labels |
 | `#multiplewords` | `#[[multiple words]]` | Concatenated tags create dead references |
 | `[[january 1, 2025]]` | `[[January 1st, 2025]]` | Must use ordinal format with proper capitalization |
 | `[text](((block-uid)))` | `[text](<((block-uid))>)` | Block ref links need angle bracket wrapper |
