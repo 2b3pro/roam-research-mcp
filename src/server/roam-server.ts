@@ -15,6 +15,7 @@ import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
 import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT } from '../config/environment.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
+import type { ContentItem } from '../tools/operations/pages.js';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
@@ -141,10 +142,7 @@ export class RoamServer {
           case 'roam_create_page': {
             const { title, content } = request.params.arguments as {
               title: string;
-              content?: Array<{
-                text: string;
-                level: number;
-              }>;
+              content?: ContentItem[];
             };
             const result = await this.toolHandlers.createPage(title, content);
             return {

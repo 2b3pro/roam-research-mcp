@@ -42,7 +42,7 @@ export const toolSchemas = {
   },
   roam_create_page: {
     name: 'roam_create_page',
-    description: 'Create a new standalone page in Roam with optional content, including structured outlines, using explicit nesting levels and headings (H1-H3). This is the preferred method for creating a new page with an outline in a single step. Best for:\n- Creating foundational concept pages that other pages will link to/from\n- Establishing new topic areas that need their own namespace\n- Setting up reference materials or documentation\n- Making permanent collections of information.\n**Efficiency Tip:** This tool batches page and content creation efficiently. For adding content to existing pages, use `roam_process_batch_actions` instead.\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
+    description: 'Create a new standalone page in Roam with optional content, including structured outlines and tables, using explicit nesting levels and headings (H1-H3). This is the preferred method for creating a new page with an outline in a single step. Best for:\n- Creating foundational concept pages that other pages will link to/from\n- Establishing new topic areas that need their own namespace\n- Setting up reference materials or documentation\n- Making permanent collections of information\n- Creating pages with mixed text and table content in one call.\n**Efficiency Tip:** This tool batches page and content creation efficiently. For adding content to existing pages, use `roam_process_batch_actions` instead.\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -52,28 +52,58 @@ export const toolSchemas = {
         },
         content: {
           type: 'array',
-          description: 'Initial content for the page as an array of blocks with explicit nesting levels. Note: While empty blocks (e.g., {"text": "", "level": 1}) can be used for visual spacing, they create empty entities in the database. Please use them sparingly and only for structural purposes, not for simple visual separation.',
+          description: 'Initial content for the page as an array of content items. Each item can be a text block or a table. Text blocks use {text, level, heading?}. Tables use {type: "table", headers, rows}. Items are processed in order.',
           items: {
             type: 'object',
             properties: {
+              type: {
+                type: 'string',
+                enum: ['text', 'table'],
+                description: 'Content type: "text" for regular blocks (default), "table" for tables',
+                default: 'text'
+              },
               text: {
                 type: 'string',
-                description: 'Content of the block'
+                description: 'Content of the block (for type: "text")'
               },
               level: {
                 type: 'integer',
-                description: 'Indentation level (1-10, where 1 is top level)',
+                description: 'Indentation level (1-10, where 1 is top level). For tables, this should always be 1.',
                 minimum: 1,
                 maximum: 10
               },
               heading: {
                 type: 'integer',
-                description: 'Optional: Heading formatting for this block (1-3)',
+                description: 'Optional: Heading formatting for this block (1-3). Only for type: "text".',
                 minimum: 1,
                 maximum: 3
+              },
+              headers: {
+                type: 'array',
+                description: 'Column headers for the table (for type: "table"). First header is typically empty for row labels.',
+                items: { type: 'string' }
+              },
+              rows: {
+                type: 'array',
+                description: 'Data rows for the table (for type: "table"). Each row has a label and cells.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    label: {
+                      type: 'string',
+                      description: 'The row label (first column content). Use empty string for blank.'
+                    },
+                    cells: {
+                      type: 'array',
+                      description: 'Cell values for this row. Must have exactly (headers.length - 1) items.',
+                      items: { type: 'string' }
+                    }
+                  },
+                  required: ['label', 'cells']
+                }
               }
             },
-            required: ['text', 'level']
+            required: ['level']
           }
         },
       },

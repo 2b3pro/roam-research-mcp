@@ -10,6 +10,25 @@ import {
   hasMarkdownTable
 } from '../../markdown-utils.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
+import { buildTableActions, type TableRow } from './table.js';
+import { BatchOperations } from './batch.js';
+
+// Content item types for createPage
+export interface TextContentItem {
+  type?: 'text';
+  text: string;
+  level: number;
+  heading?: number;
+}
+
+export interface TableContentItem {
+  type: 'table';
+  level: number;
+  headers: string[];
+  rows: TableRow[];
+}
+
+export type ContentItem = TextContentItem | TableContentItem;
 
 // Helper to get ordinal suffix for dates
 function getOrdinalSuffix(day: number): string {
@@ -23,7 +42,11 @@ function getOrdinalSuffix(day: number): string {
 }
 
 export class PageOperations {
-  constructor(private graph: Graph) { }
+  private batchOps: BatchOperations;
+
+  constructor(private graph: Graph) {
+    this.batchOps = new BatchOperations(graph);
+  }
 
   async findPagesModifiedToday(limit: number = 50, offset: number = 0, sort_order: 'asc' | 'desc' = 'desc') {
     // Define ancestor rule for traversing block hierarchy
@@ -95,7 +118,7 @@ export class PageOperations {
     }
   }
 
-  async createPage(title: string, content?: Array<{ text: string; level: number; heading?: number }>): Promise<{ success: boolean; uid: string }> {
+  async createPage(title: string, content?: ContentItem[]): Promise<{ success: boolean; uid: string }> {
     // Ensure title is properly formatted
     const pageTitle = String(title).trim();
 
@@ -145,73 +168,104 @@ export class PageOperations {
     // If content is provided, create blocks using batch operations
     if (content && content.length > 0) {
       try {
-        // Filter out empty blocks (empty or whitespace-only text) to prevent creating visual linebreaks
-        const nonEmptyContent = content.filter(block => block.text && block.text.trim().length > 0);
+        // Separate text content from table content, maintaining order
+        const textItems: TextContentItem[] = [];
+        const tableItems: { index: number; item: TableContentItem }[] = [];
 
-        if (nonEmptyContent.length === 0) {
-          // All blocks were empty, just return the page without content
-          return { success: true, uid: pageUid };
-        }
-
-        // Normalize levels to prevent gaps after filtering (e.g., if level 2 was empty, level 3 becomes orphaned)
-        // Each block's level should not exceed previous block's level + 1
-        const normalizedContent: Array<{ text: string; level: number; heading?: number }> = [];
-        for (let i = 0; i < nonEmptyContent.length; i++) {
-          const block = nonEmptyContent[i];
-          if (i === 0) {
-            // First block should always be level 1
-            normalizedContent.push({ ...block, level: 1 });
+        for (let i = 0; i < content.length; i++) {
+          const item = content[i];
+          if (item.type === 'table') {
+            tableItems.push({ index: i, item: item as TableContentItem });
           } else {
-            const prevLevel = normalizedContent[i - 1].level;
-            const maxAllowedLevel = prevLevel + 1;
-            normalizedContent.push({
-              ...block,
-              level: Math.min(block.level, maxAllowedLevel)
-            });
+            // Default to text type
+            textItems.push(item as TextContentItem);
           }
         }
 
-        // Convert content array to MarkdownNode format expected by convertToRoamActions
-        const nodes = normalizedContent.map(block => ({
-          content: convertToRoamMarkdown(block.text.replace(/^#+\s*/, '')),
-          level: block.level,
-          ...(block.heading && { heading_level: block.heading }),
-          children: []
-        }));
+        // Process text blocks
+        const allActions: any[] = [];
 
-        // Create hierarchical structure based on levels
-        const rootNodes: any[] = [];
-        const levelMap: { [level: number]: any } = {};
+        if (textItems.length > 0) {
+          // Filter out empty blocks (empty or whitespace-only text) to prevent creating visual linebreaks
+          const nonEmptyContent = textItems.filter(block => block.text && block.text.trim().length > 0);
 
-        for (const node of nodes) {
-          if (node.level === 1) {
-            rootNodes.push(node);
-            levelMap[1] = node;
-          } else {
-            const parentLevel = node.level - 1;
-            const parent = levelMap[parentLevel];
-
-            if (!parent) {
-              throw new Error(`Invalid block hierarchy: level ${node.level} block has no parent`);
+          if (nonEmptyContent.length > 0) {
+            // Normalize levels to prevent gaps after filtering
+            const normalizedContent: TextContentItem[] = [];
+            for (let i = 0; i < nonEmptyContent.length; i++) {
+              const block = nonEmptyContent[i];
+              if (i === 0) {
+                normalizedContent.push({ ...block, level: 1 });
+              } else {
+                const prevLevel = normalizedContent[i - 1].level;
+                const maxAllowedLevel = prevLevel + 1;
+                normalizedContent.push({
+                  ...block,
+                  level: Math.min(block.level, maxAllowedLevel)
+                });
+              }
             }
 
-            parent.children.push(node);
-            levelMap[node.level] = node;
+            // Convert content array to MarkdownNode format expected by convertToRoamActions
+            const nodes = normalizedContent.map(block => ({
+              content: convertToRoamMarkdown(block.text.replace(/^#+\s*/, '')),
+              level: block.level,
+              ...(block.heading && { heading_level: block.heading }),
+              children: []
+            }));
+
+            // Create hierarchical structure based on levels
+            const rootNodes: any[] = [];
+            const levelMap: { [level: number]: any } = {};
+
+            for (const node of nodes) {
+              if (node.level === 1) {
+                rootNodes.push(node);
+                levelMap[1] = node;
+              } else {
+                const parentLevel = node.level - 1;
+                const parent = levelMap[parentLevel];
+
+                if (!parent) {
+                  throw new Error(`Invalid block hierarchy: level ${node.level} block has no parent`);
+                }
+
+                parent.children.push(node);
+                levelMap[node.level] = node;
+              }
+            }
+
+            // Generate batch actions for text blocks
+            const textActions = convertToRoamActions(rootNodes, pageUid, 'last');
+            allActions.push(...textActions);
           }
         }
 
-        // Generate batch actions for all blocks
-        const actions = convertToRoamActions(rootNodes, pageUid, 'last');
-
-        // Execute batch operation
-        if (actions.length > 0) {
+        // Execute text block actions first (no placeholders, use SDK directly)
+        if (allActions.length > 0) {
           const batchResult = await batchActions(this.graph, {
             action: 'batch-actions',
-            actions
+            actions: allActions
           });
 
           if (!batchResult) {
-            throw new Error('Failed to create blocks');
+            throw new Error('Failed to create text blocks');
+          }
+        }
+
+        // Process table items separately (use BatchOperations to handle UID placeholders)
+        for (const { item } of tableItems) {
+          const tableActions = buildTableActions({
+            parent_uid: pageUid,
+            headers: item.headers,
+            rows: item.rows,
+            order: 'last'
+          });
+
+          // Use BatchOperations.processBatch to handle {{uid:*}} placeholders
+          const tableResult = await this.batchOps.processBatch(tableActions);
+          if (!tableResult.success) {
+            throw new Error(`Failed to create table: ${typeof tableResult.error === 'string' ? tableResult.error : tableResult.error?.message}`);
           }
         }
       } catch (error) {

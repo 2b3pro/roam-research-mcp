@@ -20,6 +20,11 @@ v1.3.0 - 2025-12-26
 - ADDED: Rate limit retry with exponential backoff
   - Up to 3 retries with configurable delays (1s initial, 2x multiplier, 60s max)
   - Automatic handling of 429 responses from Roam API
+- ENHANCED: `roam_create_page` now supports mixed content types
+  - Content array can now include both text blocks and tables
+  - Tables use `{type: "table", level, headers, rows}` format
+  - Reduces MCP calls when creating pages with mixed content (2+ calls → 1 call)
+  - Text blocks remain default (no type field needed for backward compatibility)
 
 v1.2.2 - 2025-12-24
 - ENHANCED: CORS support for HTTP streaming endpoint

@@ -162,22 +162,23 @@ The server provides powerful tools for interacting with Roam Research:
 
 1. `roam_fetch_page_by_title`: Fetch page content by title. Returns content in the specified format.
 2. `roam_fetch_block_with_children`: Fetch a block by its UID along with its hierarchical children down to a specified depth. Automatically handles `((UID))` formatting.
-3. `roam_create_page`: Create new pages with optional content and headings. Now creates a block on the daily page linking to the newly created page.
-4. `roam_import_markdown`: Import nested markdown content under a specific block. (Internally uses `roam_process_batch_actions`.)
-5. `roam_add_todo`: Add a list of todo items to today's daily page. (Internally uses `roam_process_batch_actions`.)
-6. `roam_create_outline`: Add a structured outline to an existing page or block, with support for `children_view_type`. Best for simpler, sequential outlines. For complex nesting (e.g., tables), consider `roam_process_batch_actions`. If `page_title_uid` and `block_text_uid` are both blank, content defaults to the daily page. (Internally uses `roam_process_batch_actions`.)
-7. `roam_search_block_refs`: Search for block references within a page or across the entire graph.
-8. `roam_search_hierarchy`: Search for parent or child blocks in the block hierarchy.
-9. `roam_find_pages_modified_today`: Find pages that have been modified today (since midnight), with pagination and sorting options.
-10. `roam_search_by_text`: Search for blocks containing specific text across all pages or within a specific page. This tool supports pagination via the `limit` and `offset` parameters.
-11. `roam_search_by_status`: Search for blocks with a specific status (TODO/DONE) across all pages or within a specific page.
-12. `roam_search_by_date`: Search for blocks or pages based on creation or modification dates.
-13. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag. This tool supports pagination via the `limit` and `offset` parameters.
-14. `roam_remember`: Add a memory or piece of information to remember. (Internally uses `roam_process_batch_actions`.)
-15. `roam_recall`: Retrieve all stored memories.
-16. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. Now supports client-side regex filtering for enhanced post-query processing. Optimal for complex filtering (including regex), highly complex boolean logic, arbitrary sorting criteria, and proximity search.
-17. `roam_markdown_cheatsheet`: Provides the content of the Roam Markdown Cheatsheet resource, optionally concatenated with custom instructions if `CUSTOM_INSTRUCTIONS_PATH` environment variable is set.
-18. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
+3. `roam_create_page`: Create new pages with optional content and headings. **Now supports mixed content types** - content array can include both text blocks and tables in a single call using `{type: "table", headers, rows}` format. Creates a block on the daily page linking to the newly created page.
+4. `roam_create_table`: Create a properly formatted Roam table with specified headers and rows. Abstracts Roam's complex nested table structure, validates row/column consistency, and handles empty cells automatically.
+5. `roam_import_markdown`: Import nested markdown content under a specific block. (Internally uses `roam_process_batch_actions`.)
+6. `roam_add_todo`: Add a list of todo items to today's daily page. (Internally uses `roam_process_batch_actions`.)
+7. `roam_create_outline`: Add a structured outline to an existing page or block, with support for `children_view_type`. Best for simpler, sequential outlines. For complex nesting (e.g., tables), consider `roam_process_batch_actions`. If `page_title_uid` and `block_text_uid` are both blank, content defaults to the daily page. (Internally uses `roam_process_batch_actions`.)
+8. `roam_search_block_refs`: Search for block references within a page or across the entire graph.
+9. `roam_search_hierarchy`: Search for parent or child blocks in the block hierarchy.
+10. `roam_find_pages_modified_today`: Find pages that have been modified today (since midnight), with pagination and sorting options.
+11. `roam_search_by_text`: Search for blocks containing specific text across all pages or within a specific page. This tool supports pagination via the `limit` and `offset` parameters.
+12. `roam_search_by_status`: Search for blocks with a specific status (TODO/DONE) across all pages or within a specific page.
+13. `roam_search_by_date`: Search for blocks or pages based on creation or modification dates.
+14. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag. This tool supports pagination via the `limit` and `offset` parameters.
+15. `roam_remember`: Add a memory or piece of information to remember. (Internally uses `roam_process_batch_actions`.)
+16. `roam_recall`: Retrieve all stored memories.
+17. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. Now supports client-side regex filtering for enhanced post-query processing. Optimal for complex filtering (including regex), highly complex boolean logic, arbitrary sorting criteria, and proximity search.
+18. `roam_markdown_cheatsheet`: Provides the content of the Roam Markdown Cheatsheet resource, optionally concatenated with custom instructions if `CUSTOM_INSTRUCTIONS_PATH` environment variable is set.
+19. `roam_process_batch_actions`: Execute a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Provides granular control for complex nesting like tables. **Now includes pre-validation** that catches errors before API execution, with structured error responses and automatic rate limit retry with exponential backoff. (Note: For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs using tools like `roam_fetch_page_by_title`.)
 
 **Deprecated Tools**:
 The following tools have been deprecated as of `v0.36.2` in favor of the more powerful and flexible `roam_process_batch_actions`:
@@ -269,10 +270,23 @@ This demonstrates moving a block from one location to another and simultaneously
 
 ### Example 4: Making a Table
 
-This demonstrates moving a block from one location to another and simultaneously updating its content.
+This demonstrates creating a standalone table on a page.
 
 ```
 "In Roam, add a new table on the page "Fruity Tables" that compares four types of fruits: apples, oranges, grapes, and dates. Choose randomly four areas to compare."
+```
+
+### Example 5: Creating a Page with Mixed Content (Text + Table)
+
+This demonstrates creating a new page with both text blocks and a table in a single call using `roam_create_page`.
+
+```
+"Create a new Roam page titled 'Product Comparison' with:
+- A heading 'Overview'
+- An introduction paragraph explaining the comparison
+- A comparison table with columns: Feature, Plan A, Plan B
+  - Rows: Price ($10, $20), Storage (10GB, 50GB), Support (Email, 24/7)
+- A conclusion section"
 ```
 
 ---

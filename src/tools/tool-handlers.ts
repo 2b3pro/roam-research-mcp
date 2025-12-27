@@ -2,7 +2,7 @@ import { Graph } from '@roam-research/roam-api-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { PageOperations } from './operations/pages.js';
+import { PageOperations, type ContentItem } from './operations/pages.js';
 import { BlockOperations } from './operations/blocks.js';
 import { BlockRetrievalOperations } from './operations/block-retrieval.js';
 import { SearchOperations } from './operations/search/index.js';
@@ -42,7 +42,7 @@ export class ToolHandlers {
     return this.pageOps.findPagesModifiedToday(limit, offset, sort_order);
   }
 
-  async createPage(title: string, content?: Array<{ text: string; level: number; heading?: number }>) {
+  async createPage(title: string, content?: ContentItem[]) {
     return this.pageOps.createPage(title, content);
   }
 
