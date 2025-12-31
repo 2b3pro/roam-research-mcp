@@ -1,5 +1,31 @@
 # Changelog
 
+v1.6.0 - 2025-12-31
+
+- ADDED: `roam refs` CLI command to find blocks referencing a page or block
+  - Accepts page titles, `#tags`, `[[Page Names]]`, or `((block UIDs))`
+  - Three output formats: grouped by page (default), `--json` for LLM/programmatic use, `--raw` for piping
+  - `-n, --limit` option to control number of results (default: 50)
+- ENHANCED: `roam_search_block_refs` MCP tool with new `title` parameter
+  - Find blocks referencing a page title using Roam's `:block/refs` attribute
+  - Captures both `[[page]]` links and `#tag` references semantically
+  - Existing `block_uid` parameter continues to work for `((uid))` pattern searches
+
+v1.5.0 - 2025-12-31
+
+- ADDED: Unified `roam` CLI with three subcommands
+  - `roam get` - Fetch pages by title or blocks by UID
+    - `--json` for machine-readable output, `--depth` for child levels, `--flat` for flattened hierarchy
+    - Accepts both `((uid))` and bare 9-character UIDs
+  - `roam search` - Full-text and tag-based search
+    - `--tag` for tag filtering, `--page` for page scope, `-i` for case-insensitive, `-n` for result limit
+  - `roam save` - Import markdown to Roam (replaces `roam-import`)
+    - `--title` for explicit page title, `--update` for smart diff mode preserving block UIDs
+    - Supports both file input and stdin piping
+- REMOVED: `roam-import` standalone CLI (functionality merged into `roam save`)
+- ADDED: `commander.js` dependency for robust CLI argument parsing
+- UPDATED: Package binary from `roam-import` to `roam`
+
 v1.4.0 - 2025-12-30
 
 - ADDED: `roam_update_page_markdown` tool

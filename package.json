@@ -1,6 +1,6 @@
 {
   "name": "roam-research-mcp",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "A Model Context Protocol (MCP) server for Roam Research API integration",
   "private": false,
   "repository": {
@@ -23,13 +23,13 @@
   "type": "module",
   "bin": {
     "roam-research-mcp": "build/index.js",
-    "roam-import": "build/cli/import-markdown.js"
+    "roam": "build/cli/roam.js"
   },
   "files": [
     "build"
   ],
   "scripts": {
-    "build": "echo \"Using custom instructions: .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md\" && tsc && cat Roam_Markdown_Cheatsheet.md .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md > build/Roam_Markdown_Cheatsheet.md && chmod 755 build/index.js build/cli/import-markdown.js",
+    "build": "echo \"Using custom instructions: .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md\" && tsc && cat Roam_Markdown_Cheatsheet.md .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md > build/Roam_Markdown_Cheatsheet.md && chmod 755 build/index.js build/cli/roam.js",
     "clean": "rm -rf build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
@@ -44,6 +44,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.2",
     "@roam-research/roam-api-sdk": "^0.10.0",
+    "commander": "^14.0.2",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {

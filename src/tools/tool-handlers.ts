@@ -73,7 +73,7 @@ export class ToolHandlers {
     return this.searchOps.searchForTag(primary_tag, page_title_uid, near_tag);
   }
 
-  async searchBlockRefs(params: { block_uid?: string; page_title_uid?: string }) {
+  async searchBlockRefs(params: { block_uid?: string; title?: string; page_title_uid?: string }) {
     return this.searchOps.searchBlockRefs(params);
   }
 
