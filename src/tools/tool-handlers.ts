@@ -149,6 +149,11 @@ export class ToolHandlers {
     return this.tableOps.createTable(input);
   }
 
+  // Page Update with Diff
+  async updatePageMarkdown(title: string, markdown: string, dryRun: boolean = false) {
+    return this.pageOps.updatePageMarkdown(title, markdown, dryRun);
+  }
+
   async getRoamMarkdownCheatsheet() {
     if (this.cachedCheatsheet) {
       return this.cachedCheatsheet;

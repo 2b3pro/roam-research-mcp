@@ -12,6 +12,17 @@ import {
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
+import {
+  parseExistingBlocks,
+  markdownToBlocks,
+  diffBlockTrees,
+  generateBatchActions,
+  getDiffStats,
+  isDiffEmpty,
+  summarizeActions,
+  type DiffStats,
+  type RoamApiBlock,
+} from '../../diff/index.js';
 
 // Content item types for createPage
 export interface TextContentItem {
@@ -499,5 +510,136 @@ export class PageOperations {
     };
 
     return `# ${title}\n\n${toMarkdown(rootBlocks)}`;
+  }
+
+  /**
+   * Update an existing page with new markdown content using smart diff.
+   * Preserves block UIDs where possible and generates minimal changes.
+   *
+   * @param title - Title of the page to update
+   * @param markdown - New GFM markdown content
+   * @param dryRun - If true, returns actions without executing them
+   * @returns Result with actions, stats, and preserved UIDs
+   */
+  async updatePageMarkdown(
+    title: string,
+    markdown: string,
+    dryRun: boolean = false
+  ): Promise<{
+    success: boolean;
+    actions: any[];
+    stats: DiffStats;
+    preservedUids: string[];
+    summary: string;
+  }> {
+    if (!title) {
+      throw new McpError(ErrorCode.InvalidRequest, 'title is required');
+    }
+
+    if (!markdown) {
+      throw new McpError(ErrorCode.InvalidRequest, 'markdown is required');
+    }
+
+    // 1. Fetch existing page with raw block data
+    const pageTitle = String(title).trim();
+
+    // Try different case variations
+    const variations = [
+      pageTitle,
+      capitalizeWords(pageTitle),
+      pageTitle.toLowerCase()
+    ];
+
+    let pageUid: string | null = null;
+
+    // Check cache first
+    for (const variation of variations) {
+      const cachedUid = pageUidCache.get(variation);
+      if (cachedUid) {
+        pageUid = cachedUid;
+        break;
+      }
+    }
+
+    // If not cached, query the database
+    if (!pageUid) {
+      const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
+      const searchQuery = `[:find ?uid .
+                          :where [?e :block/uid ?uid]
+                                 (or ${orClause})]`;
+      const result = await q(this.graph, searchQuery, []);
+      pageUid = (result === null || result === undefined) ? null : String(result);
+
+      if (pageUid) {
+        pageUidCache.set(pageTitle, pageUid);
+      }
+    }
+
+    if (!pageUid) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Page with title "${title}" not found`
+      );
+    }
+
+    // 2. Fetch existing blocks with full hierarchy
+    const blocksQuery = `[:find (pull ?page [
+                            :block/uid
+                            :block/string
+                            :block/order
+                            :block/heading
+                            {:block/children ...}
+                          ]) .
+                          :where [?page :block/uid "${pageUid}"]]`;
+
+    const pageData = await q(this.graph, blocksQuery, []) as unknown as RoamApiBlock | null;
+
+    if (!pageData) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to fetch page data for "${title}"`
+      );
+    }
+
+    // 3. Parse existing blocks into our format
+    const existingBlocks = parseExistingBlocks(pageData);
+
+    // 4. Convert new markdown to block structure
+    const newBlocks = markdownToBlocks(markdown, pageUid);
+
+    // 5. Compute diff
+    const diff = diffBlockTrees(existingBlocks, newBlocks, pageUid);
+
+    // 6. Generate ordered batch actions
+    const actions = generateBatchActions(diff);
+    const stats = getDiffStats(diff);
+    const summary = isDiffEmpty(diff) ? 'No changes needed' : summarizeActions(actions);
+
+    // 7. Execute if not dry run and there are actions
+    if (!dryRun && actions.length > 0) {
+      try {
+        const batchResult = await batchActions(this.graph, {
+          action: 'batch-actions',
+          actions: actions
+        });
+
+        if (!batchResult) {
+          throw new Error('Batch actions returned no result');
+        }
+      } catch (error) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to apply changes: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    return {
+      success: true,
+      actions,
+      stats,
+      preservedUids: [...diff.preservedUids],
+      summary: dryRun ? `[DRY RUN] ${summary}` : summary
+    };
   }
 }
