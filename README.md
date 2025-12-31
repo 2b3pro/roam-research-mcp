@@ -85,7 +85,7 @@ docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 
 ## Standalone CLI: `roam`
 
-A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides three subcommands: `get`, `search`, and `save`.
+A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides four subcommands: `get`, `search`, `save`, and `refs`.
 
 ### Installation
 
@@ -226,6 +226,58 @@ EOF
 
 ---
 
+### `roam refs` - Find references
+
+Find blocks that reference a page or block (backlinks).
+
+```bash
+# Find references to a page
+roam refs "Project Alpha"
+roam refs "December 30th, 2025"
+
+# Find references to a tag
+roam refs "#TODO"
+roam refs "[[Meeting Notes]]"
+
+# Find references to a block
+roam refs "((AbCdEfGhI))"
+
+# Limit results
+roam refs "My Page" -n 100
+
+# Output as JSON (for LLM/programmatic use)
+roam refs "My Page" --json
+
+# Raw output (for piping)
+roam refs "My Page" --raw
+```
+
+**Options:**
+- `-n, --limit <n>` - Limit number of results (default: 50)
+- `--json` - Output as JSON array
+- `--raw` - Output raw UID + content lines (no grouping)
+- `--debug` - Show query metadata
+
+**Output Formats:**
+
+Default output groups results by page:
+```
+[[Reading List: Inbox]]
+  tiTqNBvYA   Date Captured:: [[December 30th, 2025]]
+
+[[Week 53, 2025]]
+  g0ur1z7Bs   [Sun 28]([[December 28th, 2025]]) | [Mon 29](...
+```
+
+JSON output for programmatic use:
+```json
+[
+  {"uid": "tiTqNBvYA", "content": "Date Captured:: [[December 30th, 2025]]", "page": "Reading List: Inbox"}
+]
+```
+
+---
+
 ## To Test
 
 Run [MCP Inspector](https://github.com/modelcontextprotocol/inspector) after build using the provided npm script:
@@ -257,7 +309,7 @@ The server provides powerful tools for interacting with Roam Research:
 5. `roam_import_markdown`: Import nested markdown content under a specific block. (Internally uses `roam_process_batch_actions`.)
 6. `roam_add_todo`: Add a list of todo items to today's daily page. (Internally uses `roam_process_batch_actions`.)
 7. `roam_create_outline`: Add a structured outline to an existing page or block, with support for `children_view_type`. Best for simpler, sequential outlines. For complex nesting (e.g., tables), consider `roam_process_batch_actions`. If `page_title_uid` and `block_text_uid` are both blank, content defaults to the daily page. (Internally uses `roam_process_batch_actions`.)
-8. `roam_search_block_refs`: Search for block references within a page or across the entire graph.
+8. `roam_search_block_refs`: Search for block references within a page or across the entire graph. Now supports `title` parameter to find blocks referencing a page title using `:block/refs` (captures `[[page]]` and `#tag` links semantically).
 9. `roam_search_hierarchy`: Search for parent or child blocks in the block hierarchy.
 10. `roam_find_pages_modified_today`: Find pages that have been modified today (since midnight), with pagination and sorting options.
 11. `roam_search_by_text`: Search for blocks containing specific text across all pages or within a specific page. This tool supports pagination via the `limit` and `offset` parameters.

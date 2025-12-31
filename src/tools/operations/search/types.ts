@@ -20,6 +20,7 @@ export interface TagSearchParams extends BaseSearchParams {
 // Block reference search parameters
 export interface BlockRefSearchParams extends BaseSearchParams {
   block_uid?: string;
+  title?: string;  // Page title to find references to (uses :block/refs)
 }
 
 // Hierarchy search parameters

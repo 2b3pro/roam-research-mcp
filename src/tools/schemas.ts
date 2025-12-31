@@ -261,13 +261,17 @@ export const toolSchemas = {
   },
   roam_search_block_refs: {
     name: 'roam_search_block_refs',
-    description: 'Search for block references within a page or across the entire graph. Can search for references to a specific block or find all block references.',
+    description: 'Search for block references within a page or across the entire graph. Can search for references to a specific block, a page title, or find all block references.',
     inputSchema: {
       type: 'object',
       properties: {
         block_uid: {
           type: 'string',
-          description: 'Optional: UID of the block to find references to'
+          description: 'Optional: UID of the block to find references to (searches for ((uid)) patterns in text)'
+        },
+        title: {
+          type: 'string',
+          description: 'Optional: Page title to find references to (uses :block/refs for [[page]] and #tag links)'
         },
         page_title_uid: {
           type: 'string',

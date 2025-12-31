@@ -6,6 +6,7 @@ import { resolveRefs } from '../tools/helpers/refs.js';
 
 export interface BlockRefSearchParams {
   block_uid?: string;
+  title?: string;  // Page title to find references to (uses :block/refs)
   page_title_uid?: string;
 }
 
@@ -18,7 +19,7 @@ export class BlockRefSearchHandler extends BaseSearchHandler {
   }
 
   async execute(): Promise<SearchResult> {
-    const { block_uid, page_title_uid } = this.params;
+    const { block_uid, title, page_title_uid } = this.params;
 
     // Get target page UID if provided
     let targetPageUid: string | undefined;
@@ -26,12 +27,35 @@ export class BlockRefSearchHandler extends BaseSearchHandler {
       targetPageUid = await SearchUtils.findPageByTitleOrUid(this.graph, page_title_uid);
     }
 
-    // Build query based on whether we're searching for references to a specific block
-    // or all block references within a page/graph
+    // Build query based on whether we're searching for references to a specific block,
+    // a page title, or all block references within a page/graph
     let queryStr: string;
     let queryParams: any[];
 
-    if (block_uid) {
+    if (title) {
+      // Search for references to a page by title using :block/refs
+      if (targetPageUid) {
+        queryStr = `[:find ?block-uid ?block-str
+                    :in $ ?target-title ?page-uid
+                    :where [?target :node/title ?target-title]
+                           [?p :block/uid ?page-uid]
+                           [?b :block/page ?p]
+                           [?b :block/refs ?target]
+                           [?b :block/string ?block-str]
+                           [?b :block/uid ?block-uid]]`;
+        queryParams = [title, targetPageUid];
+      } else {
+        queryStr = `[:find ?block-uid ?block-str ?page-title
+                    :in $ ?target-title
+                    :where [?target :node/title ?target-title]
+                           [?b :block/refs ?target]
+                           [?b :block/string ?block-str]
+                           [?b :block/uid ?block-uid]
+                           [?b :block/page ?p]
+                           [?p :node/title ?page-title]]`;
+        queryParams = [title];
+      }
+    } else if (block_uid) {
       // Search for references to a specific block
       if (targetPageUid) {
         queryStr = `[:find ?block-uid ?block-str
@@ -84,9 +108,11 @@ export class BlockRefSearchHandler extends BaseSearchHandler {
       })
     );
     
-    const searchDescription = block_uid 
-      ? `referencing block ((${block_uid}))`
-      : 'containing block references';
+    const searchDescription = title
+      ? `referencing [[${title}]]`
+      : block_uid
+        ? `referencing block ((${block_uid}))`
+        : 'containing block references';
       
     return SearchUtils.formatSearchResults(resolvedResults, searchDescription, !targetPageUid);
   }

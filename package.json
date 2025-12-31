@@ -1,6 +1,6 @@
 {
   "name": "roam-research-mcp",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "A Model Context Protocol (MCP) server for Roam Research API integration",
   "private": false,
   "repository": {

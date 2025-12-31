@@ -232,6 +232,7 @@ export class RoamServer {
           case 'roam_search_block_refs': {
             const params = request.params.arguments as {
               block_uid?: string;
+              title?: string;
               page_title_uid?: string;
             };
             const result = await this.toolHandlers.searchBlockRefs(params);

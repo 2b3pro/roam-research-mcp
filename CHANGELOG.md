@@ -1,5 +1,16 @@
 # Changelog
 
+v1.6.0 - 2025-12-31
+
+- ADDED: `roam refs` CLI command to find blocks referencing a page or block
+  - Accepts page titles, `#tags`, `[[Page Names]]`, or `((block UIDs))`
+  - Three output formats: grouped by page (default), `--json` for LLM/programmatic use, `--raw` for piping
+  - `-n, --limit` option to control number of results (default: 50)
+- ENHANCED: `roam_search_block_refs` MCP tool with new `title` parameter
+  - Find blocks referencing a page title using Roam's `:block/refs` attribute
+  - Captures both `[[page]]` links and `#tag` references semantically
+  - Existing `block_uid` parameter continues to work for `((uid))` pattern searches
+
 v1.5.0 - 2025-12-31
 
 - ADDED: Unified `roam` CLI with three subcommands
