@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/github/license/2b3pro/roam-research-mcp)](https://github.com/2b3pro/roam-research-mcp/blob/main/LICENSE)
 
-A Model Context Protocol (MCP) server that provides comprehensive access to Roam Research's API functionality. This server enables AI assistants like Claude to interact with your Roam Research graph through a standardized interface. It supports standard input/output (stdio) and HTTP Stream communication. (A WORK-IN-PROGRESS, personal project not officially endorsed by Roam Research)
+A Model Context Protocol (MCP) server and standalone CLI that provides comprehensive access to Roam Research's API functionality. The MCP server enables AI assistants like Claude to interact with your Roam Research graph through a standardized interface, while the CLI (`roam`) lets you fetch, search, and import content directly from the command line. Supports standard input/output (stdio) and HTTP Stream communication. (A WORK-IN-PROGRESS, personal project not officially endorsed by Roam Research)
 
 <a href="https://glama.ai/mcp/servers/fzfznyaflu"><img width="380" height="200" src="https://glama.ai/mcp/servers/fzfznyaflu/badge" alt="Roam Research MCP server" /></a>
 <a href="https://mseep.ai/app/2b3pro-roam-research-mcp"><img width="380" height="200" src="https://mseep.net/pr/2b3pro-roam-research-mcp-badge.png" alt="MseeP.ai Security Assessment Badge" /></a>
@@ -83,34 +83,9 @@ Alternatively, if you have a `.env` file in the project root (which is copied in
 docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 ```
 
-## Standalone CLI: roam-import
+## Standalone CLI: `roam`
 
-A standalone command-line tool for importing markdown content directly into Roam Research, without running the MCP server.
-
-### Usage
-
-```bash
-# From a file
-cat document.md | roam-import "Meeting Notes"
-
-# From clipboard (macOS)
-pbpaste | roam-import "Ideas"
-
-# From here-doc
-roam-import "Quick Note" << EOF
-# Heading
-- Item 1
-- Item 2
-  - Nested item
-EOF
-```
-
-### Features
-
-- Reads markdown from stdin
-- Creates a new page with the specified title (or appends to existing page)
-- Automatically links the new page from today's daily page
-- Converts standard markdown to Roam-flavored markdown (bold, italic, highlights, tasks, code blocks)
+A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides three subcommands: `get`, `search`, and `save`.
 
 ### Installation
 
@@ -123,7 +98,7 @@ npm link
 Or run directly without linking:
 
 ```bash
-cat document.md | node build/cli/import-markdown.js "Page Title"
+node build/cli/roam.js <command> [options]
 ```
 
 ### Requirements
@@ -133,6 +108,121 @@ Same environment variables as the MCP server:
 - `ROAM_GRAPH_NAME`: Your Roam graph name
 
 Configure via `.env` file in the project root or set as environment variables.
+
+---
+
+### `roam get` - Fetch pages or blocks
+
+Fetch content from Roam and output as markdown or JSON.
+
+```bash
+# Fetch a page by title
+roam get "Daily Notes"
+
+# Fetch a block by UID
+roam get "((AbCdEfGhI))"
+roam get AbCdEfGhI
+
+# Output as JSON
+roam get "Daily Notes" --json
+
+# Control child depth (default: 4)
+roam get "Daily Notes" --depth 2
+
+# Flatten hierarchy
+roam get "Daily Notes" --flat
+
+# Debug mode
+roam get "Daily Notes" --debug
+```
+
+**Options:**
+- `--json` - Output as JSON instead of markdown
+- `--depth <n>` - Child levels to fetch (default: 4)
+- `--refs <n>` - Block ref expansion depth (default: 1)
+- `--flat` - Flatten hierarchy to single-level list
+- `--debug` - Show query metadata
+
+---
+
+### `roam search` - Search content
+
+Search for blocks containing text or tags.
+
+```bash
+# Full-text search
+roam search "keyword"
+
+# Multiple terms (AND logic)
+roam search "term1" "term2"
+
+# Tag-only search
+roam search --tag "[[Project]]"
+roam search --tag "#TODO"
+
+# Text + tag filter
+roam search "meeting" --tag "[[Work]]"
+
+# Scope to a specific page
+roam search "task" --page "Daily Notes"
+
+# Case-insensitive search
+roam search "keyword" -i
+
+# Limit results (default: 20)
+roam search "keyword" -n 50
+
+# Output as JSON
+roam search "keyword" --json
+```
+
+**Options:**
+- `--tag <tag>` - Filter by tag (e.g., `#TODO` or `[[Project]]`)
+- `--page <title>` - Scope search to a specific page
+- `-i, --case-insensitive` - Case-insensitive search
+- `-n, --limit <n>` - Limit number of results (default: 20)
+- `--json` - Output as JSON
+- `--debug` - Show query metadata
+
+---
+
+### `roam save` - Import markdown
+
+Import markdown content to Roam, creating or updating pages.
+
+```bash
+# From a file (title derived from filename)
+roam save document.md
+
+# With explicit title
+roam save document.md --title "Meeting Notes"
+
+# Update existing page with smart diff (preserves block UIDs)
+roam save document.md --update
+
+# From stdin (requires --title)
+cat notes.md | roam save --title "Quick Notes"
+pbpaste | roam save --title "Clipboard Content"
+
+# From here-doc
+roam save --title "Quick Note" << EOF
+# Heading
+- Item 1
+- Item 2
+  - Nested item
+EOF
+```
+
+**Options:**
+- `--title <title>` - Page title (defaults to filename without `.md`)
+- `--update` - Update existing page using smart diff (preserves block UIDs)
+- `--debug` - Show debug information
+
+**Features:**
+- Creates a new page with the specified title (or appends to existing page)
+- Automatically links the new page from today's daily page
+- Converts standard markdown to Roam-flavored markdown
+- Smart diff mode (`--update`) preserves block UIDs for existing content
 
 ---
 

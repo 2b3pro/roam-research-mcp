@@ -1,5 +1,20 @@
 # Changelog
 
+v1.5.0 - 2025-12-31
+
+- ADDED: Unified `roam` CLI with three subcommands
+  - `roam get` - Fetch pages by title or blocks by UID
+    - `--json` for machine-readable output, `--depth` for child levels, `--flat` for flattened hierarchy
+    - Accepts both `((uid))` and bare 9-character UIDs
+  - `roam search` - Full-text and tag-based search
+    - `--tag` for tag filtering, `--page` for page scope, `-i` for case-insensitive, `-n` for result limit
+  - `roam save` - Import markdown to Roam (replaces `roam-import`)
+    - `--title` for explicit page title, `--update` for smart diff mode preserving block UIDs
+    - Supports both file input and stdin piping
+- REMOVED: `roam-import` standalone CLI (functionality merged into `roam save`)
+- ADDED: `commander.js` dependency for robust CLI argument parsing
+- UPDATED: Package binary from `roam-import` to `roam`
+
 v1.4.0 - 2025-12-30
 
 - ADDED: `roam_update_page_markdown` tool
