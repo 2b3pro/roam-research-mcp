@@ -614,4 +614,27 @@ export const toolSchemas = {
       required: ['parent_uid', 'headers', 'rows']
     }
   },
+  roam_update_page_markdown: {
+    name: 'roam_update_page_markdown',
+    description: 'Update an existing page with new markdown content using smart diff. Preserves block UIDs where possible and generates minimal changes. This is ideal for:\n- Syncing external markdown files to Roam\n- AI-assisted content updates that preserve references\n- Batch content modifications without losing block references\n\n**How it works:**\n1. Fetches existing page blocks\n2. Matches new content to existing blocks by text similarity\n3. Generates minimal create/update/move/delete operations\n4. Preserves UIDs for matched blocks (keeping references intact)\n\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Title of the page to update'
+        },
+        markdown: {
+          type: 'string',
+          description: 'New GFM markdown content for the page'
+        },
+        dry_run: {
+          type: 'boolean',
+          description: 'If true, returns the planned actions without executing them. Useful for previewing changes.',
+          default: false
+        }
+      },
+      required: ['title', 'markdown']
+    }
+  },
 };

@@ -1,5 +1,20 @@
 # Changelog
 
+v1.4.0 - 2025-12-30
+
+- ADDED: `roam_update_page_markdown` tool
+  - Updates existing pages with new markdown content using smart diff algorithm
+  - Preserves block UIDs where possible, keeping references intact across the graph
+  - Three-phase block matching: exact text → normalized (removes list prefixes) → position-based fallback
+  - Generates minimal batch operations: only creates/updates/moves/deletes what changed
+  - Supports `dry_run` parameter to preview changes without executing them
+  - Returns detailed stats: creates, updates, moves, deletes, and preserved UIDs
+  - Ideal for: syncing external markdown to Roam, AI-assisted content updates, batch modifications
+- ADDED: Unit test infrastructure with Vitest
+  - Added `npm run test` and `npm run test:watch` scripts
+  - 71 tests covering diff module: matcher, parser, diff computation, action generation
+  - Tests document expected behavior of three-phase matching algorithm
+
 v1.3.2 - 2025-12-27
 
 - FIXED: Content duplication bug in `roam_create_page`

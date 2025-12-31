@@ -360,6 +360,18 @@ export class RoamServer {
             };
           }
 
+          case 'roam_update_page_markdown': {
+            const { title, markdown, dry_run = false } = request.params.arguments as {
+              title: string;
+              markdown: string;
+              dry_run?: boolean;
+            };
+            const result = await this.toolHandlers.updatePageMarkdown(title, markdown, dry_run);
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            };
+          }
+
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
