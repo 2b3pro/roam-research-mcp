@@ -71,9 +71,12 @@ Source:: https://example.com
 | `Step 1:: Do this thing` | `**Step 1:** Do this thing` | Step numbers are page-specific, not queryable concepts |
 | `Note:: Some observation` | Just write the text, or use `#note` | One-off labels don't need attribute syntax |
 | `Summary:: The main point` | `**Summary:** The main point` | Section headers are formatting, not metadata |
-| `Definition:: Some text` | `**Term**:: Definition` | Only use for actual definitions you want to query |
+| `Definition:: Some text` | `Term:: Definition` | Only use for actual definitions you want to query |
+| `Implementation Tier 3 (Societal Restructuring):: Some text` | `** Implementation Tier 3 (Societal Restructuring)**: Some text` | Label is specific to current concept |
 
 ⚠️ **The Test**: Ask yourself: "Will I ever query for all blocks with this attribute across my graph?" If no, use **bold formatting** (`**Label:**`) instead of `::` syntax.
+
+NOTE: Never combine bold markdown formatting with `::`. Roam formats attributes in bold by default. ✅ `<attribute>::` ❌ `**<attribute>**::`
 
 ---
 
@@ -328,7 +331,7 @@ Empty blocks and decorative dividers create clutter. Roam's outliner structure p
 
 ### Definitions
 ```
-**Term**:: Definition text #definition #[[domain]]
+Term:: Definition text #definition #[[domain]]
 ```
 
 ### Questions for Future
