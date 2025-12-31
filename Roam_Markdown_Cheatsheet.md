@@ -1,4 +1,4 @@
-# Roam Markdown Cheatsheet — Generic Foundation v2.0.0
+# Roam Markdown Cheatsheet — Generic Foundation v2.0.1
 
 > ⚠️ **MODEL DIRECTIVE**: Always consult this cheatsheet BEFORE making any Roam tool calls. Syntax errors in Roam are unforgiving.
 
@@ -36,6 +36,8 @@
 
 ⚠️ **CRITICAL**: Never concatenate multi-word tags. `#knowledgemanagement` ≠ `#[[knowledge management]]`
 
+⚠️ **CRITICAL**: Never use `#` to mean "number" (e.g., `#1`, `#2`). In Roam, `#` **always** creates a hashtag. Write `Step 1`, `No. 1`, or just spell out the number instead.
+
 ### Dates
 - **Always use ordinal format**: `[[January 1st, 2025]]`, `[[December 23rd, 2024]]`
 - Ordinals: 1st, 2nd, 3rd, 4th–20th, 21st, 22nd, 23rd, 24th–30th, 31st
@@ -72,7 +74,7 @@ Source:: https://example.com
 | `Note:: Some observation` | Just write the text, or use `#note` | One-off labels don't need attribute syntax |
 | `Summary:: The main point` | `**Summary:** The main point` | Section headers are formatting, not metadata |
 | `Definition:: Some text` | `Term:: Definition` | Only use for actual definitions you want to query |
-| `Implementation Tier 3 (Societal Restructuring):: Some text` | `** Implementation Tier 3 (Societal Restructuring)**: Some text` | Label is specific to current concept |
+| `Implementation Tier 3 (Societal Restructuring):: Some text` | `**Implementation Tier 3 (Societal Restructuring):** Some text` | Label is specific to current concept |
 
 ⚠️ **The Test**: Ask yourself: "Will I ever query for all blocks with this attribute across my graph?" If no, use **bold formatting** (`**Label:**`) instead of `::` syntax.
 
@@ -174,6 +176,7 @@ Tables use nested indentation. Each column header/cell nests ONE LEVEL DEEPER th
 |----------|-----------|-----|
 | `Step 1:: Do this` | `**Step 1:** Do this` | `::` creates queryable attributes; use bold for page-specific labels |
 | `#multiplewords` | `#[[multiple words]]` | Concatenated tags create dead references |
+| `#1`, `#2`, `#3` | `Step 1`, `No. 1`, or spell out | `#` always creates hashtags, never means "number" |
 | `[[january 1, 2025]]` | `[[January 1st, 2025]]` | Must use ordinal format with proper capitalization |
 | `[text](((block-uid)))` | `[text](<((block-uid))>)` | Block ref links need angle bracket wrapper |
 | `{{embed: ((uid))}}` | `{{[[embed]]: ((uid))}}` | Embed requires double brackets around keyword |
@@ -198,9 +201,17 @@ CREATING CONTENT IN ROAM:
 │   └─ Complex/nested markdown → roam_import_markdown
 │       (for deeply nested content, tables, etc.)
 │
+├─ Replacing/revising ENTIRE page content?
+│   └─ roam_update_page_markdown
+│       (fetches page internally, computes smart diff, preserves UIDs)
+│
 ├─ Need to CREATE, UPDATE, MOVE, or DELETE individual blocks?
 │   └─ roam_process_batch_actions
-│       (fine-grained control, temporary UIDs for parent refs)
+│       (fine-grained control, UID placeholders for parent refs)
+│
+├─ Creating a TABLE?
+│   └─ roam_create_table
+│       (handles complex nested structure automatically)
 │
 ├─ Adding a memory/note to remember?
 │   └─ roam_remember (auto-tags with MEMORIES_TAG)
@@ -210,9 +221,11 @@ CREATING CONTENT IN ROAM:
 │
 └─ SEARCHING/READING:
     ├─ Find by tag → roam_search_for_tag
-    ├─ Find by text → roam_search_by_text  
+    ├─ Find by text → roam_search_by_text
     ├─ Find by date range → roam_search_by_date
     ├─ Find by status → roam_search_by_status
+    ├─ Find block/page references → roam_search_block_refs
+    ├─ Find pages modified today → roam_find_pages_modified_today
     ├─ Get page content → roam_fetch_page_by_title
     ├─ Get block + children → roam_fetch_block_with_children
     ├─ Recall memories → roam_recall
@@ -226,18 +239,18 @@ CREATING CONTENT IN ROAM:
 The Roam API has rate limits. Follow these guidelines to minimize API calls:
 
 ### Tool Efficiency Ranking (Best to Worst)
-1. **`roam_process_batch_actions`** - Single API call for multiple operations (MOST EFFICIENT)
-2. **`roam_create_page`** - Batches content with page creation
-3. **`roam_create_outline` / `roam_import_markdown`** - Include verification queries (use for smaller operations)
-4. **Multiple sequential tool calls** - Each call = multiple API requests (AVOID)
+1. **`roam_update_page_markdown`** - Single call: fetches, diffs, and updates (MOST EFFICIENT for revisions)
+2. **`roam_process_batch_actions`** - Single API call for multiple operations
+3. **`roam_create_page`** - Batches content with page creation
+4. **`roam_create_outline` / `roam_import_markdown`** - Include verification queries (use for smaller operations)
+5. **Multiple sequential tool calls** - Each call = multiple API requests (AVOID)
 
 ### Best Practices for Intensive Operations
 
 #### When Updating/Revising a Page:
-1. Fetch the page content ONCE at the start
-2. Plan ALL changes needed (creates, updates, deletes)
-3. Execute ALL changes in a SINGLE `roam_process_batch_actions` call
-4. Do NOT fetch-modify-fetch-modify in a loop
+1. **Preferred**: Use `roam_update_page_markdown` — it fetches, diffs, and updates in one call
+2. **Alternative** (for fine-grained control): Fetch once with `roam_fetch_page_by_title`, then execute ALL changes in a SINGLE `roam_process_batch_actions` call
+3. Do NOT fetch-modify-fetch-modify in a loop
 
 #### When Creating Large Content:
 - For 10+ blocks: Use `roam_process_batch_actions` with nested structure
@@ -284,6 +297,11 @@ When using `roam_process_batch_actions` to create nested blocks, use **placehold
 ```
 
 **Do this:**
+```
+1. roam_update_page_markdown → single call handles fetch, diff, and updates
+```
+
+**Alternative** (when you need fine-grained control):
 ```
 1. roam_fetch_page_by_title → get page UID and content
 2. roam_process_batch_actions → ALL creates/updates in one call
