@@ -1,5 +1,21 @@
 # Changelog
 
+v1.7.0 - 2026-01-01
+
+- ADDED: Nested table support in `roam_create_page`
+  - Tables with `level: 2` or higher are now created as children of preceding text blocks
+  - Uses UID tracking to map each level to its most recent block
+  - Tables at level N become children of the last block created at level N-1
+  - If no parent found at the expected level, tables fall back to page level
+
+v1.6.2 - 2026-01-01
+
+- FIXED: `roam_create_page` table ordering bug
+  - Tables in mixed content were being created at the end of the page instead of inline at their original positions
+  - Root cause: Content processing separated text and tables into two sequential batches rather than preserving original order
+  - Solution: Refactored to process content items in order, flushing pending text batches before each table insertion
+  - Tables now appear correctly after their preceding headings when using the `content` array with mixed types
+
 v1.6.0 - 2025-12-31
 
 - ADDED: `roam refs` CLI command to find blocks referencing a page or block

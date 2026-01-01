@@ -5,9 +5,9 @@ import { resolveRefs } from '../helpers/refs.js';
 import type { RoamBlock } from '../types/index.js';
 import {
   parseMarkdown,
-  convertToRoamActions,
   convertToRoamMarkdown,
-  hasMarkdownTable
+  hasMarkdownTable,
+  generateBlockUid
 } from '../../markdown-utils.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
@@ -193,106 +193,176 @@ export class PageOperations {
           return { success: true, uid: pageUid };
         }
 
-        // Separate text content from table content, maintaining order
-        const textItems: TextContentItem[] = [];
-        const tableItems: { index: number; item: TableContentItem }[] = [];
+        // Process content items in order, tracking position for correct placement
+        // Tables and text blocks are interleaved at their original positions
+        // Tables can be nested under text blocks based on their level
+        let currentOrder = 0;
+        let pendingTextItems: TextContentItem[] = [];
+        // Track last block UID at each level for nesting tables
+        const levelToLastUid: { [level: number]: string } = {};
 
+        // Helper to assign UIDs to nodes and track level mapping
+        const assignUidsToNodes = (nodes: any[]): any[] => {
+          return nodes.map(node => {
+            const uid = generateBlockUid();
+            levelToLastUid[node.level] = uid;
+            return {
+              ...node,
+              uid,
+              children: assignUidsToNodes(node.children)
+            };
+          });
+        };
+
+        // Helper to build batch actions from nodes with pre-assigned UIDs
+        const buildActionsFromNodes = (nodes: any[], parentUid: string, startOrder: number): any[] => {
+          const actions: any[] = [];
+          for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            actions.push({
+              action: 'create-block',
+              location: { 'parent-uid': parentUid, order: startOrder + i },
+              block: {
+                uid: node.uid,
+                string: node.content,
+                ...(node.heading_level && { heading: node.heading_level })
+              }
+            });
+            if (node.children.length > 0) {
+              actions.push(...buildActionsFromNodes(node.children, node.uid, 0));
+            }
+          }
+          return actions;
+        };
+
+        // Helper to flush pending text items as a batch
+        const flushTextItems = async (startOrder: number): Promise<number> => {
+          if (pendingTextItems.length === 0) return startOrder;
+
+          // Filter out empty blocks
+          const nonEmptyContent = pendingTextItems.filter(block => block.text && block.text.trim().length > 0);
+          if (nonEmptyContent.length === 0) {
+            pendingTextItems = [];
+            return startOrder;
+          }
+
+          // Normalize levels to prevent gaps after filtering
+          const normalizedContent: TextContentItem[] = [];
+          for (let i = 0; i < nonEmptyContent.length; i++) {
+            const block = nonEmptyContent[i];
+            if (i === 0) {
+              normalizedContent.push({ ...block, level: 1 });
+            } else {
+              const prevLevel = normalizedContent[i - 1].level;
+              const maxAllowedLevel = prevLevel + 1;
+              normalizedContent.push({
+                ...block,
+                level: Math.min(block.level, maxAllowedLevel)
+              });
+            }
+          }
+
+          // Convert to node format with level info
+          const nodes = normalizedContent.map(block => ({
+            content: convertToRoamMarkdown(block.text.replace(/^#+\s*/, '')),
+            level: block.level,
+            ...(block.heading && { heading_level: block.heading }),
+            children: [] as any[]
+          }));
+
+          // Create hierarchical structure based on levels
+          const rootNodes: any[] = [];
+          const levelMap: { [level: number]: any } = {};
+
+          for (const node of nodes) {
+            if (node.level === 1) {
+              rootNodes.push(node);
+              levelMap[1] = node;
+            } else {
+              const parentLevel = node.level - 1;
+              const parent = levelMap[parentLevel];
+
+              if (!parent) {
+                throw new Error(`Invalid block hierarchy: level ${node.level} block has no parent`);
+              }
+
+              parent.children.push(node);
+              levelMap[node.level] = node;
+            }
+          }
+
+          // Assign UIDs to all nodes and track level->UID mapping
+          const nodesWithUids = assignUidsToNodes(rootNodes);
+
+          // Build batch actions from nodes with UIDs
+          const textActions = buildActionsFromNodes(nodesWithUids, pageUid, startOrder);
+
+          if (textActions.length > 0) {
+            const batchResult = await batchActions(this.graph, {
+              action: 'batch-actions',
+              actions: textActions
+            });
+
+            if (!batchResult) {
+              throw new Error('Failed to create text blocks');
+            }
+          }
+
+          // Return the next order position (number of root-level blocks added)
+          const nextOrder = startOrder + rootNodes.length;
+          pendingTextItems = [];
+          return nextOrder;
+        };
+
+        // Process content items in order
         for (let i = 0; i < content.length; i++) {
           const item = content[i];
+
           if (item.type === 'table') {
-            tableItems.push({ index: i, item: item as TableContentItem });
+            // Flush any pending text items first
+            currentOrder = await flushTextItems(currentOrder);
+
+            // Process table - determine parent based on level
+            const tableItem = item as TableContentItem;
+            const tableLevel = tableItem.level || 1;
+
+            let tableParentUid = pageUid;
+            let tableOrder: number | 'last' = currentOrder;
+
+            if (tableLevel > 1) {
+              // Nested table - find parent block at level-1
+              const parentLevel = tableLevel - 1;
+              if (levelToLastUid[parentLevel]) {
+                tableParentUid = levelToLastUid[parentLevel];
+                tableOrder = 'last'; // Append to parent's children
+              }
+              // If no parent found, fall back to page level
+            }
+
+            const tableActions = buildTableActions({
+              parent_uid: tableParentUid,
+              headers: tableItem.headers,
+              rows: tableItem.rows,
+              order: tableOrder
+            });
+
+            const tableResult = await this.batchOps.processBatch(tableActions);
+            if (!tableResult.success) {
+              throw new Error(`Failed to create table: ${typeof tableResult.error === 'string' ? tableResult.error : tableResult.error?.message}`);
+            }
+
+            // Only increment top-level order for level 1 tables
+            if (tableLevel === 1) {
+              currentOrder++;
+            }
           } else {
-            // Default to text type
-            textItems.push(item as TextContentItem);
+            // Accumulate text items
+            pendingTextItems.push(item as TextContentItem);
           }
         }
 
-        // Process text blocks
-        const allActions: any[] = [];
-
-        if (textItems.length > 0) {
-          // Filter out empty blocks (empty or whitespace-only text) to prevent creating visual linebreaks
-          const nonEmptyContent = textItems.filter(block => block.text && block.text.trim().length > 0);
-
-          if (nonEmptyContent.length > 0) {
-            // Normalize levels to prevent gaps after filtering
-            const normalizedContent: TextContentItem[] = [];
-            for (let i = 0; i < nonEmptyContent.length; i++) {
-              const block = nonEmptyContent[i];
-              if (i === 0) {
-                normalizedContent.push({ ...block, level: 1 });
-              } else {
-                const prevLevel = normalizedContent[i - 1].level;
-                const maxAllowedLevel = prevLevel + 1;
-                normalizedContent.push({
-                  ...block,
-                  level: Math.min(block.level, maxAllowedLevel)
-                });
-              }
-            }
-
-            // Convert content array to MarkdownNode format expected by convertToRoamActions
-            const nodes = normalizedContent.map(block => ({
-              content: convertToRoamMarkdown(block.text.replace(/^#+\s*/, '')),
-              level: block.level,
-              ...(block.heading && { heading_level: block.heading }),
-              children: []
-            }));
-
-            // Create hierarchical structure based on levels
-            const rootNodes: any[] = [];
-            const levelMap: { [level: number]: any } = {};
-
-            for (const node of nodes) {
-              if (node.level === 1) {
-                rootNodes.push(node);
-                levelMap[1] = node;
-              } else {
-                const parentLevel = node.level - 1;
-                const parent = levelMap[parentLevel];
-
-                if (!parent) {
-                  throw new Error(`Invalid block hierarchy: level ${node.level} block has no parent`);
-                }
-
-                parent.children.push(node);
-                levelMap[node.level] = node;
-              }
-            }
-
-            // Generate batch actions for text blocks
-            const textActions = convertToRoamActions(rootNodes, pageUid, 'last');
-            allActions.push(...textActions);
-          }
-        }
-
-        // Execute text block actions first (no placeholders, use SDK directly)
-        if (allActions.length > 0) {
-          const batchResult = await batchActions(this.graph, {
-            action: 'batch-actions',
-            actions: allActions
-          });
-
-          if (!batchResult) {
-            throw new Error('Failed to create text blocks');
-          }
-        }
-
-        // Process table items separately (use BatchOperations to handle UID placeholders)
-        for (const { item } of tableItems) {
-          const tableActions = buildTableActions({
-            parent_uid: pageUid,
-            headers: item.headers,
-            rows: item.rows,
-            order: 'last'
-          });
-
-          // Use BatchOperations.processBatch to handle {{uid:*}} placeholders
-          const tableResult = await this.batchOps.processBatch(tableActions);
-          if (!tableResult.success) {
-            throw new Error(`Failed to create table: ${typeof tableResult.error === 'string' ? tableResult.error : tableResult.error?.message}`);
-          }
-        }
+        // Flush any remaining text items
+        await flushTextItems(currentOrder);
       } catch (error) {
         throw new McpError(
           ErrorCode.InternalError,
