@@ -1,5 +1,25 @@
 # Changelog
 
+v1.8.0 - 2026-01-02
+
+- ADDED: TODO/DONE support in CLI commands
+  - `roam get --todo` - Fetch all TODO items across the graph
+  - `roam get --done` - Fetch all DONE items across the graph
+  - `roam get --todo -p "Page Title"` - Filter by page
+  - `roam get --todo -i "term1,term2"` - Include filter
+  - `roam get --todo -e "term1,term2"` - Exclude filter
+  - `roam save --todo "Task text"` - Create TODO on daily page
+  - `echo "Task" | roam save --todo` - Create TODO from stdin
+  - Multiple TODOs supported via newline-separated input
+- FIXED: TODO search now finds both `{{[[TODO]]}}` and `{{TODO}}` formats
+  - Roam API normalizes `{{[[TODO]]}}` to `{{TODO}}` in storage
+  - Search query updated to match prefix `{{TODO` for compatibility
+- ENHANCED: TODO output formatting
+  - Results grouped by page with markdown headers
+  - Clean checkbox format: `- [ ] Task (uid)` / `- [x] Done (uid)`
+  - Strips TODO/DONE markers from display for readability
+  - JSON output available with `--json` flag
+
 v1.7.0 - 2026-01-01
 
 - ADDED: Nested table support in `roam_create_page`

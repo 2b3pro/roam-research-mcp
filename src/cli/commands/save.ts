@@ -4,6 +4,8 @@ import { basename } from 'path';
 import { initializeGraph } from '@roam-research/roam-api-sdk';
 import { API_TOKEN, GRAPH_NAME } from '../../config/environment.js';
 import { PageOperations } from '../../tools/operations/pages.js';
+import { MemoryOperations } from '../../tools/operations/memory.js';
+import { TodoOperations } from '../../tools/operations/todos.js';
 import { parseMarkdown } from '../../markdown-utils.js';
 import { printDebug, exitWithError } from '../utils/output.js';
 
@@ -53,17 +55,117 @@ interface SaveOptions {
   title?: string;
   update?: boolean;
   debug?: boolean;
+  block?: string | boolean;  // Block content or flag for stdin
+  page?: string;             // Target page for block (default: daily page)
+  categories?: string;       // Comma-separated category tags
+  todo?: string | boolean;   // TODO item text or flag for stdin
 }
 
 export function createSaveCommand(): Command {
   return new Command('save')
-    .description('Import markdown to Roam')
+    .description('Import markdown to Roam (page, block, or TODO)')
     .argument('[file]', 'Markdown file to import (or pipe content to stdin)')
     .option('--title <title>', 'Page title (defaults to filename without .md)')
     .option('--update', 'Update existing page using smart diff')
     .option('--debug', 'Show debug information')
+    .option('-b, --block [text]', 'Add a single block instead of a page (text or stdin)')
+    .option('-p, --page <title>', 'Target page for block (default: today\'s daily page)')
+    .option('-c, --categories <tags>', 'Comma-separated category tags for block mode')
+    .option('-t, --todo [text]', 'Add a TODO item to today\'s daily page (text or stdin)')
     .action(async (file: string | undefined, options: SaveOptions) => {
       try {
+        // TODO mode: add a TODO item to today's daily page
+        if (options.todo !== undefined) {
+          let todoText: string;
+
+          if (typeof options.todo === 'string' && options.todo.length > 0) {
+            // TODO text provided directly
+            todoText = options.todo;
+          } else {
+            // Read from stdin
+            if (process.stdin.isTTY) {
+              exitWithError('No TODO text specified. Use: roam save --todo "text" or echo "text" | roam save --todo');
+            }
+            todoText = (await readStdin()).trim();
+          }
+
+          if (!todoText) {
+            exitWithError('Empty TODO text');
+          }
+
+          // Split by newlines to support multiple TODOs
+          const todos = todoText.split('\n').map(t => t.trim()).filter(Boolean);
+
+          if (options.debug) {
+            printDebug('TODO mode', true);
+            printDebug('TODO items', todos);
+          }
+
+          const graph = initializeGraph({
+            token: API_TOKEN,
+            graph: GRAPH_NAME
+          });
+
+          const todoOps = new TodoOperations(graph);
+          const result = await todoOps.addTodos(todos);
+
+          if (result.success) {
+            console.log(`Added ${todos.length} TODO item(s) to today's daily page`);
+          } else {
+            exitWithError('Failed to save TODO');
+          }
+          return;
+        }
+
+        // Block mode: add a single block to a page
+        if (options.block !== undefined) {
+          let blockText: string;
+
+          if (typeof options.block === 'string' && options.block.length > 0) {
+            // Block text provided directly
+            blockText = options.block;
+          } else {
+            // Read from stdin
+            if (process.stdin.isTTY) {
+              exitWithError('No block text specified. Use: roam save --block "text" or echo "text" | roam save --block');
+            }
+            blockText = (await readStdin()).trim();
+          }
+
+          if (!blockText) {
+            exitWithError('Empty block text');
+          }
+
+          // Parse categories
+          const categories = options.categories
+            ? options.categories.split(',').map(c => c.trim()).filter(Boolean)
+            : undefined;
+
+          if (options.debug) {
+            printDebug('Block mode', true);
+            printDebug('Block text', blockText);
+            printDebug('Target page', options.page || 'daily page');
+            printDebug('Categories', categories || 'none');
+          }
+
+          const graph = initializeGraph({
+            token: API_TOKEN,
+            graph: GRAPH_NAME
+          });
+
+          const memoryOps = new MemoryOperations(graph);
+          const result = await memoryOps.remember(blockText, categories);
+
+          if (result.success) {
+            // Output UID for programmatic use (e.g., stop-hook linking)
+            console.log(result.block_uid);
+          } else {
+            exitWithError('Failed to save block');
+          }
+          return;
+        }
+
+        // Page mode: import markdown as a page
         let markdownContent: string;
         let pageTitle: string;
 

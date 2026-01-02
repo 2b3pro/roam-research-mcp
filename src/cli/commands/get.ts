@@ -3,9 +3,11 @@ import { initializeGraph } from '@roam-research/roam-api-sdk';
 import { API_TOKEN, GRAPH_NAME } from '../../config/environment.js';
 import { PageOperations } from '../../tools/operations/pages.js';
 import { BlockRetrievalOperations } from '../../tools/operations/block-retrieval.js';
+import { SearchOperations } from '../../tools/operations/search/index.js';
 import {
   formatPageOutput,
   formatBlockOutput,
+  formatTodoOutput,
   printDebug,
   exitWithError,
   type OutputOptions
@@ -21,18 +23,28 @@ interface GetOptions {
   refs?: string;
   flat?: boolean;
   debug?: boolean;
+  todo?: boolean;
+  done?: boolean;
+  page?: string;
+  include?: string;
+  exclude?: string;
 }
 
 export function createGetCommand(): Command {
   return new Command('get')
-    .description('Fetch a page or block from Roam')
-    .argument('<target>', 'Page title or block UID (e.g., "Page Title" or "((AbCdEfGhI))")')
+    .description('Fetch a page, block, or TODO/DONE items from Roam')
+    .argument('[target]', 'Page title or block UID (e.g., "Page Title" or "((AbCdEfGhI))")')
     .option('--json', 'Output as JSON instead of markdown')
     .option('--depth <n>', 'Child levels to fetch (default: 4)', '4')
     .option('--refs <n>', 'Block ref expansion depth (default: 1)', '1')
     .option('--flat', 'Flatten hierarchy to single-level list')
     .option('--debug', 'Show query metadata')
-    .action(async (target: string, options: GetOptions) => {
+    .option('--todo', 'Fetch TODO items')
+    .option('--done', 'Fetch DONE items')
+    .option('-p, --page <title>', 'Filter TODOs/DONEs by page title')
+    .option('-i, --include <terms>', 'Include items with these terms in text content (comma-separated, not tags)')
+    .option('-e, --exclude <terms>', 'Exclude items with these terms in text content (comma-separated, not tags)')
+    .action(async (target: string | undefined, options: GetOptions) => {
       try {
         const graph = initializeGraph({
           token: API_TOKEN,
@@ -49,6 +61,31 @@ export function createGetCommand(): Command {
         if (options.debug) {
           printDebug('Target', target);
           printDebug('Options', { depth, refs: options.refs, ...outputOptions });
+        }
+
+        // Handle --todo or --done flags
+        if (options.todo || options.done) {
+          const status = options.todo ? 'TODO' : 'DONE';
+
+          if (options.debug) {
+            printDebug('Status search', { status, page: options.page, include: options.include, exclude: options.exclude });
+          }
+
+          const searchOps = new SearchOperations(graph);
+          const result = await searchOps.searchByStatus(
+            status,
+            options.page,
+            options.include,
+            options.exclude
+          );
+
+          console.log(formatTodoOutput(result.matches, status, outputOptions));
+          return;
+        }
+
+        // For page/block fetching, target is required
+        if (!target) {
+          exitWithError('Target is required. Use: roam get <page-title> or roam get --todo');
         }
 
         // Check if target is a block UID

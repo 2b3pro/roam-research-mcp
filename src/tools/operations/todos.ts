@@ -44,7 +44,7 @@ export class TodoOperations {
       }
     }
 
-    const todo_tag = "{{TODO}}";
+    const todo_tag = "{{[[TODO]]}}";
     const actions = todos.map((todo, index) => ({
       action: 'create-block',
       location: {

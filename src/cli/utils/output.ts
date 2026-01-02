@@ -104,6 +104,50 @@ export function formatSearchResults(
 }
 
 /**
+ * Format TODO/DONE search results for output
+ */
+export function formatTodoOutput(
+  results: Array<{ block_uid: string; content: string; page_title?: string }>,
+  status: 'TODO' | 'DONE',
+  options: OutputOptions
+): string {
+  if (options.json) {
+    return JSON.stringify(results, null, 2);
+  }
+
+  if (results.length === 0) {
+    return `No ${status} items found.`;
+  }
+
+  // Group by page
+  const byPage = new Map<string, typeof results>();
+  for (const item of results) {
+    const page = item.page_title || 'Unknown Page';
+    if (!byPage.has(page)) {
+      byPage.set(page, []);
+    }
+    byPage.get(page)!.push(item);
+  }
+
+  let output = `Found ${results.length} ${status} item(s):\n`;
+
+  for (const [page, items] of byPage) {
+    output += `\n## ${page}\n`;
+    for (const item of items) {
+      // Strip {{[[TODO]]}}, {{TODO}}, {{[[DONE]]}}, or {{DONE}} markers for cleaner display
+      const cleanContent = item.content
+        .replace(/\{\{\[\[TODO\]\]\}\}\s*/g, '')
+        .replace(/\{\{TODO\}\}\s*/g, '')
+        .replace(/\{\{\[\[DONE\]\]\}\}\s*/g, '')
+        .replace(/\{\{DONE\}\}\s*/g, '');
+      output += `- [${status === 'DONE' ? 'x' : ' '}] ${cleanContent} (${item.block_uid})\n`;
+    }
+  }
+
+  return output.trim();
+}
+
+/**
  * Print debug information
  */
 export function printDebug(label: string, data: unknown): void {

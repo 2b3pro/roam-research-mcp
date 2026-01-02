@@ -11,7 +11,7 @@ const program = new Command();
 program
   .name('roam')
   .description('CLI for Roam Research')
-  .version('1.6.0');
+  .version('1.8.0');
 
 // Register subcommands
 program.addCommand(createGetCommand());

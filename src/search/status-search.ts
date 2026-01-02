@@ -30,14 +30,15 @@ export class StatusSearchHandler extends BaseSearchHandler {
     let queryStr: string;
     let queryParams: any[];
 
+    // Search for "{{TODO" or "{{DONE" which matches both {{[[TODO]]}} and {{TODO}} formats
     if (targetPageUid) {
       queryStr = `[:find ?block-uid ?block-str
                   :in $ ?status ?page-uid
                   :where [?p :block/uid ?page-uid]
                          [?b :block/page ?p]
-         [?b :block/string ?block-str]
-         [?b :block/uid ?block-uid]
-         [(clojure.string/includes? ?block-str (str "{{[[" ?status "]]}}"))]]`;
+                         [?b :block/string ?block-str]
+                         [?b :block/uid ?block-uid]
+                         [(clojure.string/includes? ?block-str (str "{{" ?status))]]`;
       queryParams = [status, targetPageUid];
     } else {
       queryStr = `[:find ?block-uid ?block-str ?page-title
@@ -46,7 +47,7 @@ export class StatusSearchHandler extends BaseSearchHandler {
                          [?b :block/uid ?block-uid]
                          [?b :block/page ?p]
                          [?p :node/title ?page-title]
-                         [(clojure.string/includes? ?block-str (str "{{[[" ?status "]]}}"))]]`;
+                         [(clojure.string/includes? ?block-str (str "{{" ?status))]]`;
       queryParams = [status];
     }
 

@@ -111,7 +111,7 @@ Configure via `.env` file in the project root or set as environment variables.
 
 ---
 
-### `roam get` - Fetch pages or blocks
+### `roam get` - Fetch pages, blocks, or TODOs
 
 Fetch content from Roam and output as markdown or JSON.
 
@@ -132,6 +132,18 @@ roam get "Daily Notes" --depth 2
 # Flatten hierarchy
 roam get "Daily Notes" --flat
 
+# Fetch TODO items
+roam get --todo
+
+# Fetch DONE items
+roam get --done
+
+# Filter TODOs by page
+roam get --todo -p "January 2nd, 2026"
+
+# Include/exclude filter
+roam get --todo -i "urgent,important" -e "someday"
+
 # Debug mode
 roam get "Daily Notes" --debug
 ```
@@ -141,6 +153,11 @@ roam get "Daily Notes" --debug
 - `--depth <n>` - Child levels to fetch (default: 4)
 - `--refs <n>` - Block ref expansion depth (default: 1)
 - `--flat` - Flatten hierarchy to single-level list
+- `--todo` - Fetch TODO items
+- `--done` - Fetch DONE items
+- `-p, --page <title>` - Filter TODOs/DONEs by page title
+- `-i, --include <terms>` - Include only items containing these terms (comma-separated)
+- `-e, --exclude <terms>` - Exclude items containing these terms (comma-separated)
 - `--debug` - Show query metadata
 
 ---
@@ -186,9 +203,9 @@ roam search "keyword" --json
 
 ---
 
-### `roam save` - Import markdown
+### `roam save` - Import markdown or create TODOs
 
-Import markdown content to Roam, creating or updating pages.
+Import markdown content to Roam, creating or updating pages, or add TODO items.
 
 ```bash
 # From a file (title derived from filename)
@@ -211,11 +228,21 @@ roam save --title "Quick Note" << EOF
 - Item 2
   - Nested item
 EOF
+
+# Create a TODO item on today's daily page
+roam save --todo "Buy groceries"
+
+# Create multiple TODOs from stdin (newline-separated)
+echo -e "Task 1\nTask 2\nTask 3" | roam save --todo
+
+# Pipe TODO list from file
+cat todos.txt | roam save --todo
 ```
 
 **Options:**
 - `--title <title>` - Page title (defaults to filename without `.md`)
 - `--update` - Update existing page using smart diff (preserves block UIDs)
+- `-t, --todo [text]` - Add a TODO item to today's daily page (text or stdin)
 - `--debug` - Show debug information
 
 **Features:**
@@ -223,6 +250,7 @@ EOF
 - Automatically links the new page from today's daily page
 - Converts standard markdown to Roam-flavored markdown
 - Smart diff mode (`--update`) preserves block UIDs for existing content
+- TODO mode creates `{{[[TODO]]}}` items on the daily page
 
 ---
 

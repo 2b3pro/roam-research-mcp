@@ -1,6 +1,7 @@
 import { Graph, q, createPage, batchActions } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { formatRoamDate } from '../../utils/helpers.js';
+import { generateBlockUid } from '../../markdown-utils.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { SearchOperations } from './search/index.js';
 import type { SearchResult } from '../types/index.js';
@@ -13,7 +14,7 @@ export class MemoryOperations {
     this.searchOps = new SearchOperations(graph);
   }
 
-  async remember(memory: string, categories?: string[]): Promise<{ success: boolean }> {
+  async remember(memory: string, categories?: string[]): Promise<{ success: boolean; block_uid?: string }> {
     // Get today's date
     const today = new Date();
     const dateStr = formatRoamDate(today);
@@ -76,7 +77,10 @@ export class MemoryOperations {
 
     // Create block with memory, memories tag, and optional categories
     const blockContent = `${memoriesTag} ${memory} ${categoryTags}`.trim();
-    
+
+    // Pre-generate UID so we can return it
+    const blockUid = generateBlockUid();
+
     const actions = [{
       action: 'create-block',
       location: {
@@ -84,6 +88,7 @@ export class MemoryOperations {
         order: 'last'
       },
       block: {
+        uid: blockUid,
         string: blockContent
       }
     }];
@@ -107,7 +112,7 @@ export class MemoryOperations {
       );
     }
 
-    return { success: true };
+    return { success: true, block_uid: blockUid };
   }
 
   async recall(sort_by: 'newest' | 'oldest' = 'newest', filter_tag?: string): Promise<{ success: boolean; memories: string[] }> {
