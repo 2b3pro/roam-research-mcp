@@ -75,8 +75,8 @@ export class MemoryOperations {
       return cat.includes(' ') ? `#[[${cat}]]` : `#${cat}`;
     }).join(' ') || '';
 
-    // Create block with memory, memories tag, and optional categories
-    const blockContent = `${memoriesTag} ${memory} ${categoryTags}`.trim();
+    // Create block with memory, then all tags together at the end
+    const blockContent = `${memory} ${categoryTags} ${memoriesTag}`.trim();
 
     // Pre-generate UID so we can return it
     const blockUid = generateBlockUid();

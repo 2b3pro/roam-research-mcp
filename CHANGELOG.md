@@ -1,5 +1,21 @@
 # Changelog
 
+v1.8.2 - 2026-01-02
+
+feat(cli): add --no-daily-page flag to roam save command
+
+Introduces the `--no-daily-page` flag to the save command, allowing users
+to create pages without automatically linking them on the current Daily Page.
+This is useful for programmatic generation or workflows where a daily log
+entry is unnecessary.
+
+Changes:
+- Update `save` command to pass `noDailyPage` option to page operations.
+- Refactor `createPage` to conditionally skip the daily page link logic.
+- Tweak `MemoryOperations` to place the memory tag at the end of the block
+  content rather than the beginning.
+- Update CHANGELOG.md.
+
 v1.8.1 - 2026-01-02
 
 - ADDED: `roam update` CLI command to update block content by UID
@@ -12,6 +28,9 @@ v1.8.1 - 2026-01-02
   - Input format: `[{text, level, heading?}]`
   - `echo '[{"text":"Block","level":1}]' | roam save --json --title "Page"`
   - Provides precise control over indentation levels
+- ADDED: `--no-daily-page` flag to `roam save` to skip "Created page" link
+  - Useful when linking to the page from another location (e.g., brainstorm workflows)
+  - `roam save content.md --title "Page" --no-daily-page`
 - ENHANCED: CLI help text clarifies `-i`/`-e` filter on text content, not tags
 
 v1.8.0 - 2026-01-02

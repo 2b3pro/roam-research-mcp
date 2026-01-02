@@ -62,6 +62,7 @@ interface SaveOptions {
   categories?: string;       // Comma-separated category tags
   todo?: string | boolean;   // TODO item text or flag for stdin
   json?: boolean;            // Input is JSON format (explicit levels)
+  noDailyPage?: boolean;     // Skip creating link on daily page
 }
 
 interface ContentBlock {
@@ -83,6 +84,7 @@ export function createSaveCommand(): Command {
     .option('-c, --categories <tags>', 'Comma-separated category tags for block mode')
     .option('-t, --todo [text]', 'Add a TODO item to today\'s daily page (text or stdin)')
     .option('--json', 'Input is JSON format with explicit levels [{text, level, heading?}]')
+    .option('--no-daily-page', 'Skip creating "Created page" link on daily page')
     .action(async (file: string | undefined, options: SaveOptions) => {
       try {
         // TODO mode: add a TODO item to today's daily page
@@ -315,7 +317,9 @@ export function createSaveCommand(): Command {
             }
           }
 
-          const result = await pageOps.createPage(pageTitle, contentBlocks);
+          const result = await pageOps.createPage(pageTitle, contentBlocks, {
+            skipDailyPageLink: options.noDailyPage
+          });
 
           if (result.success) {
             console.log(`Created page '${pageTitle}' (uid: ${result.uid})`);
