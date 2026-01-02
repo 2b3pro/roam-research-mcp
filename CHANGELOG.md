@@ -1,13 +1,27 @@
 # Changelog
 
+v1.8.1 - 2026-01-02
+
+- ADDED: `roam update` CLI command to update block content by UID
+  - `roam update <uid> "New content"` - Update any block
+  - Useful for marking TODOs as DONE: `roam update <uid> "{{[[DONE]]}} ..."`
+- ADDED: `--parent <uid>` option to `roam save -b` for nested block creation
+  - Create blocks under a specific parent block UID
+  - `roam save -b "Child content" --parent <parent-uid>`
+- ADDED: `--json` input mode for `roam save` with explicit nesting control
+  - Input format: `[{text, level, heading?}]`
+  - `echo '[{"text":"Block","level":1}]' | roam save --json --title "Page"`
+  - Provides precise control over indentation levels
+- ENHANCED: CLI help text clarifies `-i`/`-e` filter on text content, not tags
+
 v1.8.0 - 2026-01-02
 
 - ADDED: TODO/DONE support in CLI commands
   - `roam get --todo` - Fetch all TODO items across the graph
   - `roam get --done` - Fetch all DONE items across the graph
   - `roam get --todo -p "Page Title"` - Filter by page
-  - `roam get --todo -i "term1,term2"` - Include filter
-  - `roam get --todo -e "term1,term2"` - Exclude filter
+  - `roam get --todo -i "term1,term2"` - Include filter (text content only, not tags)
+  - `roam get --todo -e "term1,term2"` - Exclude filter (text content only, not tags)
   - `roam save --todo "Task text"` - Create TODO on daily page
   - `echo "Task" | roam save --todo` - Create TODO from stdin
   - Multiple TODOs supported via newline-separated input
