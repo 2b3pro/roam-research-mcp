@@ -1,6 +1,4 @@
 import { Command } from 'commander';
-import { initializeGraph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME } from '../../config/environment.js';
 import { PageOperations } from '../../tools/operations/pages.js';
 import { BlockRetrievalOperations } from '../../tools/operations/block-retrieval.js';
 import { SearchOperations } from '../../tools/operations/search/index.js';
@@ -12,12 +10,13 @@ import {
   exitWithError,
   type OutputOptions
 } from '../utils/output.js';
+import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 import type { RoamBlock } from '../../types/roam.js';
 
 // Block UID pattern: 9 alphanumeric characters, optionally wrapped in (( ))
 const BLOCK_UID_PATTERN = /^(?:\(\()?([a-zA-Z0-9_-]{9})(?:\)\))?$/;
 
-interface GetOptions {
+interface GetOptions extends GraphOptions {
   json?: boolean;
   depth?: string;
   refs?: string;
@@ -44,12 +43,10 @@ export function createGetCommand(): Command {
     .option('-p, --page <title>', 'Filter TODOs/DONEs by page title')
     .option('-i, --include <terms>', 'Include items with these terms in text content (comma-separated, not tags)')
     .option('-e, --exclude <terms>', 'Exclude items with these terms in text content (comma-separated, not tags)')
+    .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
     .action(async (target: string | undefined, options: GetOptions) => {
       try {
-        const graph = initializeGraph({
-          token: API_TOKEN,
-          graph: GRAPH_NAME
-        });
+        const graph = resolveGraph(options, false);
 
         const depth = parseInt(options.depth || '4', 10);
         const outputOptions: OutputOptions = {
@@ -60,6 +57,7 @@ export function createGetCommand(): Command {
 
         if (options.debug) {
           printDebug('Target', target);
+          printDebug('Graph', options.graph || 'default');
           printDebug('Options', { depth, refs: options.refs, ...outputOptions });
         }
 

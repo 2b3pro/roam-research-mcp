@@ -1,10 +1,9 @@
 import { Command } from 'commander';
-import { initializeGraph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME } from '../../config/environment.js';
 import { SearchOperations } from '../../tools/operations/search/index.js';
 import { printDebug, exitWithError } from '../utils/output.js';
+import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 
-interface RefsOptions {
+interface RefsOptions extends GraphOptions {
   limit?: string;
   json?: boolean;
   raw?: boolean;
@@ -102,18 +101,17 @@ export function createRefsCommand(): Command {
     .option('--json', 'Output as JSON array')
     .option('--raw', 'Output raw UID + content lines (no grouping)')
     .option('--debug', 'Show query metadata')
+    .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
     .action(async (identifier: string, options: RefsOptions) => {
       try {
-        const graph = initializeGraph({
-          token: API_TOKEN,
-          graph: GRAPH_NAME
-        });
+        const graph = resolveGraph(options, false);
 
         const limit = parseInt(options.limit || '50', 10);
         const { block_uid, title } = parseIdentifier(identifier);
 
         if (options.debug) {
           printDebug('Identifier', identifier);
+          printDebug('Graph', options.graph || 'default');
           printDebug('Parsed', { block_uid, title });
           printDebug('Options', options);
         }

@@ -491,9 +491,13 @@ The tool will match existing blocks by content, update changed text, add new blo
    - Create a new token
 
 2. Configure the environment variables:
-   You have two options for configuring the required environment variables:
 
-   Option 1: Using a .env file (Recommended for development)
+   ### Single Graph Mode (Default)
+
+   For most users with one Roam graph, use the simple configuration:
+
+   **Option 1: Using a .env file (Recommended for development)**
+
    Create a `.env` file in the roam-research directory:
 
    ```
@@ -504,7 +508,8 @@ The tool will match existing blocks by content, update changed text, add new blo
    HTTP_STREAM_PORT=8088 # Or your desired port for HTTP Stream communication
    ```
 
-   Option 2: Using MCP settings (Alternative method)
+   **Option 2: Using MCP settings (Alternative method)**
+
    Add the configuration to your MCP settings file. Note that you may need to update the `args` to `["/path/to/roam-research-mcp/build/index.js"]` if you are running the server directly.
 
    - For Cline (`~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`):
@@ -529,6 +534,62 @@ The tool will match existing blocks by content, update changed text, add new blo
    ```
 
    Note: The server will first try to load from .env file, then fall back to environment variables from MCP settings.
+
+   ---
+
+   ### Multi-Graph Mode (v2.0.0+)
+
+   For users with multiple Roam graphs, you can configure a single MCP server instance to connect to all of them. This is more token-efficient than running multiple server instances.
+
+   **Configuration:**
+
+   ```json
+   ROAM_GRAPHS="{\"personal\":{\"token\":\"roam-graph-token-xxx\",\"graph\":\"my-personal-graph\"},\"work\":{\"token\":\"roam-graph-token-yyy\",\"graph\":\"company-graph\",\"write_key\":\"confirm-work-write\"}}"
+   ROAM_DEFAULT_GRAPH=personal
+   ```
+
+   | Field | Required | Description |
+   |-------|----------|-------------|
+   | `token` | Yes | Roam API token for this graph |
+   | `graph` | Yes | Roam graph name |
+   | `write_key` | No | Required confirmation string for writes to non-default graphs |
+
+   **Usage in Tools:**
+
+   All tools accept optional `graph` and `write_key` parameters:
+
+   ```json
+   {
+     "title": "My Page",
+     "graph": "work",
+     "write_key": "confirm-work-write"
+   }
+   ```
+
+   - **Read operations**: Can target any graph using the `graph` parameter
+   - **Write operations on default graph**: Work without additional parameters
+   - **Write operations on non-default graphs**: Require the `write_key` if configured
+
+   **CLI Usage:**
+
+   All CLI commands support the `-g, --graph` flag:
+
+   ```bash
+   # Read from work graph
+   roam get "Meeting Notes" -g work
+
+   # Write to work graph (requires --write-key if configured)
+   roam save notes.md -g work --write-key "confirm-work-write"
+   ```
+
+   **Safety Model:**
+
+   The `write_key` serves as a confirmation gate (not a secret) to prevent accidental writes to non-default graphs. When a write is attempted without the required key, the error message reveals the expected key:
+
+   ```
+   Write to "work" graph requires write_key confirmation.
+   Provide write_key: "confirm-work-write" to proceed.
+   ```
 
 3. Build the server (make sure you're in the root directory of the MCP):
 

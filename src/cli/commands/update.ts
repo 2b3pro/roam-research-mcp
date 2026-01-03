@@ -1,10 +1,9 @@
 import { Command } from 'commander';
-import { initializeGraph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME } from '../../config/environment.js';
 import { BatchOperations } from '../../tools/operations/batch.js';
 import { printDebug, exitWithError } from '../utils/output.js';
+import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 
-interface UpdateOptions {
+interface UpdateOptions extends GraphOptions {
   debug?: boolean;
 }
 
@@ -14,6 +13,8 @@ export function createUpdateCommand(): Command {
     .argument('<uid>', 'Block UID to update')
     .argument('<content>', 'New content for the block')
     .option('--debug', 'Show debug information')
+    .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
+    .option('--write-key <key>', 'Write confirmation key (for non-default graphs)')
     .action(async (uid: string, content: string, options: UpdateOptions) => {
       try {
         // Strip (( )) wrapper if present
@@ -21,13 +22,11 @@ export function createUpdateCommand(): Command {
 
         if (options.debug) {
           printDebug('Block UID', blockUid);
+          printDebug('Graph', options.graph || 'default');
           printDebug('New content', content);
         }
 
-        const graph = initializeGraph({
-          token: API_TOKEN,
-          graph: GRAPH_NAME
-        });
+        const graph = resolveGraph(options, true); // This is a write operation
 
         const batchOps = new BatchOperations(graph);
         const result = await batchOps.processBatch([{

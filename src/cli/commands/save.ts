@@ -1,14 +1,13 @@
 import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { basename } from 'path';
-import { initializeGraph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME } from '../../config/environment.js';
 import { PageOperations } from '../../tools/operations/pages.js';
 import { MemoryOperations } from '../../tools/operations/memory.js';
 import { TodoOperations } from '../../tools/operations/todos.js';
 import { BatchOperations } from '../../tools/operations/batch.js';
 import { parseMarkdown } from '../../markdown-utils.js';
 import { printDebug, exitWithError } from '../utils/output.js';
+import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 
 interface MarkdownNode {
   content: string;
@@ -52,7 +51,7 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-interface SaveOptions {
+interface SaveOptions extends GraphOptions {
   title?: string;
   update?: boolean;
   debug?: boolean;
@@ -87,6 +86,8 @@ export function createSaveCommand(): Command {
     .option('-t, --todo [text]', 'Add a TODO item to today\'s daily page (text or stdin)')
     .option('--json', 'Input is JSON format with explicit levels [{text, level, heading?}]')
     .option('--no-daily-page', 'Skip creating "Created page" link on daily page')
+    .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
+    .option('--write-key <key>', 'Write confirmation key (for non-default graphs)')
     .action(async (file: string | undefined, options: SaveOptions) => {
       try {
         // TODO mode: add a TODO item to today's daily page
@@ -113,13 +114,11 @@ export function createSaveCommand(): Command {
 
           if (options.debug) {
             printDebug('TODO mode', true);
+            printDebug('Graph', options.graph || 'default');
             printDebug('TODO items', todos);
           }
 
-          const graph = initializeGraph({
-            token: API_TOKEN,
-            graph: GRAPH_NAME
-          });
+          const graph = resolveGraph(options, true); // Write operation
 
           const todoOps = new TodoOperations(graph);
           const result = await todoOps.addTodos(todos);
@@ -158,6 +157,7 @@ export function createSaveCommand(): Command {
 
           if (options.debug) {
             printDebug('Block mode', true);
+            printDebug('Graph', options.graph || 'default');
             printDebug('Block text', blockText);
             printDebug('Parent UID', options.parent || 'none');
             printDebug('Heading', options.heading || 'none');
@@ -165,10 +165,7 @@ export function createSaveCommand(): Command {
             printDebug('Categories', categories || 'none');
           }
 
-          const graph = initializeGraph({
-            token: API_TOKEN,
-            graph: GRAPH_NAME
-          });
+          const graph = resolveGraph(options, true); // Write operation
 
           // If --parent is specified, create block under that parent using batch operations
           if (options.parent) {
@@ -254,15 +251,13 @@ export function createSaveCommand(): Command {
 
         if (options.debug) {
           printDebug('Page title', pageTitle);
+          printDebug('Graph', options.graph || 'default');
           printDebug('Content length', rawContent.length);
           printDebug('JSON mode', options.json || false);
           printDebug('Update mode', options.update || false);
         }
 
-        const graph = initializeGraph({
-          token: API_TOKEN,
-          graph: GRAPH_NAME
-        });
+        const graph = resolveGraph(options, true); // Write operation
 
         const pageOps = new PageOperations(graph);
 

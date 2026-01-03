@@ -1,6 +1,4 @@
 import { Command } from 'commander';
-import { initializeGraph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME } from '../../config/environment.js';
 import { SearchOperations } from '../../tools/operations/search/index.js';
 import {
   formatSearchResults,
@@ -8,8 +6,9 @@ import {
   exitWithError,
   type OutputOptions
 } from '../utils/output.js';
+import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 
-interface SearchOptions {
+interface SearchOptions extends GraphOptions {
   tag?: string;
   page?: string;
   caseInsensitive?: boolean;
@@ -28,12 +27,10 @@ export function createSearchCommand(): Command {
     .option('-n, --limit <n>', 'Limit number of results (default: 20)', '20')
     .option('--json', 'Output as JSON')
     .option('--debug', 'Show query metadata')
+    .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
     .action(async (terms: string[], options: SearchOptions) => {
       try {
-        const graph = initializeGraph({
-          token: API_TOKEN,
-          graph: GRAPH_NAME
-        });
+        const graph = resolveGraph(options, false);
 
         const limit = parseInt(options.limit || '20', 10);
         const outputOptions: OutputOptions = {
@@ -43,6 +40,7 @@ export function createSearchCommand(): Command {
 
         if (options.debug) {
           printDebug('Search terms', terms);
+          printDebug('Graph', options.graph || 'default');
           printDebug('Options', options);
         }
 
