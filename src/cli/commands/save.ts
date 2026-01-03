@@ -59,6 +59,7 @@ interface SaveOptions {
   block?: string | boolean;  // Block content or flag for stdin
   page?: string;             // Target page for block (default: daily page)
   parent?: string;           // Parent block UID for nested block creation
+  heading?: string;          // Heading text to nest under (finds/creates)
   categories?: string;       // Comma-separated category tags
   todo?: string | boolean;   // TODO item text or flag for stdin
   json?: boolean;            // Input is JSON format (explicit levels)
@@ -81,6 +82,7 @@ export function createSaveCommand(): Command {
     .option('-b, --block [text]', 'Add a single block instead of a page (text or stdin)')
     .option('-p, --page <title>', 'Target page for block (default: today\'s daily page)')
     .option('--parent <uid>', 'Parent block UID for nested block creation (use with -b)')
+    .option('--heading <text>', 'Heading text to nest block under; finds or creates (use with -b)')
     .option('-c, --categories <tags>', 'Comma-separated category tags for block mode')
     .option('-t, --todo [text]', 'Add a TODO item to today\'s daily page (text or stdin)')
     .option('--json', 'Input is JSON format with explicit levels [{text, level, heading?}]')
@@ -158,6 +160,7 @@ export function createSaveCommand(): Command {
             printDebug('Block mode', true);
             printDebug('Block text', blockText);
             printDebug('Parent UID', options.parent || 'none');
+            printDebug('Heading', options.heading || 'none');
             printDebug('Target page', options.page || 'daily page');
             printDebug('Categories', categories || 'none');
           }
@@ -194,13 +197,23 @@ export function createSaveCommand(): Command {
             return;
           }
 
-          // Default: use MemoryOperations for daily page
+          // Use MemoryOperations for daily page (supports heading for nesting)
           const memoryOps = new MemoryOperations(graph);
-          const result = await memoryOps.remember(blockText, categories);
+          const result = await memoryOps.remember(
+            blockText,
+            categories,
+            options.heading,    // Find/create heading to nest under
+            undefined           // parent_uid (use --parent flag path instead)
+          );
 
           if (result.success) {
-            // Output UID for programmatic use (e.g., stop-hook linking)
-            console.log(result.block_uid);
+            // Output block_uid and parent_uid for programmatic use
+            // Format: block_uid [parent_uid] - parent_uid only if heading was used
+            if (options.heading && result.parent_uid) {
+              console.log(`${result.block_uid} ${result.parent_uid}`);
+            } else {
+              console.log(result.block_uid);
+            }
           } else {
             exitWithError('Failed to save block');
           }

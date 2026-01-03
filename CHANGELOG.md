@@ -1,5 +1,9 @@
 # Changelog
 
+v1.9.1 - 2026-01-02
+
+- Updated: Added --heading to `roam save` CLI
+
 v1.9.0 - 2026-01-02
 
 - ADDED: `roam_move_block` MCP tool
