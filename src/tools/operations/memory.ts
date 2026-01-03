@@ -14,7 +14,12 @@ export class MemoryOperations {
     this.searchOps = new SearchOperations(graph);
   }
 
-  async remember(memory: string, categories?: string[]): Promise<{ success: boolean; block_uid?: string }> {
+  async remember(
+    memory: string,
+    categories?: string[],
+    heading?: string,
+    parent_uid?: string
+  ): Promise<{ success: boolean; block_uid?: string; parent_uid?: string }> {
     // Get today's date
     const today = new Date();
     const dateStr = formatRoamDate(today);
@@ -60,6 +65,50 @@ export class MemoryOperations {
       }
     }
 
+    // Determine parent block for the memory
+    let targetParentUid: string;
+
+    if (parent_uid) {
+      // Use provided parent_uid directly
+      targetParentUid = parent_uid;
+    } else if (heading) {
+      // Search for heading block on today's page, create if not found
+      const headingQuery = `[:find ?uid
+                            :in $ ?page-uid ?text
+                            :where
+                            [?page :block/uid ?page-uid]
+                            [?page :block/children ?block]
+                            [?block :block/string ?text]
+                            [?block :block/uid ?uid]]`;
+      const headingResults = await q(this.graph, headingQuery, [pageUid, heading]) as [string][];
+
+      if (headingResults && headingResults.length > 0) {
+        targetParentUid = headingResults[0][0];
+      } else {
+        // Create the heading block
+        const headingBlockUid = generateBlockUid();
+        try {
+          await batchActions(this.graph, {
+            action: 'batch-actions',
+            actions: [{
+              action: 'create-block',
+              location: { 'parent-uid': pageUid, order: 'last' },
+              block: { uid: headingBlockUid, string: heading }
+            }]
+          });
+          targetParentUid = headingBlockUid;
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to create heading block: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+    } else {
+      // Default: use daily page root
+      targetParentUid = pageUid;
+    }
+
     // Get memories tag from environment
     const memoriesTag = process.env.MEMORIES_TAG;
     if (!memoriesTag) {
@@ -84,7 +133,7 @@ export class MemoryOperations {
     const actions = [{
       action: 'create-block',
       location: {
-        'parent-uid': pageUid,
+        'parent-uid': targetParentUid,
         order: 'last'
       },
       block: {
@@ -112,7 +161,7 @@ export class MemoryOperations {
       );
     }
 
-    return { success: true, block_uid: blockUid };
+    return { success: true, block_uid: blockUid, parent_uid: targetParentUid };
   }
 
   async recall(sort_by: 'newest' | 'oldest' = 'newest', filter_tag?: string): Promise<{ success: boolean; memories: string[] }> {

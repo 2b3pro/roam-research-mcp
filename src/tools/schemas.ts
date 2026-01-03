@@ -424,6 +424,14 @@ export const toolSchemas = {
             type: 'string'
           },
           description: 'Optional categories to tag the memory with (will be converted to Roam tags)'
+        },
+        heading: {
+          type: 'string',
+          description: 'Optional heading text to nest the memory under (e.g., "Memories" or "## LLM Memories"). If the heading does not exist on the daily page, it will be created. Ignored if parent_uid is provided.'
+        },
+        parent_uid: {
+          type: 'string',
+          description: 'Optional UID of a specific block to nest the memory under. Takes precedence over heading parameter.'
         }
       },
       required: ['memory']
@@ -616,6 +624,29 @@ export const toolSchemas = {
         }
       },
       required: ['parent_uid', 'headers', 'rows']
+    }
+  },
+  roam_move_block: {
+    name: 'roam_move_block',
+    description: 'Move a block to a new location (different parent or position). This is a convenience wrapper around `roam_process_batch_actions` for single block moves.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        block_uid: {
+          type: 'string',
+          description: 'The UID of the block to move'
+        },
+        parent_uid: {
+          type: 'string',
+          description: 'The UID of the new parent block or page'
+        },
+        order: {
+          type: ['integer', 'string'],
+          description: 'Position under the new parent. Can be a number (0-based index) or "first"/"last". Defaults to "last".',
+          default: 'last'
+        }
+      },
+      required: ['block_uid', 'parent_uid']
     }
   },
   roam_update_page_markdown: {

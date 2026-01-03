@@ -1,5 +1,14 @@
 # Changelog
 
+v1.9.0 - 2026-01-02
+
+- ADDED: `roam_move_block` MCP tool
+  - Standalone tool for moving a block to a new parent or position
+  - Parameters: `block_uid` (required), `parent_uid` (required), `order` (optional, defaults to "last")
+  - Convenience wrapper around `roam_process_batch_actions` for single block moves
+  - Validates block existence before attempting move
+  - Returns: `{ success, block_uid, new_parent_uid, order }`
+
 v1.8.2 - 2026-01-02
 
 feat(cli): add --no-daily-page flag to roam save command

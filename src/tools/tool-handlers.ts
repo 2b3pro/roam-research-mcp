@@ -55,6 +55,10 @@ export class ToolHandlers {
     return this.blockRetrievalOps.fetchBlockWithChildren(block_uid, depth);
   }
 
+  async moveBlock(block_uid: string, parent_uid: string, order: number | 'first' | 'last' = 'last') {
+    return this.blockOps.moveBlock(block_uid, parent_uid, order);
+  }
+
   // Search Operations
   async searchByStatus(
     status: 'TODO' | 'DONE',
@@ -110,8 +114,8 @@ export class ToolHandlers {
   }
 
   // Memory Operations
-  async remember(memory: string, categories?: string[]) {
-    return this.memoryOps.remember(memory, categories);
+  async remember(memory: string, categories?: string[], heading?: string, parent_uid?: string) {
+    return this.memoryOps.remember(memory, categories, heading, parent_uid);
   }
 
   async recall(sort_by: 'newest' | 'oldest' = 'newest', filter_tag?: string) {

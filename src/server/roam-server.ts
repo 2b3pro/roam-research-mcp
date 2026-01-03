@@ -118,11 +118,13 @@ export class RoamServer {
             };
           }
           case 'roam_remember': {
-            const { memory, categories } = request.params.arguments as {
+            const { memory, categories, heading, parent_uid } = request.params.arguments as {
               memory: string;
               categories?: string[];
+              heading?: string;
+              parent_uid?: string;
             };
-            const result = await this.toolHandlers.remember(memory, categories);
+            const result = await this.toolHandlers.remember(memory, categories, heading, parent_uid);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
@@ -356,6 +358,18 @@ export class RoamServer {
               headers,
               rows
             });
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            };
+          }
+
+          case 'roam_move_block': {
+            const { block_uid, parent_uid, order = 'last' } = request.params.arguments as {
+              block_uid: string;
+              parent_uid: string;
+              order?: number | 'first' | 'last';
+            };
+            const result = await this.toolHandlers.moveBlock(block_uid, parent_uid, order);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
