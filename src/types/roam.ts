@@ -8,6 +8,6 @@ export interface RoamBlock {
 }
 
 export type RoamBatchAction = {
-  action: 'create-block' | 'update-block' | 'move-block' | 'delete-block';
+  action: 'create-block' | 'update-block' | 'move-block' | 'delete-block' | 'create-page' | 'update-page' | 'delete-page';
   [key: string]: any;
 };

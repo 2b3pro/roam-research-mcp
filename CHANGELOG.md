@@ -1,5 +1,17 @@
 # Changelog
 
+v2.3.0 - 2026-01-04
+
+- ADDED: `roam rename` CLI command to rename pages
+  - `roam rename "Old Title" "New Title"` - rename by current title
+  - `roam rename --uid abc123def "New Title"` - rename by page UID
+  - Supports multi-graph mode with `-g` and `--write-key` flags
+- ADDED: `roam_rename_page` MCP tool
+  - Parameters: `old_title` OR `uid` to identify page, `new_title` (required)
+  - Returns: `{ success, message }`
+- ADDED: `updatePage` SDK function type declaration for page operations
+- ENHANCED: `RoamBatchAction` type now includes page actions (`create-page`, `update-page`, `delete-page`)
+
 v2.2.0 - 2026-01-03
 
 - ADDED: Datalog query support in `roam search` CLI command

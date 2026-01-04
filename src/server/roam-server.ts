@@ -431,6 +431,18 @@ export class RoamServer {
             };
           }
 
+          case 'roam_rename_page': {
+            const { old_title, uid, new_title } = cleanedArgs as {
+              old_title?: string;
+              uid?: string;
+              new_title: string;
+            };
+            const result = await toolHandlers.renamePage({ old_title, uid, new_title });
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            };
+          }
+
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,

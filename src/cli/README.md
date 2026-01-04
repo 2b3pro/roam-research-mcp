@@ -1,6 +1,6 @@
-# Roam Research CLI v2.2.0
+# Roam Research CLI v2.3.0
 
-As of 2026-01-03
+As of 2026-01-04
 
 Command-line interface for interacting with Roam Research graphs.
 
@@ -25,6 +25,7 @@ Commands:
   save            Save text, files, or JSON to pages/blocks
   refs            Find all blocks that reference a page, tag, or block
   update          Update block content, heading, or status
+  rename          Rename a page by title or UID
   batch           Execute multiple block operations efficiently
 ```
 
@@ -299,6 +300,39 @@ roam update abc123def "Content" -c          # Collapse block
 roam update abc123def "Task" -T             # Set as TODO
 roam update abc123def "Task" -D             # Mark as DONE
 roam update abc123def "Task" --clear-status # Remove status marker
+```
+
+---
+
+## `roam rename`
+
+Rename a page by changing its title.
+
+```
+Usage: roam rename [options] <old-title> <new-title>
+
+Arguments:
+  old-title           Current page title (or use --uid for UID)
+  new-title           New page title
+
+Options:
+  -u, --uid <uid>     Use page UID instead of title
+  -g, --graph <name>  Target graph key (multi-graph mode)
+  --write-key <key>   Write confirmation key (non-default graphs)
+  --debug             Show debug information
+```
+
+### Examples
+
+```bash
+# Rename by title
+roam rename "Old Page Name" "New Page Name"
+
+# Rename by UID
+roam rename --uid abc123def "New Page Name"
+
+# Multi-graph
+roam rename "Draft" "Published" -g work --write-key confirm
 ```
 
 ---

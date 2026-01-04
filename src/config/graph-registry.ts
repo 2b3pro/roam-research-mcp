@@ -39,6 +39,7 @@ export const WRITE_OPERATIONS = [
   'roam_create_table',
   'roam_move_block',
   'roam_update_page_markdown',
+  'roam_rename_page',
 ] as const;
 
 export type WriteOperation = typeof WRITE_OPERATIONS[number];

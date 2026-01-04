@@ -698,4 +698,26 @@ export const toolSchemas = {
       required: ['title', 'markdown']
     }
   },
+  roam_rename_page: {
+    name: 'roam_rename_page',
+    description: 'Rename a page by changing its title. Identifies the page by current title or UID.',
+    inputSchema: {
+      type: 'object',
+      properties: withMultiGraphParams({
+        old_title: {
+          type: 'string',
+          description: 'Current title of the page to rename (use this OR uid, not both)'
+        },
+        uid: {
+          type: 'string',
+          description: 'UID of the page to rename (use this OR old_title, not both)'
+        },
+        new_title: {
+          type: 'string',
+          description: 'New title for the page'
+        }
+      }),
+      required: ['new_title']
+    }
+  },
 };

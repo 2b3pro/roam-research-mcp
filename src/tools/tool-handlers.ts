@@ -158,6 +158,11 @@ export class ToolHandlers {
     return this.pageOps.updatePageMarkdown(title, markdown, dryRun);
   }
 
+  // Page Rename
+  async renamePage(params: { old_title?: string; uid?: string; new_title: string }) {
+    return this.pageOps.renamePage(params);
+  }
+
   async getRoamMarkdownCheatsheet() {
     if (this.cachedCheatsheet) {
       return this.cachedCheatsheet;

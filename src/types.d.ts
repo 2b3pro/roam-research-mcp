@@ -98,6 +98,20 @@ declare module '@roam-research/roam-api-sdk' {
     options: RoamMoveBlock
   ): Promise<boolean>;
 
+  interface RoamUpdatePage {
+    action?: 'update-page';
+    page: {
+      uid?: string;
+      title?: string;
+    };
+    title: string;
+  }
+
+  export function updatePage(
+    graph: Graph,
+    options: RoamUpdatePage
+  ): Promise<boolean>;
+
   interface RoamDeletePage {
     action?: 'delete-page';
     page: {
@@ -124,15 +138,7 @@ declare module '@roam-research/roam-api-sdk' {
 
   interface RoamBatchActions {
     action?: 'batch-actions';
-    actions: Array<
-      | RoamDeletePage
-      | RoamUpdatePage
-      | RoamCreatePage
-      | RoamDeleteBlock
-      | RoamUpdateBlock
-      | RoamMoveBlock
-      | RoamCreateBlock
-    >;
+    actions: Array<any>;  // Flexible type to match SDK behavior
   }
 
   export function batchActions(

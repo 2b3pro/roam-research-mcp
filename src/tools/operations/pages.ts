@@ -1,4 +1,4 @@
-import { Graph, q, createPage as createRoamPage, batchActions } from '@roam-research/roam-api-sdk';
+import { Graph, q, createPage as createRoamPage, batchActions, updatePage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { capitalizeWords } from '../helpers/text.js';
 import { resolveRefs } from '../helpers/refs.js';
@@ -695,5 +695,47 @@ export class PageOperations {
       preservedUids: [...diff.preservedUids],
       summary: dryRun ? `[DRY RUN] ${summary}` : summary
     };
+  }
+
+  /**
+   * Rename a page by updating its title
+   */
+  async renamePage(params: { old_title?: string; uid?: string; new_title: string }): Promise<{ success: boolean; message: string }> {
+    const { old_title, uid, new_title } = params;
+
+    if (!old_title && !uid) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Either old_title or uid must be provided to identify the page'
+      );
+    }
+
+    // Build the page identifier
+    const pageIdentifier = uid ? { uid } : { title: old_title };
+
+    try {
+      const success = await updatePage(this.graph, {
+        page: pageIdentifier,
+        title: new_title
+      });
+
+      if (success) {
+        const identifier = uid ? `((${uid}))` : `"${old_title}"`;
+        return {
+          success: true,
+          message: `Renamed ${identifier} → "${new_title}"`
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Failed to rename page (API returned false)'
+        };
+      }
+    } catch (error) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to rename page: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }
