@@ -85,7 +85,7 @@ docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 
 ## Standalone CLI: `roam`
 
-A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides four subcommands: `get`, `search`, `save`, and `refs`.
+A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides six subcommands: `get`, `search`, `save`, `refs`, `update`, and `batch`.
 
 ### Installation
 
@@ -303,6 +303,70 @@ JSON output for programmatic use:
   {"uid": "tiTqNBvYA", "content": "Date Captured:: [[December 30th, 2025]]", "page": "Reading List: Inbox"}
 ]
 ```
+
+---
+
+### `roam batch` - Execute multiple operations in one API call
+
+Execute multiple operations in a single batch API call to reduce rate limiting issues.
+
+```bash
+# From a JSON file
+roam batch commands.json
+
+# From stdin
+cat commands.json | roam batch
+
+# Dry run (validate without executing)
+roam batch --dry-run commands.json
+
+# With debug output
+roam batch --debug commands.json
+```
+
+**Command Format:**
+
+Input is a JSON array of command objects:
+
+```json
+[
+  { "command": "create", "params": { "text": "Parent block", "parent": "pageUid", "as": "p1" } },
+  { "command": "create", "params": { "text": "Child block", "parent": "{{p1}}" } },
+  { "command": "todo", "params": { "text": "Task item" } },
+  { "command": "codeblock", "params": { "parent": "{{p1}}", "language": "ts", "code": "const x = 1;" } }
+]
+```
+
+**Supported Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `create` | Create a block |
+| `update` | Update block content |
+| `delete` | Delete a block |
+| `move` | Move block to new location |
+| `todo` | Create TODO item |
+| `table` | Create table structure |
+| `outline` | Create nested outline |
+| `remember` | Create tagged memory |
+| `page` | Create page with content |
+| `codeblock` | Create code block |
+
+**Features:**
+
+- Placeholder references (`{{name}}`) for cross-command dependencies
+- Automatic page title → UID resolution
+- Daily page auto-resolution for `todo` and `remember`
+- Level-based hierarchy for `outline` command
+- `--dry-run` mode for validation
+
+**Options:**
+- `--dry-run` - Validate and show planned actions without executing
+- `--debug` - Show debug information
+- `-g, --graph <name>` - Target graph (multi-graph mode)
+- `--write-key <key>` - Write confirmation key
+
+See [docs/batch-cli-spec.md](docs/batch-cli-spec.md) for full specification.
 
 ---
 

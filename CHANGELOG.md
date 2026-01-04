@@ -1,5 +1,19 @@
 # Changelog
 
+v2.1.0 - 2026-01-03
+
+- ADDED: `roam batch` CLI command for executing multiple operations in a single API call
+  - Reduces rate limit issues by batching operations
+  - Supports 10 command types: `create`, `update`, `delete`, `move`, `todo`, `table`, `outline`, `remember`, `page`, `codeblock`
+  - Placeholder references (`{{name}}`) for cross-command dependencies
+  - Automatic page title resolution (with parallel lookups)
+  - Daily page auto-resolution for `todo` and `remember` commands
+  - Level-based hierarchy for `outline` command
+  - Table expansion to nested Roam structure
+  - `--dry-run` mode for validating without execution
+  - `--debug` mode for troubleshooting
+  - Full spec: [docs/batch-cli-spec.md](docs/batch-cli-spec.md)
+
 v2.0.2 - 2026-01-03
 
 - CHANGED: `roam_create_page` now adds "Processed: [[date]]" as last block on the new page

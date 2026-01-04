@@ -9,6 +9,7 @@ import { createSearchCommand } from './commands/search.js';
 import { createSaveCommand } from './commands/save.js';
 import { createRefsCommand } from './commands/refs.js';
 import { createUpdateCommand } from './commands/update.js';
+import { createBatchCommand } from './commands/batch.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,6 +32,7 @@ program.addCommand(createSearchCommand());
 program.addCommand(createSaveCommand());
 program.addCommand(createRefsCommand());
 program.addCommand(createUpdateCommand());
+program.addCommand(createBatchCommand());
 
 // Parse arguments
 program.parse();
