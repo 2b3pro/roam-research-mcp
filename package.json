@@ -35,9 +35,11 @@
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "start": "node build/index.js",
     "prepublishOnly": "npm run clean && npm run build",
-    "release:patch": "npm version patch && git push origin v$(node -p \"require('./package.json').version\")",
-    "release:minor": "npm version minor && git push origin v$(node -p \"require('./package.json').version\")",
-    "release:major": "npm version major && git push origin v$(node -p \"require('./package.json').version\")",
+    "release": "standard-version",
+    "release:patch": "standard-version --release-as patch",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major",
+    "release:first": "standard-version --first-release",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -49,6 +51,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
+    "standard-version": "^9.5.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3",
     "vitest": "^3.2.4"

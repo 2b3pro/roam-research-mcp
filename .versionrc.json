@@ -1,0 +1,15 @@
+{
+  "header": "# Changelog\n",
+  "types": [
+    {"type": "feat", "section": "ADDED"},
+    {"type": "fix", "section": "FIXED"},
+    {"type": "perf", "section": "ENHANCED"},
+    {"type": "refactor", "section": "ENHANCED"},
+    {"type": "docs", "section": "DOCS", "hidden": true},
+    {"type": "chore", "hidden": true},
+    {"type": "style", "hidden": true},
+    {"type": "test", "hidden": true}
+  ],
+  "releaseCommitMessageFormat": "chore(release): v{{currentTag}}",
+  "tagPrefix": "v"
+}
