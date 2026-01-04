@@ -1,13 +1,13 @@
 ![](./roam-research-mcp-image.jpeg)
 
-# Roam Research MCP Server
+# Roam Research MCP + CLI
 
 [![npm version](https://badge.fury.io/js/roam-research-mcp.svg)](https://badge.fury.io/js/roam-research-mcp)
-[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
+[![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/github/license/2b3pro/roam-research-mcp)](https://github.com/2b3pro/roam-research-mcp/blob/main/LICENSE)
 
-A Model Context Protocol (MCP) server and standalone CLI that provides comprehensive access to Roam Research's API functionality. The MCP server enables AI assistants like Claude to interact with your Roam Research graph through a standardized interface, while the CLI (`roam`) lets you fetch, search, and import content directly from the command line. Supports standard input/output (stdio) and HTTP Stream communication. (A WORK-IN-PROGRESS, personal project not officially endorsed by Roam Research)
+A Model Context Protocol (MCP) server and standalone CLI that provides comprehensive access to Roam Research's API functionality. The MCP server enables AI assistants like Claude to interact with your Roam Research graph through a standardized interface, while the CLI (`roam`) lets you fetch, search, and import content directly from the command line. Supports multi-graph configurations, write protection, standard input/output (stdio) and HTTP Stream communication. (Personal project, not officially endorsed by Roam Research)
 
 <a href="https://glama.ai/mcp/servers/fzfznyaflu"><img width="380" height="200" src="https://glama.ai/mcp/servers/fzfznyaflu/badge" alt="Roam Research MCP server" /></a>
 <a href="https://mseep.ai/app/2b3pro-roam-research-mcp"><img width="380" height="200" src="https://mseep.net/pr/2b3pro-roam-research-mcp-badge.png" alt="MseeP.ai Security Assessment Badge" /></a>
