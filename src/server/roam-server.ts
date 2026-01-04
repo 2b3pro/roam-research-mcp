@@ -186,11 +186,12 @@ export class RoamServer {
           }
 
           case 'roam_create_page': {
-            const { title, content } = cleanedArgs as {
+            const { title, content, skip_daily_page_link } = cleanedArgs as {
               title: string;
               content?: ContentItem[];
+              skip_daily_page_link?: boolean;
             };
-            const result = await toolHandlers.createPage(title, content);
+            const result = await toolHandlers.createPage(title, content, skip_daily_page_link);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };

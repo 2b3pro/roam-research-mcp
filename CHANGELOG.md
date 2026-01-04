@@ -1,5 +1,12 @@
 # Changelog
 
+v2.0.1 - 2026-01-03
+
+- ADDED: `skip_daily_page_link` parameter to `roam_create_page` MCP tool
+  - When `true`, skips adding the "Created page: [[title]]" block to today's daily page
+  - Defaults to `false` (preserves existing behavior)
+  - Useful for programmatic page creation where daily page logging is unnecessary
+
 v1.9.1 - 2026-01-02
 
 - Updated: Added --heading to `roam save` CLI

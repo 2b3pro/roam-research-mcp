@@ -332,7 +332,7 @@ The server provides powerful tools for interacting with Roam Research:
 
 1. `roam_fetch_page_by_title`: Fetch page content by title. Returns content in the specified format.
 2. `roam_fetch_block_with_children`: Fetch a block by its UID along with its hierarchical children down to a specified depth. Automatically handles `((UID))` formatting.
-3. `roam_create_page`: Create new pages with optional content and headings. **Now supports mixed content types** - content array can include both text blocks and tables in a single call using `{type: "table", headers, rows}` format. Creates a block on the daily page linking to the newly created page.
+3. `roam_create_page`: Create new pages with optional content and headings. **Now supports mixed content types** - content array can include both text blocks and tables in a single call using `{type: "table", headers, rows}` format. Creates a block on the daily page linking to the newly created page (disable with `skip_daily_page_link: true`).
 4. `roam_create_table`: Create a properly formatted Roam table with specified headers and rows. Abstracts Roam's complex nested table structure, validates row/column consistency, and handles empty cells automatically.
 5. `roam_import_markdown`: Import nested markdown content under a specific block. (Internally uses `roam_process_batch_actions`.)
 6. `roam_add_todo`: Add a list of todo items to today's daily page. (Internally uses `roam_process_batch_actions`.)

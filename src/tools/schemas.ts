@@ -132,6 +132,11 @@ export const toolSchemas = {
             required: ['level']
           }
         },
+        skip_daily_page_link: {
+          type: 'boolean',
+          description: 'If true, skip adding a "Created page: [[title]]" link to today\'s daily page. Defaults to false.',
+          default: false
+        },
       }),
       required: ['title'],
     },
