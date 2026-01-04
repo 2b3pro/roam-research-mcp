@@ -1,128 +1,78 @@
-# Roam Markdown Cheatsheet — Generic Foundation v2.0.1
+# Roam Markdown Cheatsheet v2.1.0
 
-> ⚠️ **MODEL DIRECTIVE**: Always consult this cheatsheet BEFORE making any Roam tool calls. Syntax errors in Roam are unforgiving.
+## Core Syntax
 
----
-
-## Quick Reference: Core Syntax
-
-### Text Formatting
-| Style | Syntax | Example |
-|-------|--------|---------|
-| Bold | `**text**` | **bold text** |
-| Italic | `__text__` | __italic text__ |
-| Highlight | `^^text^^` | ^^highlighted^^ |
-| Strikethrough | `~~text~~` | ~~struck~~ |
-| Inline code | `` `code` `` | `code` |
-| LaTeX | `$$E=mc^2$$` | rendered math |
+### Formatting
+`**bold**` · `__italic__` · `^^highlight^^` · `~~strike~~` · `` `code` `` · `$$LaTeX$$`
 
 ### Links & References
-| Type | Syntax | Notes |
-|------|--------|-------|
-| Page reference | `[[Page Name]]` | Creates/links to page |
-| Block reference | `((block-uid))` | Embeds block content inline |
-| Block embed | `{{[[embed]]: ((block-uid))}}` | Full block embed with children |
-| External link | `[text](URL)` | Standard markdown |
-| Aliased page ref | `[display text]([[Actual Page]])` | Shows custom text, links to page |
-| Aliased block ref | `[display text](<((block-uid))>)` | Links to specific block |
-| Image embed | `![alt text](URL)` | Inline image |
+- **Page ref:** `[[Page Name]]` — creates/links to page
+- **Block ref:** `((block-uid))` — embeds block content inline
+- **Block embed:** `{{[[embed]]: ((block-uid))}}` — full block with children
+- **External:** `[text](URL)`
+- **Aliased page:** `[display text]([[Actual Page]])`
+- **Aliased block:** `[display text](<((block-uid))>)` — note the angle brackets
+- **Image:** `![alt](URL)`
 
-### Tags & Hashtags
-| Type | Syntax | When to Use |
-|------|--------|-------------|
-| Single word | `#tag` | Simple categorization |
-| Multi-word | `#[[multiple words]]` | Phrases, compound concepts |
-| Hyphenated | `#self-esteem` | Naturally hyphenated terms |
+### Tags
+- Single word: `#tag`
+- Multi-word: `#[[multiple words]]`
+- Hyphenated: `#self-esteem`
 
-⚠️ **CRITICAL**: Never concatenate multi-word tags. `#knowledgemanagement` ≠ `#[[knowledge management]]`
-
-⚠️ **CRITICAL**: Never use `#` to mean "number" (e.g., `#1`, `#2`). In Roam, `#` **always** creates a hashtag. Write `Step 1`, `No. 1`, or just spell out the number instead.
+⚠️ Never concatenate: `#knowledgemanagement` ≠ `#[[knowledge management]]`
+⚠️ `#` always creates tags — write `Step 1` not `#1`
 
 ### Dates
-- **Always use ordinal format**: `[[January 1st, 2025]]`, `[[December 23rd, 2024]]`
-- Ordinals: 1st, 2nd, 3rd, 4th–20th, 21st, 22nd, 23rd, 24th–30th, 31st
+Always ordinal format: `[[January 1st, 2025]]`, `[[December 23rd, 2024]]`
 
-### Task Management
-| Status | Syntax |
-|--------|--------|
-| Todo | `{{[[TODO]]}} task description` |
-| Done | `{{[[DONE]]}} task description` |
+### Tasks
+- Todo: `{{[[TODO]]}} task`
+- Done: `{{[[DONE]]}} task`
 
-### Attributes (Properties)
+### Attributes
 ```
 Type:: Book
 Author:: [[Person Name]]
 Rating:: 4/5
-Source:: https://example.com
 ```
 
-**Purpose**: Attributes create structured metadata that is **queryable across your entire graph**. The attribute name becomes a page reference, so only use `::` when the attribute is a reusable property that applies to multiple pages or concepts.
+**Use `::` when:** queryable across graph (Type, Author, Status, Source, Date)
+**Use bold instead when:** page-specific labels (Step 1, Summary, Note)
 
-**When to USE attributes:**
-| Attribute | Why It's Good |
-|-----------|---------------|
-| `Type:: Book` | Reusable across all media you consume |
-| `Author:: [[Person]]` | Links to author page, queryable |
-| `Status:: In Progress` | Standard project states, queryable |
-| `Source:: URL` | Consistent sourcing across notes |
-| `Date:: [[January 1st, 2025]]` | Enables date-based queries |
-
-**When NOT to use attributes:**
-| ❌ Wrong | ✅ Use Instead | Why |
-|----------|----------------|-----|
-| `Step 1:: Do this thing` | `**Step 1:** Do this thing` | Step numbers are page-specific, not queryable concepts |
-| `Note:: Some observation` | Just write the text, or use `#note` | One-off labels don't need attribute syntax |
-| `Summary:: The main point` | `**Summary:** The main point` | Section headers are formatting, not metadata |
-| `Definition:: Some text` | `Term:: Definition` | Only use for actual definitions you want to query |
-| `Implementation Tier 3 (Societal Restructuring):: Some text` | `**Implementation Tier 3 (Societal Restructuring):** Some text` | Label is specific to current concept |
-
-⚠️ **The Test**: Ask yourself: "Will I ever query for all blocks with this attribute across my graph?" If no, use **bold formatting** (`**Label:**`) instead of `::` syntax.
-
-NOTE: Never combine bold markdown formatting with `::`. Roam formats attributes in bold by default. ✅ `<attribute>::` ❌ `**<attribute>**::`
-
----
+⚠️ Test: "Will I query all blocks with this attribute?" If no → use `**Label:**` instead
+⚠️ Never `**Attr**::` — Roam auto-bolds attributes
 
 ## Block Structures
 
-### Bullet Points
-- Use `-` (dash) followed by space
-- Nested bullets: indent with tab or spaces
+### Bullets
 ```
-- Parent item
-    - Child item
-        - Grandchild item
+- Parent
+    - Child
+        - Grandchild
 ```
 
 ### Code Blocks
 ````
 ```javascript
-const example = () => {
-    return "syntax highlighted";
-}
+const x = 1;
 ```
 ````
 
 ### Queries
 ```
 {{[[query]]: {and: [[tag1]] [[tag2]]}}}
-{{[[query]]: {or: [[optionA]] [[optionB]]}}}
-{{[[query]]: {not: [[exclude-this]]}}}
+{{[[query]]: {or: [[A]] [[B]]}}}
+{{[[query]]: {not: [[exclude]]}}}
 {{[[query]]: {between: [[January 1st, 2025]] [[January 31st, 2025]]}}}
 ```
 
 ### Calculator
-```
-{{[[calc]]: 2 + 2}}
-{{[[calc]]: 100 * 0.15}}
-```
-
----
+`{{[[calc]]: 2 + 2}}`
 
 ## Complex Structures
 
 ### Tables
-Tables use nested indentation. Each column header/cell nests ONE LEVEL DEEPER than previous.
-
+Each column nests ONE LEVEL DEEPER than previous:
 ```
 {{[[table]]}}
     - Header 1
@@ -131,232 +81,111 @@ Tables use nested indentation. Each column header/cell nests ONE LEVEL DEEPER th
     - Row 1 Label
         - Cell 1.1
             - Cell 1.2
-                - Cell 1.3
     - Row 2 Label
         - Cell 2.1
             - Cell 2.2
-                - Cell 2.3
 ```
+Keep tables ≤5 columns.
 
-**Rules:**
-- `{{[[table]]}}` is level 1
-- First header/row-label at level 2
-- Each subsequent column nests +1 level deeper
-- Keep tables ≤5 columns for readability
-
-### Kanban Boards
+### Kanban
 ```
 {{[[kanban]]}}
-    - Column 1 Title
-        - Card 1 content
-        - Card 2 content
-    - Column 2 Title
-        - Card 3 content
+    - Column 1
+        - Card 1
+        - Card 2
+    - Column 2
+        - Card 3
 ```
 
-### Mermaid Diagrams
+### Mermaid
 ```
 {{[[mermaid]]}}
     - graph TD
         - A[Start] --> B{Decision}
         - B -->|Yes| C[Action]
-        - B -->|No| D[Alternative]
 ```
 
-### Hiccup (Custom HTML)
-`:hiccup [:iframe {:width "600" :height "400" :src "https://example.com"}]`
+### Hiccup
+`:hiccup [:iframe {:width "600" :height "400" :src "URL"}]`
 
-`:hiccup [:div {:style {:color "red"}} "Custom styled content"]`
+## Anti-Patterns
 
----
+| ❌ Wrong | ✅ Correct |
+|----------|-----------|
+| `#multiplewords` | `#[[multiple words]]` |
+| `#1`, `#2` | `Step 1`, `No. 1` |
+| `[[january 1, 2025]]` | `[[January 1st, 2025]]` |
+| `[text](((uid)))` | `[text](<((uid))>)` |
+| `{{embed: ((uid))}}` | `{{[[embed]]: ((uid))}}` |
+| `[[TODO]] task` | `{{[[TODO]]}} task` |
+| `- *bullet` | `- bullet` |
+| `* bullet` | `- bullet` |
+| `**Attr**:: val` | `Attr:: val` |
 
-## Anti-Patterns — DON'T DO THIS
-
-| ❌ Wrong | ✅ Correct | Why |
-|----------|-----------|-----|
-| `Step 1:: Do this` | `**Step 1:** Do this` | `::` creates queryable attributes; use bold for page-specific labels |
-| `#multiplewords` | `#[[multiple words]]` | Concatenated tags create dead references |
-| `#1`, `#2`, `#3` | `Step 1`, `No. 1`, or spell out | `#` always creates hashtags, never means "number" |
-| `[[january 1, 2025]]` | `[[January 1st, 2025]]` | Must use ordinal format with proper capitalization |
-| `[text](((block-uid)))` | `[text](<((block-uid))>)` | Block ref links need angle bracket wrapper |
-| `{{embed: ((uid))}}` | `{{[[embed]]: ((uid))}}` | Embed requires double brackets around keyword |
-| Deeply nested tables (6+ cols) | Max 4-5 columns | Becomes unreadable/unmanageable |
-| `- *bullet` | `- bullet` | Use dash, not asterisk for bullets |
-| `[[TODO]] task` | `{{[[TODO]]}} task` | TODO needs double curly braces |
-
----
-
-## Tool Selection Decision Tree
+## Tool Selection
 
 ```
-CREATING CONTENT IN ROAM:
+CREATING:
+├─ New page + structure → roam_create_page
+├─ Add to existing page/block:
+│   ├─ Simple outline → roam_create_outline
+│   └─ Complex markdown → roam_import_markdown
+├─ Revise entire page → roam_update_page_markdown
+├─ Fine-grained CRUD → roam_process_batch_actions
+├─ Table → roam_create_table
+├─ Memory → roam_remember
+└─ Todos → roam_add_todo
 
-┌─ Is this a NEW standalone page with structure?
-│   └─ YES → roam_create_page (with content array)
-│
-├─ Adding content to EXISTING page/block?
-│   ├─ Simple outline structure → roam_create_outline
-│   │   (provide page_title_uid and/or block_text_uid)
-│   │
-│   └─ Complex/nested markdown → roam_import_markdown
-│       (for deeply nested content, tables, etc.)
-│
-├─ Replacing/revising ENTIRE page content?
-│   └─ roam_update_page_markdown
-│       (fetches page internally, computes smart diff, preserves UIDs)
-│
-├─ Need to CREATE, UPDATE, MOVE, or DELETE individual blocks?
-│   └─ roam_process_batch_actions
-│       (fine-grained control, UID placeholders for parent refs)
-│
-├─ Creating a TABLE?
-│   └─ roam_create_table
-│       (handles complex nested structure automatically)
-│
-├─ Adding a memory/note to remember?
-│   └─ roam_remember (auto-tags with MEMORIES_TAG)
-│
-├─ Adding TODO items to today?
-│   └─ roam_add_todo (creates individual TODO blocks)
-│
-└─ SEARCHING/READING:
-    ├─ Find by tag → roam_search_for_tag
-    ├─ Find by text → roam_search_by_text
-    ├─ Find by date range → roam_search_by_date
-    ├─ Find by status → roam_search_by_status
-    ├─ Find block/page references → roam_search_block_refs
-    ├─ Find pages modified today → roam_find_pages_modified_today
-    ├─ Get page content → roam_fetch_page_by_title
-    ├─ Get block + children → roam_fetch_block_with_children
-    ├─ Recall memories → roam_recall
-    └─ Complex queries → roam_datomic_query
+SEARCHING:
+├─ By tag → roam_search_for_tag
+├─ By text → roam_search_by_text
+├─ By date → roam_search_by_date
+├─ By status → roam_search_by_status
+├─ Block refs → roam_search_block_refs
+├─ Modified today → roam_find_pages_modified_today
+├─ Page content → roam_fetch_page_by_title
+├─ Block + children → roam_fetch_block_with_children
+├─ Memories → roam_recall
+└─ Complex → roam_datomic_query
 ```
 
----
+## API Efficiency
 
-## API Efficiency Guidelines (Rate Limit Avoidance)
+**Ranking (best → worst):**
+1. `roam_update_page_markdown` — single call: fetch + diff + update
+2. `roam_process_batch_actions` — batch multiple ops
+3. `roam_create_page` — batches content with creation
+4. `roam_create_outline` / `roam_import_markdown` — includes verification
+5. Multiple sequential calls — avoid
 
-The Roam API has rate limits. Follow these guidelines to minimize API calls:
+**Best practices:**
+- Use `roam_update_page_markdown` for revisions (handles everything)
+- For 10+ blocks: `roam_process_batch_actions`
+- Cache UIDs — use `page_uid` over `page_title` when available
+- Never fetch-modify-fetch-modify in loops
 
-### Tool Efficiency Ranking (Best to Worst)
-1. **`roam_update_page_markdown`** - Single call: fetches, diffs, and updates (MOST EFFICIENT for revisions)
-2. **`roam_process_batch_actions`** - Single API call for multiple operations
-3. **`roam_create_page`** - Batches content with page creation
-4. **`roam_create_outline` / `roam_import_markdown`** - Include verification queries (use for smaller operations)
-5. **Multiple sequential tool calls** - Each call = multiple API requests (AVOID)
-
-### Best Practices for Intensive Operations
-
-#### When Updating/Revising a Page:
-1. **Preferred**: Use `roam_update_page_markdown` — it fetches, diffs, and updates in one call
-2. **Alternative** (for fine-grained control): Fetch once with `roam_fetch_page_by_title`, then execute ALL changes in a SINGLE `roam_process_batch_actions` call
-3. Do NOT fetch-modify-fetch-modify in a loop
-
-#### When Creating Large Content:
-- For 10+ blocks: Use `roam_process_batch_actions` with nested structure
-- For simple outlines (<10 blocks): `roam_create_outline` is fine
-
-#### UID Caching:
-- Save UIDs from previous operations - don't re-query for them
-- Use `page_uid` instead of `page_title` when available (avoids lookup query)
-- Use `block_uid` instead of `block_text_uid` when you have it
-
-#### UID Placeholders for Nested Blocks:
-When using `roam_process_batch_actions` to create nested blocks, use **placeholder tokens** instead of generating UIDs yourself. The server generates proper random UIDs and returns a mapping.
-
-**Syntax:** `{{uid:name}}` where `name` is any identifier you choose.
-
-**Example:**
+### UID Placeholders
+Use `{{uid:name}}` for parent refs in batch actions:
 ```json
 [
-  { "action": "create-block", "uid": "{{uid:parent}}", "string": "Parent Block", "location": { "parent-uid": "pageUid123", "order": 0 } },
-  { "action": "create-block", "string": "Child Block", "location": { "parent-uid": "{{uid:parent}}", "order": 0 } }
+  {"action": "create-block", "uid": "{{uid:parent}}", "string": "Parent", "location": {"parent-uid": "pageUid", "order": 0}},
+  {"action": "create-block", "string": "Child", "location": {"parent-uid": "{{uid:parent}}", "order": 0}}
 ]
 ```
-
-**Response includes UID mapping:**
-```json
-{
-  "success": true,
-  "uid_map": {
-    "parent": "Xk7mN2pQ9"
-  }
-}
-```
-
-**Why placeholders?** LLMs are not reliable random generators. The server uses cryptographically secure randomness to generate proper 9-character Roam UIDs.
-
-### Example: Efficient Page Revision
-
-**Instead of:**
-```
-1. roam_fetch_page_by_title → get content
-2. roam_create_outline → add section 1
-3. roam_create_outline → add section 2
-4. roam_import_markdown → add more content
-```
-
-**Do this:**
-```
-1. roam_update_page_markdown → single call handles fetch, diff, and updates
-```
-
-**Alternative** (when you need fine-grained control):
-```
-1. roam_fetch_page_by_title → get page UID and content
-2. roam_process_batch_actions → ALL creates/updates in one call
-```
-
----
+Server returns `{"uid_map": {"parent": "Xk7mN2pQ9"}}`.
 
 ## Structural Defaults
 
-When unsure how to structure output:
+- **Hierarchy:** 2-4 levels preferred, rarely exceed 5
+- **Blocks:** One idea per block
+- **Page refs vs tags:** `[[Page]]` for expandable concepts, `#tag` for filtering
+- **Embed vs ref:** `((uid))` inline, `{{[[embed]]: ((uid))}}` with children, `[text](<((uid))>)` link only
+- **No empty blocks or `---` dividers** — use hierarchy for visual separation
 
-1. **Hierarchy depth**: Prefer 2-4 levels; rarely exceed 5
-2. **Block length**: Keep blocks atomic — one idea per block
-3. **Page refs vs hashtags**: 
-   - `[[Page]]` for concepts you'll expand into full pages
-   - `#tag` for categorization/filtering
-4. **When to embed vs reference**:
-   - `((uid))` — inline reference (shows content)
-   - `{{[[embed]]: ((uid))}}` — full block with children
-   - `[text](<((uid))>)` — clickable link only
+## Output Conventions
 
----
-## Visual Separation — Hierarchy First, Separators Never
-
-Empty blocks and decorative dividers create clutter. Roam's outliner structure provides all the visual separation you need.
-
-| ❌ Avoid | ✅ Instead |
-|----------|-----------|
-| Blank blocks | Let hierarchy create space — child blocks are visually indented |
-| `---` dividers | Use a **heading block** to signal section breaks |
-| Decorative lines `───` | Nest content under a parent block as a structural container |
-
-**Principle**: If you feel the urge to add visual breathing room, you probably need *better structure*, not more blocks. Promote a block to a heading, or reorganize into parent/child relationships.
-
-**The test**: If you'd delete it during cleanup, don't create it.
+**Quote:** `<text> —[[Author]] #quote`
+**Definition:** `Term:: definition #definition`
+**Open question:** `{{[[TODO]]}} Research: <question> #[[open questions]]`
 
 ---
-
-## Output Format Conventions
-
-### Quotes
-```
-<quote text> —[[Author Name]] #quote #[[relevant topic]]
-```
-
-### Definitions
-```
-Term:: Definition text #definition #[[domain]]
-```
-
-### Questions for Future
-```
-{{[[TODO]]}} Research: <question> #[[open questions]]
-```
-
----
-
-*End of Generic Foundation — Personalization section follows during user setup.*
