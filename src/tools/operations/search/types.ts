@@ -9,6 +9,9 @@ export interface BaseSearchParams {
 export interface DatomicSearchParams {
   query: string;
   inputs?: unknown[];
+  regexFilter?: string;
+  regexFlags?: string;
+  regexTargetField?: string[];
 }
 
 // Tag search parameters

@@ -1,4 +1,4 @@
-import { Graph, q, createPage as createRoamPage, batchActions, createBlock } from '@roam-research/roam-api-sdk';
+import { Graph, q, createPage as createRoamPage, batchActions, updatePage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { capitalizeWords } from '../helpers/text.js';
 import { resolveRefs } from '../helpers/refs.js';
@@ -131,8 +131,7 @@ export class PageOperations {
 
   async createPage(
     title: string,
-    content?: ContentItem[],
-    options?: { skipDailyPageLink?: boolean }
+    content?: ContentItem[]
   ): Promise<{ success: boolean; uid: string }> {
     // Ensure title is properly formatted
     const pageTitle = String(title).trim();
@@ -375,45 +374,24 @@ export class PageOperations {
       }
     }
 
-    // Add a link to the created page on today's daily page (unless skipped)
-    if (!options?.skipDailyPageLink) {
-      try {
-        const today = new Date();
-        const day = today.getDate();
-        const month = today.toLocaleString('en-US', { month: 'long' });
-        const year = today.getFullYear();
-        const formattedTodayTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
+    // Add a "Processed: [[date]]" block as the last block of the newly created page
+    try {
+      const today = new Date();
+      const day = today.getDate();
+      const month = today.toLocaleString('en-US', { month: 'long' });
+      const year = today.getFullYear();
+      const formattedTodayTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
 
-        // Check cache for daily page
-        let dailyPageUid: string | undefined = pageUidCache.get(formattedTodayTitle);
-        if (!dailyPageUid) {
-          const dailyPageQuery = `[:find ?uid .
-                                  :where [?e :node/title "${formattedTodayTitle}"]
-                                         [?e :block/uid ?uid]]`;
-          const dailyPageResult = await q(this.graph, dailyPageQuery, []);
-          dailyPageUid = dailyPageResult ? String(dailyPageResult) : undefined;
-          if (dailyPageUid) {
-            pageUidCache.set(formattedTodayTitle, dailyPageUid);
-          }
-        }
-
-        if (dailyPageUid) {
-          await createBlock(this.graph, {
-            action: 'create-block',
-            block: {
-              string: `Created page: [[${pageTitle}]]`
-            },
-            location: {
-              'parent-uid': dailyPageUid,
-              order: 'last'
-            }
-          });
-        } else {
-          console.warn(`Could not find daily page with title: ${formattedTodayTitle}. Link to created page not added.`);
-        }
-      } catch (error) {
-        console.error(`Failed to add link to daily page: ${error instanceof Error ? error.message : String(error)}`);
-      }
+      await batchActions(this.graph, {
+        action: 'batch-actions',
+        actions: [{
+          action: 'create-block',
+          location: { 'parent-uid': pageUid, order: 'last' },
+          block: { string: `Processed: [[${formattedTodayTitle}]]` }
+        }]
+      });
+    } catch (error) {
+      console.error(`Failed to add Processed block: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return { success: true, uid: pageUid };
@@ -717,5 +695,47 @@ export class PageOperations {
       preservedUids: [...diff.preservedUids],
       summary: dryRun ? `[DRY RUN] ${summary}` : summary
     };
+  }
+
+  /**
+   * Rename a page by updating its title
+   */
+  async renamePage(params: { old_title?: string; uid?: string; new_title: string }): Promise<{ success: boolean; message: string }> {
+    const { old_title, uid, new_title } = params;
+
+    if (!old_title && !uid) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        'Either old_title or uid must be provided to identify the page'
+      );
+    }
+
+    // Build the page identifier
+    const pageIdentifier = uid ? { uid } : { title: old_title };
+
+    try {
+      const success = await updatePage(this.graph, {
+        page: pageIdentifier,
+        title: new_title
+      });
+
+      if (success) {
+        const identifier = uid ? `((${uid}))` : `"${old_title}"`;
+        return {
+          success: true,
+          message: `Renamed ${identifier} → "${new_title}"`
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Failed to rename page (API returned false)'
+        };
+      }
+    } catch (error) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to rename page: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }

@@ -12,8 +12,10 @@ import {
   BlockRefSearchHandlerImpl,
   HierarchySearchHandlerImpl,
   TextSearchHandlerImpl,
-  StatusSearchHandlerImpl
+  StatusSearchHandlerImpl,
+  DatomicSearchHandlerImpl
 } from './handlers.js';
+import type { DatomicSearchParams } from './types.js';
 
 export class SearchOperations {
   constructor(private graph: Graph) {}
@@ -91,6 +93,11 @@ export class SearchOperations {
 
   async searchByText(params: TextSearchParams): Promise<SearchHandlerResult> {
     const handler = new TextSearchHandlerImpl(this.graph, params);
+    return handler.execute();
+  }
+
+  async executeDatomicQuery(params: DatomicSearchParams): Promise<SearchHandlerResult> {
+    const handler = new DatomicSearchHandlerImpl(this.graph, params);
     return handler.execute();
   }
 

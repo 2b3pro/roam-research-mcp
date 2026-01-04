@@ -11,8 +11,9 @@ import {
   ListToolsRequestSchema,
   ListPromptsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
-import { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT } from '../config/environment.js';
+import { type Graph } from '@roam-research/roam-api-sdk';
+import { HTTP_STREAM_PORT, validateEnvironment } from '../config/environment.js';
+import { createRegistryFromEnv, GraphRegistry, isWriteOperation } from '../config/graph-registry.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
 import type { ContentItem } from '../tools/operations/pages.js';
@@ -32,33 +33,39 @@ const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 const serverVersion = packageJson.version;
 
 export class RoamServer {
-  private toolHandlers: ToolHandlers;
-  private graph: Graph;
+  private registry: GraphRegistry;
+  private toolHandlersCache: Map<string, ToolHandlers> = new Map();
 
   constructor() {
+    // Validate environment first
+    validateEnvironment();
 
     try {
-      this.graph = initializeGraph({
-        token: API_TOKEN,
-        graph: GRAPH_NAME,
-      });
+      this.registry = createRegistryFromEnv();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new McpError(ErrorCode.InternalError, `Failed to initialize Roam graph: ${errorMessage}`);
-    }
-
-    try {
-      this.toolHandlers = new ToolHandlers(this.graph);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new McpError(ErrorCode.InternalError, `Failed to initialize tool handlers: ${errorMessage}`);
+      throw new McpError(ErrorCode.InternalError, `Failed to initialize graph registry: ${errorMessage}`);
     }
 
     // Ensure toolSchemas is not empty before proceeding
     if (Object.keys(toolSchemas).length === 0) {
       throw new McpError(ErrorCode.InternalError, 'No tool schemas defined in src/tools/schemas.ts');
     }
+  }
 
+  /**
+   * Get or create a ToolHandlers instance for a specific graph
+   * Handlers are cached per-graph for efficiency
+   */
+  private getToolHandlers(graph: Graph, graphKey: string): ToolHandlers {
+    const cached = this.toolHandlersCache.get(graphKey);
+    if (cached) {
+      return cached;
+    }
+
+    const handlers = new ToolHandlers(graph);
+    this.toolHandlersCache.set(graphKey, handlers);
+    return handlers;
   }
 
   // Helper to create and configure MCP server instance
@@ -82,6 +89,38 @@ export class RoamServer {
     );
     this.setupRequestHandlers(server);
     return server;
+  }
+
+  /**
+   * Extract graph and write_key from tool arguments
+   */
+  private extractGraphParams(args: Record<string, unknown>): {
+    graphKey: string | undefined;
+    writeKey: string | undefined;
+    cleanedArgs: Record<string, unknown>;
+  } {
+    const { graph, write_key, ...cleanedArgs } = args as {
+      graph?: string;
+      write_key?: string;
+      [key: string]: unknown;
+    };
+    return {
+      graphKey: graph,
+      writeKey: write_key,
+      cleanedArgs,
+    };
+  }
+
+  /**
+   * Resolve graph for a tool call with validation
+   */
+  private resolveGraph(toolName: string, graphKey: string | undefined, writeKey?: string): {
+    graph: Graph;
+    resolvedKey: string;
+  } {
+    const resolvedKey = graphKey ?? this.registry.defaultKey;
+    const graph = this.registry.resolveGraphForTool(toolName, graphKey, writeKey);
+    return { graph, resolvedKey };
   }
 
   // Refactored to accept a Server instance
@@ -110,43 +149,50 @@ export class RoamServer {
     // Handle tool calls
     mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
+        const args = (request.params.arguments ?? {}) as Record<string, unknown>;
+        const { graphKey, writeKey, cleanedArgs } = this.extractGraphParams(args);
+        const { graph, resolvedKey } = this.resolveGraph(request.params.name, graphKey, writeKey);
+        const toolHandlers = this.getToolHandlers(graph, resolvedKey);
+
         switch (request.params.name) {
           case 'roam_markdown_cheatsheet': {
-            const content = await this.toolHandlers.getRoamMarkdownCheatsheet();
+            const graphInfo = this.registry.getGraphInfoMarkdown();
+            const cheatsheet = await toolHandlers.getRoamMarkdownCheatsheet();
+            const content = graphInfo + cheatsheet;
             return {
               content: [{ type: 'text', text: content }],
             };
           }
           case 'roam_remember': {
-            const { memory, categories, heading, parent_uid } = request.params.arguments as {
+            const { memory, categories, heading, parent_uid } = cleanedArgs as {
               memory: string;
               categories?: string[];
               heading?: string;
               parent_uid?: string;
             };
-            const result = await this.toolHandlers.remember(memory, categories, heading, parent_uid);
+            const result = await toolHandlers.remember(memory, categories, heading, parent_uid);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_fetch_page_by_title': {
-            const { title, format } = request.params.arguments as {
+            const { title, format } = cleanedArgs as {
               title: string;
               format?: 'markdown' | 'raw';
             };
-            const content = await this.toolHandlers.fetchPageByTitle(title, format);
+            const content = await toolHandlers.fetchPageByTitle(title, format);
             return {
               content: [{ type: 'text', text: content }],
             };
           }
 
           case 'roam_create_page': {
-            const { title, content } = request.params.arguments as {
+            const { title, content } = cleanedArgs as {
               title: string;
               content?: ContentItem[];
             };
-            const result = await this.toolHandlers.createPage(title, content);
+            const result = await toolHandlers.createPage(title, content);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
@@ -161,7 +207,7 @@ export class RoamServer {
               parent_uid,
               parent_string,
               order = 'first'
-            } = request.params.arguments as {
+            } = cleanedArgs as {
               content: string;
               page_uid?: string;
               page_title?: string;
@@ -169,7 +215,7 @@ export class RoamServer {
               parent_string?: string;
               order?: 'first' | 'last';
             };
-            const result = await this.toolHandlers.importMarkdown(
+            const result = await toolHandlers.importMarkdown(
               content,
               page_uid,
               page_title,
@@ -183,20 +229,20 @@ export class RoamServer {
           }
 
           case 'roam_add_todo': {
-            const { todos } = request.params.arguments as { todos: string[] };
-            const result = await this.toolHandlers.addTodos(todos);
+            const { todos } = cleanedArgs as { todos: string[] };
+            const result = await toolHandlers.addTodos(todos);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_create_outline': {
-            const { outline, page_title_uid, block_text_uid } = request.params.arguments as {
+            const { outline, page_title_uid, block_text_uid } = cleanedArgs as {
               outline: Array<{ text: string | undefined; level: number }>;
               page_title_uid?: string;
               block_text_uid?: string;
             };
-            const result = await this.toolHandlers.createOutline(
+            const result = await toolHandlers.createOutline(
               outline,
               page_title_uid,
               block_text_uid
@@ -207,44 +253,44 @@ export class RoamServer {
           }
 
           case 'roam_search_for_tag': {
-            const { primary_tag, page_title_uid, near_tag } = request.params.arguments as {
+            const { primary_tag, page_title_uid, near_tag } = cleanedArgs as {
               primary_tag: string;
               page_title_uid?: string;
               near_tag?: string;
             };
-            const result = await this.toolHandlers.searchForTag(primary_tag, page_title_uid, near_tag);
+            const result = await toolHandlers.searchForTag(primary_tag, page_title_uid, near_tag);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_search_by_status': {
-            const { status, page_title_uid, include, exclude } = request.params.arguments as {
+            const { status, page_title_uid, include, exclude } = cleanedArgs as {
               status: 'TODO' | 'DONE';
               page_title_uid?: string;
               include?: string;
               exclude?: string;
             };
-            const result = await this.toolHandlers.searchByStatus(status, page_title_uid, include, exclude);
+            const result = await toolHandlers.searchByStatus(status, page_title_uid, include, exclude);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_search_block_refs': {
-            const params = request.params.arguments as {
+            const params = cleanedArgs as {
               block_uid?: string;
               title?: string;
               page_title_uid?: string;
             };
-            const result = await this.toolHandlers.searchBlockRefs(params);
+            const result = await toolHandlers.searchBlockRefs(params);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_search_hierarchy': {
-            const params = request.params.arguments as {
+            const params = cleanedArgs as {
               parent_uid?: string;
               child_uid?: string;
               page_title_uid?: string;
@@ -259,42 +305,42 @@ export class RoamServer {
               );
             }
 
-            const result = await this.toolHandlers.searchHierarchy(params);
+            const result = await toolHandlers.searchHierarchy(params);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_find_pages_modified_today': {
-            const { max_num_pages } = request.params.arguments as {
+            const { max_num_pages } = cleanedArgs as {
               max_num_pages?: number;
             };
-            const result = await this.toolHandlers.findPagesModifiedToday(max_num_pages || 50);
+            const result = await toolHandlers.findPagesModifiedToday(max_num_pages || 50);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_search_by_text': {
-            const params = request.params.arguments as {
+            const params = cleanedArgs as {
               text: string;
               page_title_uid?: string;
             };
-            const result = await this.toolHandlers.searchByText(params);
+            const result = await toolHandlers.searchByText(params);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_search_by_date': {
-            const params = request.params.arguments as {
+            const params = cleanedArgs as {
               start_date: string;
               end_date?: string;
               type: 'created' | 'modified' | 'both';
               scope: 'blocks' | 'pages' | 'both';
               include_content: boolean;
             };
-            const result = await this.toolHandlers.searchByDate(params);
+            const result = await toolHandlers.searchByDate(params);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
@@ -302,11 +348,11 @@ export class RoamServer {
 
 
           case 'roam_recall': {
-            const { sort_by = 'newest', filter_tag } = request.params.arguments as {
+            const { sort_by = 'newest', filter_tag } = cleanedArgs as {
               sort_by?: 'newest' | 'oldest';
               filter_tag?: string;
             };
-            const result = await this.toolHandlers.recall(sort_by, filter_tag);
+            const result = await toolHandlers.recall(sort_by, filter_tag);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
@@ -314,45 +360,45 @@ export class RoamServer {
 
 
           case 'roam_datomic_query': {
-            const { query, inputs } = request.params.arguments as {
+            const { query, inputs } = cleanedArgs as {
               query: string;
               inputs?: unknown[];
             };
-            const result = await this.toolHandlers.executeDatomicQuery({ query, inputs });
+            const result = await toolHandlers.executeDatomicQuery({ query, inputs });
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_process_batch_actions': {
-            const { actions } = request.params.arguments as {
+            const { actions } = cleanedArgs as {
               actions: any[];
             };
-            const result = await this.toolHandlers.processBatch(actions);
+            const result = await toolHandlers.processBatch(actions);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_fetch_block_with_children': {
-            const { block_uid, depth } = request.params.arguments as {
+            const { block_uid, depth } = cleanedArgs as {
               block_uid: string;
               depth?: number;
             };
-            const result = await this.toolHandlers.fetchBlockWithChildren(block_uid, depth);
+            const result = await toolHandlers.fetchBlockWithChildren(block_uid, depth);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_create_table': {
-            const { parent_uid, order, headers, rows } = request.params.arguments as {
+            const { parent_uid, order, headers, rows } = cleanedArgs as {
               parent_uid: string;
               order?: number | 'first' | 'last';
               headers: string[];
               rows: Array<{ label: string; cells: string[] }>;
             };
-            const result = await this.toolHandlers.createTable({
+            const result = await toolHandlers.createTable({
               parent_uid,
               order,
               headers,
@@ -364,24 +410,36 @@ export class RoamServer {
           }
 
           case 'roam_move_block': {
-            const { block_uid, parent_uid, order = 'last' } = request.params.arguments as {
+            const { block_uid, parent_uid, order = 'last' } = cleanedArgs as {
               block_uid: string;
               parent_uid: string;
               order?: number | 'first' | 'last';
             };
-            const result = await this.toolHandlers.moveBlock(block_uid, parent_uid, order);
+            const result = await toolHandlers.moveBlock(block_uid, parent_uid, order);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 
           case 'roam_update_page_markdown': {
-            const { title, markdown, dry_run = false } = request.params.arguments as {
+            const { title, markdown, dry_run = false } = cleanedArgs as {
               title: string;
               markdown: string;
               dry_run?: boolean;
             };
-            const result = await this.toolHandlers.updatePageMarkdown(title, markdown, dry_run);
+            const result = await toolHandlers.updatePageMarkdown(title, markdown, dry_run);
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            };
+          }
+
+          case 'roam_rename_page': {
+            const { old_title, uid, new_title } = cleanedArgs as {
+              old_title?: string;
+              uid?: string;
+              new_title: string;
+            };
+            const result = await toolHandlers.renamePage({ old_title, uid, new_title });
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };

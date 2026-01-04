@@ -1,5 +1,72 @@
 # Changelog
 
+v2.4.0 - 2026-01-04
+
+- ADDED: `roam status` CLI command to show available graphs and connection status
+  - `roam status` - Display all configured graphs with default and write-protection indicators
+  - `roam status --ping` - Test connectivity to each graph
+  - `roam status --json` - Output as JSON for scripting
+- ENHANCED: `roam_markdown_cheatsheet` MCP tool now dynamically prepends graph configuration
+  - In multi-graph mode, displays a table of available graphs with write protection status
+  - Shows the exact `write_key` needed for protected graphs
+  - Enables AI models to know graph requirements before making write calls
+  - Single-graph mode shows no additional info (clean output)
+
+v2.3.0 - 2026-01-04
+
+- ADDED: `roam rename` CLI command to rename pages
+  - `roam rename "Old Title" "New Title"` - rename by current title
+  - `roam rename --uid abc123def "New Title"` - rename by page UID
+  - Supports multi-graph mode with `-g` and `--write-key` flags
+- ADDED: `roam_rename_page` MCP tool
+  - Parameters: `old_title` OR `uid` to identify page, `new_title` (required)
+  - Returns: `{ success, message }`
+- ADDED: `updatePage` SDK function type declaration for page operations
+- ENHANCED: `RoamBatchAction` type now includes page actions (`create-page`, `update-page`, `delete-page`)
+
+v2.2.0 - 2026-01-03
+
+- ADDED: Datalog query support in `roam search` CLI command
+  - `-q, --query <datalog>` - Execute raw Datalog queries directly from CLI
+  - `--inputs <json>` - JSON array of inputs for parameterized queries
+  - `--regex <pattern>` - Client-side regex filter on results
+  - `--regex-flags <flags>` - Regex flags (e.g., "i" for case-insensitive)
+  - Examples: `roam search -q '[:find ?title :where [?e :node/title ?title]]'`
+- ENHANCED: `roam batch` CLI command reliability
+  - `--simulate` mode for offline validation (no API calls)
+  - Upfront placeholder validation catches `{{ref}}` errors before execution
+  - Partial results output on failure shows created pages for manual cleanup
+  - Better error messages with action index and field details
+
+v2.1.0 - 2026-01-03
+
+- ADDED: `roam batch` CLI command for executing multiple operations in a single API call
+  - Reduces rate limit issues by batching operations
+  - Supports 10 command types: `create`, `update`, `delete`, `move`, `todo`, `table`, `outline`, `remember`, `page`, `codeblock`
+  - Placeholder references (`{{name}}`) for cross-command dependencies
+  - Automatic page title resolution (with parallel lookups)
+  - Daily page auto-resolution for `todo` and `remember` commands
+  - Level-based hierarchy for `outline` command
+  - Table expansion to nested Roam structure
+  - `--dry-run` mode for validating without execution
+  - `--debug` mode for troubleshooting
+  - Full spec: [docs/batch-cli-spec.md](docs/batch-cli-spec.md)
+
+v2.0.2 - 2026-01-03
+
+- CHANGED: `roam_create_page` now adds "Processed: [[date]]" as last block on the new page
+  - Replaces the previous behavior of adding "Created page: [[title]]" to today's daily page
+  - The "Processed: [[date]]" block naturally links back to today's daily page
+  - Removed `skip_daily_page_link` parameter from MCP tool
+  - Removed `--no-daily-page` flag from CLI `roam save` command
+
+v2.0.1 - 2026-01-03
+
+- ADDED: `skip_daily_page_link` parameter to `roam_create_page` MCP tool (removed in v2.0.2)
+  - When `true`, skips adding the "Created page: [[title]]" block to today's daily page
+  - Defaults to `false` (preserves existing behavior)
+  - Useful for programmatic page creation where daily page logging is unnecessary
+
 v1.9.1 - 2026-01-02
 
 - Updated: Added --heading to `roam save` CLI
@@ -15,12 +82,13 @@ v1.9.0 - 2026-01-02
 
 v1.8.2 - 2026-01-02
 
-feat(cli): add --no-daily-page flag to roam save command
+feat(cli): add --no-daily-page flag to roam save command (removed in v2.0.2)
 
 Introduces the `--no-daily-page` flag to the save command, allowing users
 to create pages without automatically linking them on the current Daily Page.
 This is useful for programmatic generation or workflows where a daily log
-entry is unnecessary.
+entry is unnecessary. (Note: This feature was removed in v2.0.2 - pages now
+add a "Processed: [[date]]" block at the end instead of linking from daily page.)
 
 Changes:
 - Update `save` command to pass `noDailyPage` option to page operations.
@@ -41,7 +109,7 @@ v1.8.1 - 2026-01-02
   - Input format: `[{text, level, heading?}]`
   - `echo '[{"text":"Block","level":1}]' | roam save --json --title "Page"`
   - Provides precise control over indentation levels
-- ADDED: `--no-daily-page` flag to `roam save` to skip "Created page" link
+- ADDED: `--no-daily-page` flag to `roam save` to skip "Created page" link (removed in v2.0.2)
   - Useful when linking to the page from another location (e.g., brainstorm workflows)
   - `roam save content.md --title "Page" --no-daily-page`
 - ENHANCED: CLI help text clarifies `-i`/`-e` filter on text content, not tags
