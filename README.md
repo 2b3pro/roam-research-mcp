@@ -1,4 +1,4 @@
-![](./roam-research-mcp-image.jpeg)
+![Roam Research MCP + CLI](./roam-research-mcp-header.png)
 
 # Roam Research MCP + CLI
 
