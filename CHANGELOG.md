@@ -1,5 +1,19 @@
 # Changelog
 
+v2.2.0 - 2026-01-03
+
+- ADDED: Datalog query support in `roam search` CLI command
+  - `-q, --query <datalog>` - Execute raw Datalog queries directly from CLI
+  - `--inputs <json>` - JSON array of inputs for parameterized queries
+  - `--regex <pattern>` - Client-side regex filter on results
+  - `--regex-flags <flags>` - Regex flags (e.g., "i" for case-insensitive)
+  - Examples: `roam search -q '[:find ?title :where [?e :node/title ?title]]'`
+- ENHANCED: `roam batch` CLI command reliability
+  - `--simulate` mode for offline validation (no API calls)
+  - Upfront placeholder validation catches `{{ref}}` errors before execution
+  - Partial results output on failure shows created pages for manual cleanup
+  - Better error messages with action index and field details
+
 v2.1.0 - 2026-01-03
 
 - ADDED: `roam batch` CLI command for executing multiple operations in a single API call

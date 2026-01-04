@@ -95,13 +95,28 @@ function parseIdentifier(identifier: string): { block_uid?: string; title?: stri
 
 export function createRefsCommand(): Command {
   return new Command('refs')
-    .description('Find blocks referencing a page or block')
-    .argument('<identifier>', 'Page title or block UID (use ((uid)) for block refs)')
+    .description('Find all blocks that reference a page, tag, or block')
+    .argument('<identifier>', 'Page title, #tag, [[Page]], or ((block-uid))')
     .option('-n, --limit <n>', 'Limit number of results', '50')
     .option('--json', 'Output as JSON array')
     .option('--raw', 'Output raw UID + content lines (no grouping)')
     .option('--debug', 'Show query metadata')
     .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
+    .addHelpText('after', `
+Examples:
+  # Page references
+  roam refs "Project Alpha"               # Blocks linking to page
+  roam refs "[[Meeting Notes]]"           # With bracket syntax
+  roam refs "#TODO"                       # Blocks with #TODO tag
+
+  # Block references
+  roam refs "((abc123def))"               # Blocks embedding this block
+
+  # Output options
+  roam refs "Work" --json                 # JSON array output
+  roam refs "Ideas" --raw                 # Raw UID + content (no grouping)
+  roam refs "Tasks" -n 100                # Limit to 100 results
+`)
     .action(async (identifier: string, options: RefsOptions) => {
       try {
         const graph = resolveGraph(options, false);

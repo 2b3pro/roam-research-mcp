@@ -15,3 +15,27 @@ export function formatRoamDate(date: Date): string {
   const year = date.getFullYear();
   return `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
 }
+
+/**
+ * Resolve relative date keywords to Roam date format.
+ * Returns the original string if not a recognized keyword.
+ */
+export function resolveRelativeDate(input: string): string {
+  const lower = input.toLowerCase().trim();
+  const today = new Date();
+
+  switch (lower) {
+    case 'today':
+      return formatRoamDate(today);
+    case 'yesterday':
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      return formatRoamDate(yesterday);
+    case 'tomorrow':
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      return formatRoamDate(tomorrow);
+    default:
+      return input;
+  }
+}

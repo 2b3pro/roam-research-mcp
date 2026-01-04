@@ -40,7 +40,8 @@ export function validateBlockString(str: string | undefined | null, allowEmpty =
 /**
  * Validates a Roam UID.
  * UIDs must be either:
- * - 9 alphanumeric characters (standard Roam UID)
+ * - 9 alphanumeric characters (standard Roam block UID)
+ * - A date format like MM-DD-YYYY (daily page UID)
  * - A placeholder like {{uid:name}}
  * @param uid The UID to validate
  * @param required If true, UID is required
@@ -56,12 +57,17 @@ export function validateUid(uid: string | undefined | null, required = true): st
     return null;
   }
 
-  // Check if it's a valid Roam UID (9 alphanumeric characters)
-  if (!/^[a-zA-Z0-9_-]{9}$/.test(uid)) {
-    return 'uid must be 9 alphanumeric characters or a {{uid:name}} placeholder';
+  // Check if it's a valid Roam block UID (9 alphanumeric characters)
+  if (/^[a-zA-Z0-9_-]{9}$/.test(uid)) {
+    return null;
   }
 
-  return null;
+  // Check if it's a daily page UID (MM-DD-YYYY format)
+  if (/^\d{2}-\d{2}-\d{4}$/.test(uid)) {
+    return null;
+  }
+
+  return 'uid must be 9 alphanumeric characters, MM-DD-YYYY date, or a {{uid:name}} placeholder';
 }
 
 /**
