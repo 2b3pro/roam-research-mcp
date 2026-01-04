@@ -1,8 +1,16 @@
 # Changelog
 
+v2.0.2 - 2026-01-03
+
+- CHANGED: `roam_create_page` now adds "Processed: [[date]]" as last block on the new page
+  - Replaces the previous behavior of adding "Created page: [[title]]" to today's daily page
+  - The "Processed: [[date]]" block naturally links back to today's daily page
+  - Removed `skip_daily_page_link` parameter from MCP tool
+  - Removed `--no-daily-page` flag from CLI `roam save` command
+
 v2.0.1 - 2026-01-03
 
-- ADDED: `skip_daily_page_link` parameter to `roam_create_page` MCP tool
+- ADDED: `skip_daily_page_link` parameter to `roam_create_page` MCP tool (removed in v2.0.2)
   - When `true`, skips adding the "Created page: [[title]]" block to today's daily page
   - Defaults to `false` (preserves existing behavior)
   - Useful for programmatic page creation where daily page logging is unnecessary
@@ -22,12 +30,13 @@ v1.9.0 - 2026-01-02
 
 v1.8.2 - 2026-01-02
 
-feat(cli): add --no-daily-page flag to roam save command
+feat(cli): add --no-daily-page flag to roam save command (removed in v2.0.2)
 
 Introduces the `--no-daily-page` flag to the save command, allowing users
 to create pages without automatically linking them on the current Daily Page.
 This is useful for programmatic generation or workflows where a daily log
-entry is unnecessary.
+entry is unnecessary. (Note: This feature was removed in v2.0.2 - pages now
+add a "Processed: [[date]]" block at the end instead of linking from daily page.)
 
 Changes:
 - Update `save` command to pass `noDailyPage` option to page operations.
@@ -48,7 +57,7 @@ v1.8.1 - 2026-01-02
   - Input format: `[{text, level, heading?}]`
   - `echo '[{"text":"Block","level":1}]' | roam save --json --title "Page"`
   - Provides precise control over indentation levels
-- ADDED: `--no-daily-page` flag to `roam save` to skip "Created page" link
+- ADDED: `--no-daily-page` flag to `roam save` to skip "Created page" link (removed in v2.0.2)
   - Useful when linking to the page from another location (e.g., brainstorm workflows)
   - `roam save content.md --title "Page" --no-daily-page`
 - ENHANCED: CLI help text clarifies `-i`/`-e` filter on text content, not tags

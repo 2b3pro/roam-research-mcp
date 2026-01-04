@@ -62,7 +62,6 @@ interface SaveOptions extends GraphOptions {
   categories?: string;       // Comma-separated category tags
   todo?: string | boolean;   // TODO item text or flag for stdin
   json?: boolean;            // Input is JSON format (explicit levels)
-  noDailyPage?: boolean;     // Skip creating link on daily page
 }
 
 interface ContentBlock {
@@ -85,7 +84,6 @@ export function createSaveCommand(): Command {
     .option('-c, --categories <tags>', 'Comma-separated category tags for block mode')
     .option('-t, --todo [text]', 'Add a TODO item to today\'s daily page (text or stdin)')
     .option('--json', 'Input is JSON format with explicit levels [{text, level, heading?}]')
-    .option('--no-daily-page', 'Skip creating "Created page" link on daily page')
     .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
     .option('--write-key <key>', 'Write confirmation key (for non-default graphs)')
     .action(async (file: string | undefined, options: SaveOptions) => {
@@ -325,9 +323,7 @@ export function createSaveCommand(): Command {
             }
           }
 
-          const result = await pageOps.createPage(pageTitle, contentBlocks, {
-            skipDailyPageLink: options.noDailyPage
-          });
+          const result = await pageOps.createPage(pageTitle, contentBlocks);
 
           if (result.success) {
             console.log(`Created page '${pageTitle}' (uid: ${result.uid})`);
