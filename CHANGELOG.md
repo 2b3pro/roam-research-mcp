@@ -1,5 +1,17 @@
 # Changelog
 
+v2.4.0 - 2026-01-04
+
+- ADDED: `roam status` CLI command to show available graphs and connection status
+  - `roam status` - Display all configured graphs with default and write-protection indicators
+  - `roam status --ping` - Test connectivity to each graph
+  - `roam status --json` - Output as JSON for scripting
+- ENHANCED: `roam_markdown_cheatsheet` MCP tool now dynamically prepends graph configuration
+  - In multi-graph mode, displays a table of available graphs with write protection status
+  - Shows the exact `write_key` needed for protected graphs
+  - Enables AI models to know graph requirements before making write calls
+  - Single-graph mode shows no additional info (clean output)
+
 v2.3.0 - 2026-01-04
 
 - ADDED: `roam rename` CLI command to rename pages

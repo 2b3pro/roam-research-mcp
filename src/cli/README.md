@@ -1,4 +1,4 @@
-# Roam Research CLI v2.3.0
+# Roam Research CLI v2.4.0
 
 As of 2026-01-04
 
@@ -27,6 +27,7 @@ Commands:
   update          Update block content, heading, or status
   rename          Rename a page by title or UID
   batch           Execute multiple block operations efficiently
+  status          Show available graphs and connection status
 ```
 
 ---
@@ -394,6 +395,46 @@ echo '[{"command":"todo","params":{"text":"Task 1"}}]' | roam batch
   {"command": "outline", "params": {"parent": "{{overview}}", "items": ["Goal 1", "Goal 2"]}},
   {"command": "todo", "params": {"text": "Review project"}}
 ]
+```
+
+---
+
+## `roam status`
+
+Show available graphs and connection status.
+
+```
+Usage: roam status [options]
+
+Options:
+  --ping         Test connection to each graph
+  --json         Output as JSON
+  -h, --help     Display help for command
+```
+
+### Examples
+
+```bash
+# Show available graphs
+roam status
+
+# Test connectivity to all graphs
+roam status --ping
+
+# JSON output for scripting
+roam status --json
+```
+
+### Example Output
+
+```
+Roam Research MCP v2.4.0
+
+Graphs:
+  • personal (default)  ✓ connected
+  • work [protected]    ✓ connected
+
+Write-protected graphs require --write-key flag for modifications.
 ```
 
 ---

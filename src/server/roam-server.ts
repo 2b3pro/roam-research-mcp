@@ -156,7 +156,9 @@ export class RoamServer {
 
         switch (request.params.name) {
           case 'roam_markdown_cheatsheet': {
-            const content = await toolHandlers.getRoamMarkdownCheatsheet();
+            const graphInfo = this.registry.getGraphInfoMarkdown();
+            const cheatsheet = await toolHandlers.getRoamMarkdownCheatsheet();
+            const content = graphInfo + cheatsheet;
             return {
               content: [{ type: 'text', text: content }],
             };

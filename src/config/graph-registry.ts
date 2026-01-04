@@ -199,6 +199,47 @@ export class GraphRegistry {
     // Return the graph instance
     return this.getGraph(graphKey);
   }
+
+  /**
+   * Generate markdown documentation about available graphs and their configuration
+   * Used to inform AI models about graph access requirements
+   */
+  getGraphInfoMarkdown(): string {
+    const graphKeys = this.getAvailableGraphs();
+
+    // Single graph mode - minimal info
+    if (graphKeys.length === 1 && graphKeys[0] === 'default') {
+      return ''; // No need to show graph info in single-graph mode
+    }
+
+    const lines: string[] = [
+      '## Available Graphs',
+      '',
+      '| Graph | Default | Write Protected |',
+      '|-------|---------|-----------------|',
+    ];
+
+    for (const key of graphKeys) {
+      const config = this.configs.get(key)!;
+      const isDefault = key === this.defaultKey;
+      const isProtected = !!config.write_key;
+
+      const defaultCol = isDefault ? '✓' : '';
+      const protectedCol = isProtected
+        ? `Yes (requires \`write_key: "${config.write_key}"\`)`
+        : 'No';
+
+      lines.push(`| ${key} | ${defaultCol} | ${protectedCol} |`);
+    }
+
+    lines.push('');
+    lines.push('> **Note:** Write operations to protected graphs require the `write_key` parameter.');
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+
+    return lines.join('\n');
+  }
 }
 
 /**

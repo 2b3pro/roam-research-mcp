@@ -85,7 +85,7 @@ docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 
 ## Standalone CLI: `roam`
 
-A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides six subcommands: `get`, `search`, `save`, `refs`, `update`, and `batch`.
+A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides eight subcommands: `get`, `search`, `save`, `refs`, `update`, `batch`, `rename`, and `status`.
 
 ### Installation
 
@@ -367,6 +367,39 @@ Input is a JSON array of command objects:
 - `--write-key <key>` - Write confirmation key
 
 See [docs/batch-cli-spec.md](docs/batch-cli-spec.md) for full specification.
+
+---
+
+### `roam status` - Show available graphs
+
+Display configured graphs and their connection status.
+
+```bash
+# Show available graphs
+roam status
+
+# Test connectivity to all graphs
+roam status --ping
+
+# Output as JSON
+roam status --json
+```
+
+**Example Output:**
+
+```
+Roam Research MCP v2.4.0
+
+Graphs:
+  • personal (default)  ✓ connected
+  • work [protected]    ✓ connected
+
+Write-protected graphs require --write-key flag for modifications.
+```
+
+**Options:**
+- `--ping` - Test connection to each graph
+- `--json` - Output as JSON for scripting
 
 ---
 
