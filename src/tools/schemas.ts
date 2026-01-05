@@ -442,14 +442,14 @@ export const toolSchemas = {
       properties: withMultiGraphParams({
         memory: {
           type: 'string',
-          description: 'The memory detail or information to remember'
+          description: 'The memory detail or information to remember. Add tags in `categories`.'
         },
         categories: {
           type: 'array',
           items: {
             type: 'string'
           },
-          description: 'Optional categories to tag the memory with (will be converted to Roam tags)'
+          description: 'Optional categories to tag the memory with (will be converted to Roam tags). Do not duplicate tags added in `memory` parameter.'
         },
         heading: {
           type: 'string',
