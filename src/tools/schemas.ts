@@ -436,7 +436,7 @@ export const toolSchemas = {
   },
   roam_remember: {
     name: 'roam_remember',
-    description: 'Add a memory or piece of information to remember, stored on the daily page with MEMORIES_TAG tag and optional categories. \nNOTE on Roam-flavored markdown: For direct linking: use [[link]] syntax. For aliased linking, use [alias]([[link]]) syntax. Do not concatenate words in links/hashtags - correct: #[[multiple words]] #self-esteem (for typically hyphenated words).\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
+    description: 'Add a memory or piece of information to remember, stored on the daily page with MEMORIES_TAG tag and optional categories (unless include_memories_tag is false). \nNOTE on Roam-flavored markdown: For direct linking: use [[link]] syntax. For aliased linking, use [alias]([[link]]) syntax. Do not concatenate words in links/hashtags - correct: #[[multiple words]] #self-esteem (for typically hyphenated words).\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({
@@ -458,6 +458,11 @@ export const toolSchemas = {
         parent_uid: {
           type: 'string',
           description: 'Optional UID of a specific block to nest the memory under. Takes precedence over heading parameter.'
+        },
+        include_memories_tag: {
+          type: 'boolean',
+          description: 'Whether to append the MEMORIES_TAG tag to the memory block.',
+          default: true
         }
       }),
       required: ['memory']

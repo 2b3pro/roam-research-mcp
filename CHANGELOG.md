@@ -1,5 +1,9 @@
 # Changelog
 
+v2.4.2 - 2026-01-06
+
+- ENHANCED: `roam_remember` MCP tool now supports `include_memories_tag` to omit MEMORIES_TAG when desired
+
 v2.4.0 - 2026-01-04
 
 - ADDED: `roam status` CLI command to show available graphs and connection status

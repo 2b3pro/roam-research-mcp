@@ -441,7 +441,7 @@ The server provides powerful tools for interacting with Roam Research:
 12. `roam_search_by_status`: Search for blocks with a specific status (TODO/DONE) across all pages or within a specific page.
 13. `roam_search_by_date`: Search for blocks or pages based on creation or modification dates.
 14. `roam_search_for_tag`: Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag. This tool supports pagination via the `limit` and `offset` parameters.
-15. `roam_remember`: Add a memory or piece of information to remember. Supports optional `heading` parameter to nest under a specific heading on the daily page (created if missing), or `parent_uid` to nest under a specific block. (Internally uses `roam_process_batch_actions`.)
+15. `roam_remember`: Add a memory or piece of information to remember. Supports optional `heading` parameter to nest under a specific heading on the daily page (created if missing), or `parent_uid` to nest under a specific block. Use `include_memories_tag: false` to omit the MEMORIES_TAG. (Internally uses `roam_process_batch_actions`.)
 16. `roam_recall`: Retrieve all stored memories.
 17. `roam_datomic_query`: Execute a custom Datomic query on the Roam graph for advanced data retrieval beyond the available search tools. Now supports client-side regex filtering for enhanced post-query processing. Optimal for complex filtering (including regex), highly complex boolean logic, arbitrary sorting criteria, and proximity search.
 18. `roam_markdown_cheatsheet`: Provides the content of the Roam Markdown Cheatsheet resource, optionally concatenated with custom instructions if `CUSTOM_INSTRUCTIONS_PATH` environment variable is set.

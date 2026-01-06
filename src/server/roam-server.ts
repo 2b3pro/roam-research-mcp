@@ -164,13 +164,20 @@ export class RoamServer {
             };
           }
           case 'roam_remember': {
-            const { memory, categories, heading, parent_uid } = cleanedArgs as {
+            const { memory, categories, heading, parent_uid, include_memories_tag } = cleanedArgs as {
               memory: string;
               categories?: string[];
               heading?: string;
               parent_uid?: string;
+              include_memories_tag?: boolean;
             };
-            const result = await toolHandlers.remember(memory, categories, heading, parent_uid);
+            const result = await toolHandlers.remember(
+              memory,
+              categories,
+              heading,
+              parent_uid,
+              include_memories_tag
+            );
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };

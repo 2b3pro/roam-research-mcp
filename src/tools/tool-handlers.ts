@@ -114,8 +114,14 @@ export class ToolHandlers {
   }
 
   // Memory Operations
-  async remember(memory: string, categories?: string[], heading?: string, parent_uid?: string) {
-    return this.memoryOps.remember(memory, categories, heading, parent_uid);
+  async remember(
+    memory: string,
+    categories?: string[],
+    heading?: string,
+    parent_uid?: string,
+    include_memories_tag?: boolean
+  ) {
+    return this.memoryOps.remember(memory, categories, heading, parent_uid, include_memories_tag);
   }
 
   async recall(sort_by: 'newest' | 'oldest' = 'newest', filter_tag?: string) {

@@ -18,7 +18,8 @@ export class MemoryOperations {
     memory: string,
     categories?: string[],
     heading?: string,
-    parent_uid?: string
+    parent_uid?: string,
+    include_memories_tag: boolean = true
   ): Promise<{ success: boolean; block_uid?: string; parent_uid?: string }> {
     // Get today's date
     const today = new Date();
@@ -110,22 +111,26 @@ export class MemoryOperations {
     }
 
     // Get memories tag from environment
-    const memoriesTag = process.env.MEMORIES_TAG;
-    if (!memoriesTag) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        'MEMORIES_TAG environment variable not set'
-      );
+    let memoriesTag: string | undefined;
+    if (include_memories_tag) {
+      memoriesTag = process.env.MEMORIES_TAG;
+      if (!memoriesTag) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          'MEMORIES_TAG environment variable not set'
+        );
+      }
     }
 
     // Format categories as Roam tags if provided
     const categoryTags = categories?.map(cat => {
       // Handle multi-word categories
       return cat.includes(' ') ? `#[[${cat}]]` : `#${cat}`;
-    }).join(' ') || '';
+    }) ?? [];
 
     // Create block with memory, then all tags together at the end
-    const blockContent = `${memory} ${categoryTags} ${memoriesTag}`.trim();
+    const tags = memoriesTag ? [...categoryTags, memoriesTag] : categoryTags;
+    const blockContent = [memory, ...tags].join(' ').trim();
 
     // Pre-generate UID so we can return it
     const blockUid = generateBlockUid();
