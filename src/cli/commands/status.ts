@@ -22,7 +22,6 @@ interface GraphStatus {
   name: string;
   default: boolean;
   protected: boolean;
-  writeKey?: string;
   connected?: boolean;
   error?: string;
 }
@@ -53,17 +52,13 @@ Examples:
         for (const key of graphKeys) {
           const config = registry.getConfig(key)!;
           const isDefault = key === registry.defaultKey;
-          const isProtected = !!config.write_key;
+          const isProtected = !!config.protected;
 
           const status: GraphStatus = {
             name: key,
             default: isDefault,
             protected: isProtected,
           };
-
-          if (isProtected) {
-            status.writeKey = config.write_key;
-          }
 
           if (options.ping) {
             try {

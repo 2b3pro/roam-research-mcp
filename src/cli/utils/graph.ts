@@ -43,10 +43,16 @@ export function resolveGraph(options: GraphOptions, isWriteOp: boolean = false):
 
     if (!reg.isWriteAllowed(graphKey, options.writeKey)) {
       const config = reg.getConfig(graphKey);
-      if (config?.write_key) {
+      if (config?.protected) {
+        const systemWriteKey = process.env.ROAM_SYSTEM_WRITE_KEY;
+        if (!systemWriteKey) {
+          throw new Error(
+            `Write to protected graph "${graphKey}" failed: ROAM_SYSTEM_WRITE_KEY not configured.`
+          );
+        }
         throw new Error(
           `Write to "${graphKey}" graph requires --write-key confirmation.\n` +
-          `Use: --write-key "${config.write_key}"`
+          `Use: --write-key "${systemWriteKey}"`
         );
       }
     }

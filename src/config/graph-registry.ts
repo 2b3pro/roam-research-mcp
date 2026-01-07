@@ -4,7 +4,7 @@
  * Supports:
  * - Multiple graph configurations via ROAM_GRAPHS env var
  * - Backwards compatibility with single graph via ROAM_API_TOKEN/ROAM_GRAPH_NAME
- * - Write protection for non-default graphs via write_key confirmation
+ * - Write protection via protected: true flag + ROAM_SYSTEM_WRITE_KEY env var
  * - Lazy graph initialization (connects only when first accessed)
  */
 
@@ -17,8 +17,8 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 export interface GraphConfig {
   token: string;
   graph: string;
-  /** Required confirmation string for writes to non-default graphs */
-  write_key?: string;
+  /** If true, writes require ROAM_SYSTEM_WRITE_KEY confirmation */
+  protected?: boolean;
 }
 
 /**
@@ -127,8 +127,8 @@ export class GraphRegistry {
    * Rules:
    * - Writes to default graph are always allowed
    * - Writes to non-default graphs require:
-   *   - If write_key is configured: must provide matching write_key
-   *   - If no write_key configured: writes are allowed
+   *   - If protected: true, must provide matching ROAM_SYSTEM_WRITE_KEY
+   *   - If not protected: writes are allowed
    */
   isWriteAllowed(graphKey: string | undefined, providedWriteKey?: string): boolean {
     const resolvedKey = graphKey ?? this.defaultKey;
@@ -143,13 +143,14 @@ export class GraphRegistry {
       return false; // Unknown graph
     }
 
-    // If no write_key is configured, allow writes
-    if (!config.write_key) {
+    // If graph is not protected, allow writes
+    if (!config.protected) {
       return true;
     }
 
-    // Check if provided key matches
-    return providedWriteKey === config.write_key;
+    // Check if provided key matches ROAM_SYSTEM_WRITE_KEY
+    const systemWriteKey = process.env.ROAM_SYSTEM_WRITE_KEY;
+    return !!systemWriteKey && providedWriteKey === systemWriteKey;
   }
 
   /**
@@ -175,11 +176,19 @@ export class GraphRegistry {
         );
       }
 
+      const systemWriteKey = process.env.ROAM_SYSTEM_WRITE_KEY;
+      if (!systemWriteKey) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Write to protected graph "${resolvedKey}" failed: ROAM_SYSTEM_WRITE_KEY not configured.`
+        );
+      }
+
       // Provide informative error with the required key
       throw new McpError(
         ErrorCode.InvalidParams,
         `Write to "${resolvedKey}" graph requires write_key confirmation.\n` +
-        `Provide write_key: "${config.write_key}" to proceed.`
+        `Provide write_key: "${systemWriteKey}" to proceed.`
       );
     }
   }
@@ -222,18 +231,16 @@ export class GraphRegistry {
     for (const key of graphKeys) {
       const config = this.configs.get(key)!;
       const isDefault = key === this.defaultKey;
-      const isProtected = !!config.write_key;
+      const isProtected = !!config.protected;
 
       const defaultCol = isDefault ? '✓' : '';
-      const protectedCol = isProtected
-        ? `Yes (requires \`write_key: "${config.write_key}"\`)`
-        : 'No';
+      const protectedCol = isProtected ? 'Yes' : 'No';
 
       lines.push(`| ${key} | ${defaultCol} | ${protectedCol} |`);
     }
 
     lines.push('');
-    lines.push('> **Note:** Write operations to protected graphs require the `write_key` parameter.');
+    lines.push('> **Note:** Write operations to protected graphs require the `write_key` parameter. The key will be shown in the error message if omitted.');
     lines.push('');
     lines.push('---');
     lines.push('');
