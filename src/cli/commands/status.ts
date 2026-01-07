@@ -41,6 +41,8 @@ Examples:
 
   # JSON output for scripting
   roam status --json
+
+JSON output fields: { version, graphs: [{ name, default, protected, connected?, error? }] }
 `)
     .action(async (options: StatusOptions) => {
       try {

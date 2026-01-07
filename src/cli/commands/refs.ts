@@ -115,6 +115,8 @@ Examples:
 
   # Block references
   roam refs "((abc123def))"               # Blocks embedding this block
+
+JSON output fields: uid, content, page
 `)
     .action(async (identifier: string | undefined, options: RefsOptions) => {
       try {

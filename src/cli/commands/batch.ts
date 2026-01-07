@@ -202,6 +202,8 @@ Example:
     {"command": "outline", "params": {"parent": "{{overview}}", "items": ["Goal 1", "Goal 2"]}},
     {"command": "todo", "params": {"text": "Review project"}}
   ]
+
+Output (JSON): { success, pages_created, actions_executed, uid_map? }
 `)
     .action(async (file: string | undefined, options: BatchOptions) => {
       try {

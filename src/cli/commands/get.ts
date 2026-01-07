@@ -97,6 +97,11 @@ Examples:
   roam get --todo                             # All TODOs across graph
   roam get --done                             # All completed items
   roam get --todo -p "Work"                   # TODOs on "Work" page
+
+JSON output fields:
+  Page:      { title, children: [Block...] }
+  Block:     { uid, string, order, heading?, children: [Block...] }
+  TODO/DONE: [{ block_uid, content, page_title }]
 `)
     .action(async (target: string | undefined, options: GetOptions) => {
       try {
