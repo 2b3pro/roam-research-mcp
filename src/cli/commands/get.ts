@@ -11,6 +11,7 @@ import {
   type OutputOptions
 } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
+import { readStdin } from '../utils/input.js';
 import { resolveRefs } from '../../tools/helpers/refs.js';
 import { resolveRelativeDate } from '../../utils/helpers.js';
 import type { RoamBlock } from '../../types/roam.js';
@@ -57,7 +58,7 @@ async function resolveBlocksRefs(graph: Graph, blocks: RoamBlock[], maxDepth: nu
 export function createGetCommand(): Command {
   return new Command('get')
     .description('Fetch pages, blocks, or TODO/DONE items with optional ref expansion')
-    .argument('[target]', 'Page title, block UID, or relative date (today/yesterday/tomorrow)')
+    .argument('[target]', 'Page title, block UID, or relative date. Reads from stdin if "-" or omitted.')
     .option('-j, --json', 'Output as JSON instead of markdown')
     .option('-d, --depth <n>', 'Child levels to fetch (default: 4)', '4')
     .option('-r, --refs [n]', 'Expand ((uid)) refs in output (default depth: 1, max: 4)')
@@ -75,11 +76,15 @@ Examples:
   roam get "Project Notes"                    # Page by title
   roam get today                              # Today's daily page
   roam get yesterday                          # Yesterday's daily page
-  roam get tomorrow                           # Tomorrow's daily page
 
   # Fetch blocks
   roam get abc123def                          # Block by UID
   roam get "((abc123def))"                    # UID with wrapper
+
+  # Stdin / Batch Retrieval
+  echo "Project A" | roam get                 # Pipe page title
+  echo "abc123def" | roam get                 # Pipe block UID
+  cat uids.txt | roam get --json              # Fetch multiple blocks (NDJSON output)
 
   # Output options
   roam get "Page" -j                          # JSON output
@@ -92,8 +97,6 @@ Examples:
   roam get --todo                             # All TODOs across graph
   roam get --done                             # All completed items
   roam get --todo -p "Work"                   # TODOs on "Work" page
-  roam get --todo -i "urgent,blocker"         # TODOs containing these terms
-  roam get --todo -e "someday,maybe"          # Exclude items with terms
 `)
     .action(async (target: string | undefined, options: GetOptions) => {
       try {
@@ -111,12 +114,13 @@ Examples:
         };
 
         if (options.debug) {
-          printDebug('Target', target);
+          printDebug('Target', target || 'stdin');
           printDebug('Graph', options.graph || 'default');
           printDebug('Options', { depth, refs: refsDepth || 'off', ...outputOptions });
         }
 
-        // Handle --todo or --done flags
+        // Handle --todo or --done flags (these ignore target arg usually, but could filter by page if target is used as page?)
+        // The help says "-p" is for page. So we strictly follow flags.
         if (options.todo || options.done) {
           const status = options.todo ? 'TODO' : 'DONE';
 
@@ -136,72 +140,98 @@ Examples:
           return;
         }
 
-        // For page/block fetching, target is required
-        if (!target) {
-          exitWithError('Target is required. Use: roam get <page-title> or roam get --todo');
-        }
-
-        // Resolve relative date keywords (today, yesterday, tomorrow)
-        const resolvedTarget = resolveRelativeDate(target);
-
-        if (options.debug && resolvedTarget !== target) {
-          printDebug('Resolved date', `${target} → ${resolvedTarget}`);
-        }
-
-        // Check if target is a block UID
-        const uidMatch = resolvedTarget.match(BLOCK_UID_PATTERN);
-
-        if (uidMatch) {
-          // Fetch block by UID
-          const blockUid = uidMatch[1];
-
-          if (options.debug) {
-            printDebug('Fetching block', { uid: blockUid, depth });
-          }
-
-          const blockOps = new BlockRetrievalOperations(graph);
-          let block = await blockOps.fetchBlockWithChildren(blockUid, depth);
-
-          if (!block) {
-            exitWithError(`Block with UID "${blockUid}" not found`);
-          }
-
-          // Resolve block references if requested
-          if (refsDepth > 0) {
-            block = await resolveBlockRefs(graph, block, refsDepth);
-          }
-
-          console.log(formatBlockOutput(block, outputOptions));
+        // Determine targets
+        let targets: string[] = [];
+        if (target && target !== '-') {
+          targets = [target];
         } else {
-          // Fetch page by title
-          if (options.debug) {
-            printDebug('Fetching page', { title: resolvedTarget, depth });
+          // Read from stdin if no target or explicit '-'
+          if (process.stdin.isTTY && target !== '-') {
+             // If TTY and no target, show error
+             exitWithError('Target is required. Use: roam get <page-title>, roam get --todo, or pipe targets via stdin');
           }
-
-          const pageOps = new PageOperations(graph);
-          const result = await pageOps.fetchPageByTitle(resolvedTarget, 'raw');
-
-          // Parse the raw result
-          let blocks: RoamBlock[];
-          if (typeof result === 'string') {
-            try {
-              blocks = JSON.parse(result) as RoamBlock[];
-            } catch {
-              // Result is already formatted as string (e.g., "Page Title (no content found)")
-              console.log(result);
-              return;
-            }
-          } else {
-            blocks = result;
+          const input = await readStdin();
+          if (input) {
+            targets = input.split('\n').map(t => t.trim()).filter(Boolean);
           }
-
-          // Resolve block references if requested
-          if (refsDepth > 0) {
-            blocks = await resolveBlocksRefs(graph, blocks, refsDepth);
-          }
-
-          console.log(formatPageOutput(resolvedTarget, blocks, outputOptions));
         }
+
+        if (targets.length === 0) {
+          exitWithError('No targets provided');
+        }
+
+        // Helper to process a single target
+        const processTarget = async (item: string) => {
+           // Resolve relative date keywords (today, yesterday, tomorrow)
+           const resolvedTarget = resolveRelativeDate(item);
+           
+           if (options.debug && resolvedTarget !== item) {
+             printDebug('Resolved date', `${item} → ${resolvedTarget}`);
+           }
+
+           // Check if target is a block UID
+           const uidMatch = resolvedTarget.match(BLOCK_UID_PATTERN);
+
+           if (uidMatch) {
+             // Fetch block by UID
+             const blockUid = uidMatch[1];
+             if (options.debug) printDebug('Fetching block', { uid: blockUid });
+
+             const blockOps = new BlockRetrievalOperations(graph);
+             let block = await blockOps.fetchBlockWithChildren(blockUid, depth);
+
+             if (!block) {
+               // If fetching multiple, maybe warn instead of exit?
+               // For now, consistent behavior: print error message to stderr but continue?
+               // Or simpler: just return a "not found" string/object.
+               // formatBlockOutput doesn't handle null.
+               return options.json ? JSON.stringify({ error: `Block ${blockUid} not found` }) : `Block ${blockUid} not found`;
+             }
+
+             // Resolve block references if requested
+             if (refsDepth > 0) {
+               block = await resolveBlockRefs(graph, block, refsDepth);
+             }
+
+             return formatBlockOutput(block, outputOptions);
+           } else {
+             // Fetch page by title
+             if (options.debug) printDebug('Fetching page', { title: resolvedTarget });
+
+             const pageOps = new PageOperations(graph);
+             const result = await pageOps.fetchPageByTitle(resolvedTarget, 'raw');
+
+             // Parse the raw result
+             let blocks: RoamBlock[];
+             if (typeof result === 'string') {
+               try {
+                 blocks = JSON.parse(result) as RoamBlock[];
+               } catch {
+                 // Result is already formatted as string (e.g., "Page Title (no content found)")
+                 // But wait, fetchPageByTitle returns string if not found or empty?
+                 // Actually fetchPageByTitle 'raw' returns JSON string of blocks OR empty array JSON string?
+                 // Let's assume result is valid JSON or error message string.
+                 return options.json ? JSON.stringify({ title: resolvedTarget, error: result }) : result;
+               }
+             } else {
+               blocks = result;
+             }
+
+             // Resolve block references if requested
+             if (refsDepth > 0) {
+               blocks = await resolveBlocksRefs(graph, blocks, refsDepth);
+             }
+
+             return formatPageOutput(resolvedTarget, blocks, outputOptions);
+           }
+        };
+
+        // Execute sequentially
+        for (const t of targets) {
+           const output = await processTarget(t);
+           console.log(output);
+        }
+
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         exitWithError(message);

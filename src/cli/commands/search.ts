@@ -7,6 +7,7 @@ import {
   type OutputOptions
 } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
+import { readStdin } from '../utils/input.js';
 
 /**
  * Normalize a tag by stripping #, [[, ]] wrappers
@@ -45,7 +46,7 @@ interface SearchOptions extends GraphOptions {
 export function createSearchCommand(): Command {
   return new Command('search')
     .description('Search blocks by text, tags, Datalog queries, or within specific pages')
-    .argument('[terms...]', 'Search terms (multiple terms use AND logic)')
+    .argument('[terms...]', 'Search terms (multiple terms use AND logic). Reads from stdin if omitted.')
     .option('--tag <tag>', 'Filter by tag (repeatable, comma-separated). Default: AND logic', (val, prev: string[]) => {
       // Support both comma-separated and multiple flags
       const tags = val.split(',').map(t => t.trim()).filter(Boolean);
@@ -71,38 +72,17 @@ Examples:
   # Text search
   roam search "meeting notes"               # Find blocks containing text
   roam search api integration               # Multiple terms (AND logic)
-  roam search "bug fix" -i                  # Case-insensitive search
+
+  # Stdin search
+  echo "urgent project" | roam search       # Pipe terms
+  roam get today | roam search TODO         # Search within output
 
   # Tag search
   roam search --tag TODO                    # All blocks with #TODO
   roam search --tag "[[Project Alpha]]"     # Blocks with page reference
-  roam search --tag work --page "January 3rd, 2026"  # Tag on specific page
-
-  # Multiple tags
-  roam search --tag TODO --tag urgent       # Blocks with BOTH tags (AND)
-  roam search --tag "TODO,urgent,blocked"   # Comma-separated (AND)
-  roam search --tag TODO --tag urgent --any # Blocks with ANY tag (OR)
-
-  # Exclude tags
-  roam search --tag TODO --negtag done      # TODOs excluding #done
-  roam search --tag TODO --negtag "someday,maybe"  # Exclude multiple
-
-  # Combined filters
-  roam search urgent --tag TODO             # Text + tag filter
-  roam search "review" --page "Work"        # Search within page
-
-  # Output options
-  roam search "design" -n 50                # Limit to 50 results
-  roam search "api" --json                  # JSON output
 
   # Datalog queries (advanced)
-  roam search -q '[:find ?title :where [?e :node/title ?title]]'
-  roam search -q '[:find ?s :in $ ?term :where [?b :block/string ?s] [(clojure.string/includes? ?s ?term)]]' --inputs '["TODO"]'
-  roam search -q '[:find ?uid ?s :where [?b :block/uid ?uid] [?b :block/string ?s]]' --regex "meeting" --regex-flags "i"
-
-Datalog tips:
-  Common attributes: :node/title, :block/string, :block/uid, :block/page, :block/children
-  Predicates: clojure.string/includes?, clojure.string/starts-with?, <, >, =
+  roam search -q '[:find ?uid ?s :where [?b :block/uid ?uid] [?b :block/string ?s]]' --regex "meeting"
 `)
     .action(async (terms: string[], options: SearchOptions) => {
       try {
@@ -114,8 +94,18 @@ Datalog tips:
           debug: options.debug
         };
 
+        let searchTerms = terms;
+
+        // If no terms provided as args, try stdin
+        if (searchTerms.length === 0 && !process.stdin.isTTY && !options.query && (options.tag?.length === 0)) {
+           const input = await readStdin();
+           if (input) {
+             searchTerms = input.trim().split(/\s+/);
+           }
+        }
+
         if (options.debug) {
-          printDebug('Search terms', terms);
+          printDebug('Search terms', searchTerms);
           printDebug('Graph', options.graph || 'default');
           printDebug('Options', options);
         }
@@ -123,7 +113,6 @@ Datalog tips:
         const searchOps = new SearchOperations(graph);
 
         // Datalog query mode (bypasses other search options)
-        // See for query construction - Roam_Research_Datalog_Cheatsheet.md
         if (options.query) {
           // Parse inputs if provided
           let inputs: unknown[] | undefined;
@@ -136,12 +125,6 @@ Datalog tips:
             } catch {
               exitWithError('Invalid JSON in --inputs');
             }
-          }
-
-          if (options.debug) {
-            printDebug('Datalog query', options.query);
-            printDebug('Inputs', inputs || 'none');
-            printDebug('Regex filter', options.regex || 'none');
           }
 
           const result = await searchOps.executeDatomicQuery({
@@ -159,7 +142,6 @@ Datalog tips:
           const limitedMatches = result.matches.slice(0, limit);
 
           if (options.json) {
-            // For JSON output, parse the content back to objects
             const parsed = limitedMatches.map(m => {
               try {
                 return JSON.parse(m.content);
@@ -169,7 +151,6 @@ Datalog tips:
             });
             console.log(JSON.stringify(parsed, null, 2));
           } else {
-            // For text output, show raw results
             if (limitedMatches.length === 0) {
               console.log('No results found.');
             } else {
@@ -184,38 +165,24 @@ Datalog tips:
 
         // Determine search type based on options
         const tags = options.tag || [];
-        if (tags.length > 0 && terms.length === 0) {
+        if (tags.length > 0 && searchTerms.length === 0) {
           // Tag-only search
           const normalizedTags = tags.map(normalizeTag);
           const useOrLogic = options.any || false;
 
-          if (options.debug) {
-            printDebug('Tag search', {
-              tags: normalizedTags,
-              logic: useOrLogic ? 'OR' : 'AND',
-              page: options.page
-            });
-          }
-
-          // Search for first tag, then filter by additional tags
           const result = await searchOps.searchForTag(normalizedTags[0], options.page);
-
           let matches = result.matches;
 
-          // Apply multi-tag filter if more than one tag
           if (normalizedTags.length > 1) {
             matches = matches.filter(m => {
               if (useOrLogic) {
-                // OR: has at least one tag
                 return normalizedTags.some(tag => contentHasTag(m.content, tag));
               } else {
-                // AND: has all tags
                 return normalizedTags.every(tag => contentHasTag(m.content, tag));
               }
             });
           }
 
-          // Apply negtag filter (exclude blocks with any of these tags)
           const negTags = options.negtag || [];
           if (negTags.length > 0) {
             const normalizedNegTags = negTags.map(normalizeTag);
@@ -226,23 +193,16 @@ Datalog tips:
 
           const limitedMatches = matches.slice(0, limit);
           console.log(formatSearchResults(limitedMatches, outputOptions));
-        } else if (terms.length > 0) {
-          // Text search (with optional tag filter)
-          const searchText = terms.join(' ');
-
-          if (options.debug) {
-            printDebug('Text search', { text: searchText, page: options.page, tag: options.tag });
-          }
-
+        } else if (searchTerms.length > 0) {
+          // Text search
+          const searchText = searchTerms.join(' ');
           const result = await searchOps.searchByText({
             text: searchText,
             page_title_uid: options.page
           });
 
-          // Apply client-side filters
           let matches = result.matches;
 
-          // Case-insensitive filter if requested
           if (options.caseInsensitive) {
             const lowerSearchText = searchText.toLowerCase();
             matches = matches.filter(m =>
@@ -250,7 +210,6 @@ Datalog tips:
             );
           }
 
-          // Tag filter if provided
           if (tags.length > 0) {
             const normalizedTags = tags.map(normalizeTag);
             const useOrLogic = options.any || false;
@@ -264,7 +223,6 @@ Datalog tips:
             });
           }
 
-          // Negtag filter (exclude blocks with any of these tags)
           const negTags = options.negtag || [];
           if (negTags.length > 0) {
             const normalizedNegTags = negTags.map(normalizeTag);
@@ -273,7 +231,6 @@ Datalog tips:
             );
           }
 
-          // Apply limit
           console.log(formatSearchResults(matches.slice(0, limit), outputOptions));
         } else {
           exitWithError('Please provide search terms or use --tag to search by tag');

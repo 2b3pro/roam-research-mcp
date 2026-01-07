@@ -41,7 +41,7 @@ Usage: roam get [options] [target]
 
 Arguments:
   target                 Page title, block UID, or relative date
-                         (today/yesterday/tomorrow)
+                         (today/yesterday/tomorrow). Reads from stdin if omitted.
 
 Options:
   -j, --json             Output as JSON instead of markdown
@@ -70,6 +70,11 @@ roam get tomorrow                           # Tomorrow's daily page
 roam get abc123def                          # Block by UID
 roam get "((abc123def))"                    # UID with wrapper
 
+# Stdin / Batch Retrieval
+echo "Project A" | roam get                 # Pipe page title
+echo "abc123def" | roam get                 # Pipe block UID
+cat uids.txt | roam get --json              # Fetch multiple blocks (NDJSON output)
+
 # Output options
 roam get "Page" -j                          # JSON output
 roam get "Page" -f                          # Flat list (no hierarchy)
@@ -95,7 +100,7 @@ Search blocks by text, tags, Datalog queries, or within specific pages.
 Usage: roam search [options] [terms...]
 
 Arguments:
-  terms                   Search terms (multiple terms use AND logic)
+  terms                   Search terms (multiple terms use AND logic). Reads from stdin if omitted.
 
 Options:
   --tag <tag>             Filter by tag (repeatable, comma-separated). Default: AND logic
@@ -120,6 +125,10 @@ Options:
 roam search "meeting notes"               # Find blocks containing text
 roam search api integration               # Multiple terms (AND logic)
 roam search "bug fix" -i                  # Case-insensitive search
+
+# Stdin search
+echo "urgent project" | roam search       # Pipe terms
+roam get today | roam search TODO         # Search within output
 
 # Tag search
 roam search --tag TODO                    # All blocks with #TODO
@@ -202,6 +211,11 @@ roam save notes.md --title "My Notes"           # Create page from file
 roam save notes.md --title "My Notes" --update  # Smart update (preserves UIDs)
 cat data.json | roam save --json                # Pipe JSON blocks
 
+# Stdin operations
+echo "Task from CLI" | roam save --todo         # Pipe to TODO
+cat note.md | roam save --title "From Pipe"     # Pipe file content to new page
+echo "Quick capture" | roam save -p "Inbox"     # Pipe to specific page
+
 # Combine options
 roam save -p "Work" --parent "## Today" "Done with task" -c "wins"
 ```
@@ -229,7 +243,7 @@ Find all blocks that reference a page, tag, or block.
 Usage: roam refs [options] <identifier>
 
 Arguments:
-  identifier          Page title, #tag, [[Page]], or ((block-uid))
+  identifier          Page title, #tag, [[Page]], or ((block-uid)). Reads from stdin if "-" or omitted.
 
 Options:
   -n, --limit <n>     Limit number of results (default: 50)
@@ -246,6 +260,10 @@ Options:
 roam refs "Project Alpha"               # Blocks linking to page
 roam refs "[[Meeting Notes]]"           # With bracket syntax
 roam refs "#TODO"                       # Blocks with #TODO tag
+
+# Stdin / Batch references
+echo "Project A" | roam refs            # Pipe page title
+cat uids.txt | roam refs --json         # Find refs for multiple UIDs
 
 # Block references
 roam refs "((abc123def))"               # Blocks embedding this block
@@ -267,7 +285,7 @@ Usage: roam update [options] <uid> <content>
 
 Arguments:
   uid                    Block UID to update (accepts ((uid)) wrapper)
-  content                New content. Use # prefix for heading: "# Title" sets H1
+  content                New content. Use # prefix for heading: "# Title" sets H1. Reads from stdin if "-" or omitted (when piped).
 
 Options:
   -H, --heading <level>  Set heading level (1-3), or 0 to remove
@@ -301,6 +319,11 @@ roam update abc123def "Content" -c          # Collapse block
 roam update abc123def "Task" -T             # Set as TODO
 roam update abc123def "Task" -D             # Mark as DONE
 roam update abc123def "Task" --clear-status # Remove status marker
+
+# Stdin / Partial Updates
+echo "New text" | roam update abc123def     # Pipe content
+roam update abc123def -T                    # Add TODO (fetches existing text)
+roam update abc123def -o                    # Expand block (keeps text)
 ```
 
 ---

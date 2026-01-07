@@ -87,6 +87,8 @@ docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 
 A standalone command-line tool for interacting with Roam Research directly, without running the MCP server. Provides eight subcommands: `get`, `search`, `save`, `refs`, `update`, `batch`, `rename`, and `status`.
 
+All content creation, update, and retrieval commands support **standard input (stdin) piping**, allowing for powerful automation workflows (e.g., `cat notes.md | roam save`, `roam search "query" | roam get`).
+
 ### Installation
 
 After building the project, make the command globally available:

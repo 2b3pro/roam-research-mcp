@@ -7,6 +7,7 @@ import { BatchOperations } from '../../tools/operations/batch.js';
 import { parseMarkdown, generateBlockUid, parseMarkdownHeadingLevel } from '../../markdown-utils.js';
 import { printDebug, exitWithError } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
+import { readStdin } from '../utils/input.js';
 import { formatRoamDate } from '../../utils/helpers.js';
 import { q, createPage as roamCreatePage } from '@roam-research/roam-api-sdk';
 
@@ -39,17 +40,6 @@ function flattenNodes(
   }
 
   return result;
-}
-
-/**
- * Read all input from stdin
- */
-async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks).toString('utf-8');
 }
 
 /**
@@ -217,6 +207,11 @@ Examples:
   roam save notes.md --title "My Notes" --update  # Smart update (preserves UIDs)
   cat data.json | roam save --json                # Pipe JSON blocks
 
+  # Stdin operations
+  echo "Task from CLI" | roam save --todo         # Pipe to TODO
+  cat note.md | roam save --title "From Pipe"     # Pipe file content to new page
+  echo "Quick capture" | roam save -p "Inbox"     # Pipe to specific page
+
   # Combine options
   roam save -p "Work" --parent "## Today" "Done with task" -c "wins"
 
@@ -273,7 +268,7 @@ JSON format (--json):
         let isFile = false;
         let sourceFilename: string | undefined;
 
-        if (input) {
+        if (input && input !== '-') {
           // Check if input is a file path that exists
           if (existsSync(input)) {
             isFile = true;
@@ -288,8 +283,8 @@ JSON format (--json):
             content = input;
           }
         } else {
-          // Read from stdin
-          if (process.stdin.isTTY) {
+          // Read from stdin (or if input is explicit '-')
+          if (process.stdin.isTTY && input !== '-') {
             exitWithError('No input. Use: roam save "text", roam save <file>, or pipe content');
           }
           content = await readStdin();

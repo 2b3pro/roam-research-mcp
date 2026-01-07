@@ -15,15 +15,7 @@ import {
   getDailyPageTitle
 } from '../batch/resolver.js';
 import { translateAllCommands } from '../batch/translator.js';
-
-/** Read all input from stdin */
-async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks).toString('utf-8');
-}
+import { readStdin } from '../utils/input.js';
 
 interface BatchOptions extends GraphOptions {
   debug?: boolean;

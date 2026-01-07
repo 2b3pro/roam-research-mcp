@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { SearchOperations } from '../../tools/operations/search/index.js';
 import { printDebug, exitWithError } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
+import { readStdin } from '../utils/input.js';
 
 interface RefsOptions extends GraphOptions {
   limit?: string;
@@ -96,7 +97,7 @@ function parseIdentifier(identifier: string): { block_uid?: string; title?: stri
 export function createRefsCommand(): Command {
   return new Command('refs')
     .description('Find all blocks that reference a page, tag, or block')
-    .argument('<identifier>', 'Page title, #tag, [[Page]], or ((block-uid))')
+    .argument('[identifier]', 'Page title, #tag, [[Page]], or ((block-uid)). Reads from stdin if "-" or omitted.')
     .option('-n, --limit <n>', 'Limit number of results', '50')
     .option('--json', 'Output as JSON array')
     .option('--raw', 'Output raw UID + content lines (no grouping)')
@@ -106,54 +107,72 @@ export function createRefsCommand(): Command {
 Examples:
   # Page references
   roam refs "Project Alpha"               # Blocks linking to page
-  roam refs "[[Meeting Notes]]"           # With bracket syntax
   roam refs "#TODO"                       # Blocks with #TODO tag
+
+  # Stdin / Batch references
+  echo "Project A" | roam refs            # Pipe page title
+  cat uids.txt | roam refs --json         # Find refs for multiple UIDs
 
   # Block references
   roam refs "((abc123def))"               # Blocks embedding this block
-
-  # Output options
-  roam refs "Work" --json                 # JSON array output
-  roam refs "Ideas" --raw                 # Raw UID + content (no grouping)
-  roam refs "Tasks" -n 100                # Limit to 100 results
 `)
-    .action(async (identifier: string, options: RefsOptions) => {
+    .action(async (identifier: string | undefined, options: RefsOptions) => {
       try {
         const graph = resolveGraph(options, false);
-
         const limit = parseInt(options.limit || '50', 10);
-        const { block_uid, title } = parseIdentifier(identifier);
 
-        if (options.debug) {
-          printDebug('Identifier', identifier);
-          printDebug('Graph', options.graph || 'default');
-          printDebug('Parsed', { block_uid, title });
-          printDebug('Options', options);
+        // Determine identifiers
+        let identifiers: string[] = [];
+        if (identifier && identifier !== '-') {
+          identifiers = [identifier];
+        } else {
+          if (process.stdin.isTTY && identifier !== '-') {
+             exitWithError('Identifier is required. Use: roam refs <title> or pipe identifiers via stdin');
+          }
+          const input = await readStdin();
+          if (input) {
+            identifiers = input.split('\n').map(t => t.trim()).filter(Boolean);
+          }
+        }
+
+        if (identifiers.length === 0) {
+          exitWithError('No identifiers provided');
         }
 
         const searchOps = new SearchOperations(graph);
-        const result = await searchOps.searchBlockRefs({ block_uid, title });
 
-        if (options.debug) {
-          printDebug('Total matches', result.matches.length);
+        // Helper to process a single identifier
+        const processIdentifier = async (id: string) => {
+           const { block_uid, title } = parseIdentifier(id);
+
+           if (options.debug) {
+             printDebug('Identifier', id);
+             printDebug('Parsed', { block_uid, title });
+           }
+
+           const result = await searchOps.searchBlockRefs({ block_uid, title });
+           const limitedMatches = result.matches.slice(0, limit);
+
+           if (options.json) {
+             return JSON.stringify(limitedMatches.map(m => ({
+               uid: m.block_uid,
+               content: m.content,
+               page: m.page_title
+             })));
+           } else if (options.raw) {
+             return formatRaw(limitedMatches);
+           } else {
+             return formatGrouped(limitedMatches);
+           }
+        };
+
+        // Execute
+        for (const id of identifiers) {
+           const output = await processIdentifier(id);
+           console.log(output);
+           if (identifiers.length > 1 && !options.json) console.log('\n---\n');
         }
 
-        // Apply limit
-        const limitedMatches = result.matches.slice(0, limit);
-
-        // Format output
-        if (options.json) {
-          const jsonOutput = limitedMatches.map(m => ({
-            uid: m.block_uid,
-            content: m.content,
-            page: m.page_title
-          }));
-          console.log(JSON.stringify(jsonOutput, null, 2));
-        } else if (options.raw) {
-          console.log(formatRaw(limitedMatches));
-        } else {
-          console.log(formatGrouped(limitedMatches));
-        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         exitWithError(message);
