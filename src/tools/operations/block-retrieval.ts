@@ -1,6 +1,7 @@
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { RoamBlock } from '../../types/roam.js';
+import { resolveBlockRefs } from '../helpers/refs.js';
 
 export class BlockRetrievalOperations {
   constructor(private graph: Graph) { }
@@ -73,13 +74,26 @@ export class BlockRetrievalOperations {
       const [rootString, rootOrder, rootHeading] = rootBlockResult;
       const childrenMap = await fetchChildren([block_uid], 0);
 
-      return {
+      const rootBlock: RoamBlock = {
         uid: block_uid,
         string: rootString,
         order: rootOrder,
         heading: rootHeading || undefined,
         children: childrenMap[block_uid] || [],
       };
+
+      // Gather all blocks in the tree to scan for references
+      const allBlocks: RoamBlock[] = [];
+      const traverse = (b: RoamBlock) => {
+        allBlocks.push(b);
+        b.children.forEach(traverse);
+      };
+      traverse(rootBlock);
+
+      // Resolve references (max depth 2)
+      await resolveBlockRefs(this.graph, allBlocks, 2);
+
+      return rootBlock;
     } catch (error) {
       throw new McpError(
         ErrorCode.InternalError,

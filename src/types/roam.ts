@@ -5,6 +5,7 @@ export interface RoamBlock {
   order: number;
   heading?: number | null;
   children: RoamBlock[];
+  refs?: RoamBlock[];
 }
 
 export type RoamBatchAction = {

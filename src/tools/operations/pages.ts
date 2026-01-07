@@ -1,7 +1,7 @@
 import { Graph, q, createPage as createRoamPage, batchActions, updatePage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { capitalizeWords } from '../helpers/text.js';
-import { resolveRefs } from '../helpers/refs.js';
+import { resolveRefs, resolveBlockRefs } from '../helpers/refs.js';
 import type { RoamBlock } from '../types/index.js';
 import {
   parseMarkdown,
@@ -493,18 +493,19 @@ export class PageOperations {
     // Create a map of all blocks
     const blockMap = new Map<string, RoamBlock>();
     const rootBlocks: RoamBlock[] = [];
+    const allBlocks: RoamBlock[] = [];
 
     // First pass: Create all block objects
     for (const [blockUid, blockStr, order, parentUid] of blocks) {
-      const resolvedString = await resolveRefs(this.graph, blockStr);
       const block = {
         uid: blockUid,
-        string: resolvedString,
+        string: blockStr,
         order: order as number,
         heading: headingMap.get(blockUid) || null,
         children: []
       };
       blockMap.set(blockUid, block);
+      allBlocks.push(block);
 
       // If no parent or parent is the page itself, it's a root block
       if (!parentUid || parentUid === uid) {
@@ -535,8 +536,15 @@ export class PageOperations {
     sortBlocks(rootBlocks);
 
     if (format === 'raw') {
+      // Resolve structured references for raw JSON output
+      await resolveBlockRefs(this.graph, allBlocks, 2);
       return JSON.stringify(rootBlocks);
     }
+
+    // For markdown, resolve references inline
+    await Promise.all(allBlocks.map(async b => {
+      b.string = await resolveRefs(this.graph, b.string);
+    }));
 
     // Convert to markdown with proper nesting
     const toMarkdown = (blocks: RoamBlock[], level: number = 0): string => {

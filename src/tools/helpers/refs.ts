@@ -1,4 +1,5 @@
 import { Graph, q } from '@roam-research/roam-api-sdk';
+import { RoamBlock } from '../../types/roam.js';
 
 // Roam block UIDs are 9 alphanumeric characters (with _ and -)
 const REF_PATTERN = /\(\(([a-zA-Z0-9_-]{9})\)\)/g;
@@ -79,4 +80,83 @@ export async function resolveRefs(
   return text.replace(REF_PATTERN, (match, uid) => {
     return refMap.get(uid) ?? match;
   });
+}
+
+/**
+ * Recursively resolves block references for a list of RoamBlocks.
+ * Attaches referenced blocks to the `refs` property of the referencing block.
+ * 
+ * @param graph - Roam graph connection
+ * @param blocksToScan - List of blocks to scan for references
+ * @param remainingDepth - Maximum depth to resolve nested refs
+ */
+export async function resolveBlockRefs(
+  graph: Graph, 
+  blocksToScan: RoamBlock[], 
+  remainingDepth: number = 2
+): Promise<void> {
+  if (remainingDepth <= 0 || blocksToScan.length === 0) {
+    return;
+  }
+
+  const refMap: Record<string, RoamBlock[]> = {}; // uid -> list of blocks referencing it
+  const allRefUids = new Set<string>();
+
+  for (const block of blocksToScan) {
+    // Reset lastIndex for REF_PATTERN reuse if using exec, or use matchAll
+    // matchAll is safer with global regex state
+    const matches = block.string.matchAll(REF_PATTERN);
+    for (const match of matches) {
+      const refUid = match[1];
+      if (!refMap[refUid]) {
+        refMap[refUid] = [];
+      }
+      refMap[refUid].push(block);
+      allRefUids.add(refUid);
+    }
+  }
+
+  if (allRefUids.size === 0) {
+    return;
+  }
+
+  const uidsToFetch = Array.from(allRefUids);
+  
+  // Fetch referenced blocks content
+  const refsQuery = `[:find ?uid ?string ?heading
+                      :in $ [?uid ...]
+                      :where [?b :block/uid ?uid]
+                             [?b :block/string ?string]
+                             [(get-else $ ?b :block/heading 0) ?heading]]`;
+  
+  const results = await q(graph, refsQuery, [uidsToFetch]) as [string, string, number | null][];
+
+  const fetchedBlocks: RoamBlock[] = [];
+
+  for (const [uid, string, heading] of results) {
+    const newBlock: RoamBlock = {
+      uid,
+      string,
+      order: 0,
+      heading: heading || undefined,
+      children: [],
+      refs: []
+    };
+    
+    fetchedBlocks.push(newBlock);
+
+    // Attach to parents
+    if (refMap[uid]) {
+      for (const parentBlock of refMap[uid]) {
+         if (!parentBlock.refs) parentBlock.refs = [];
+         // Avoid duplicates
+         if (!parentBlock.refs.some(r => r.uid === uid)) {
+           parentBlock.refs.push(newBlock);
+         }
+      }
+    }
+  }
+
+  // Recurse for the next level of references
+  await resolveBlockRefs(graph, fetchedBlocks, remainingDepth - 1);
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+### [2.5.1](https://github.com/2b3pro/roam-research-mcp/compare/v2.5.0...v2.5.1) (2026-01-07)
+
+### FIXED
+
+* **block-retrieval:** fixed recursive reference resolution logic for `roam_fetch_block_with_children`
+* **pages:** fixed `roam_fetch_page_by_title` (raw format) to use structured reference resolution
+
+### ENHANCED
+
+* **roam_fetch_block_with_children:** now returns a `refs` array containing structured objects for referenced blocks (recursive depth 2)
+
 ### [2.4.3](https://github.com/2b3pro/roam-research-mcp/compare/v2.4.0...v2.4.3) (2026-01-07)
 
 
