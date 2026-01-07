@@ -83,6 +83,11 @@ Examples:
 
   # Datalog queries (advanced)
   roam search -q '[:find ?uid ?s :where [?b :block/uid ?uid] [?b :block/string ?s]]' --regex "meeting"
+
+  # Chaining with jq
+  roam search TODO --json | jq '.[].block_uid'
+
+JSON output fields: block_uid, content, page_title
 `)
     .action(async (terms: string[], options: SearchOptions) => {
       try {
