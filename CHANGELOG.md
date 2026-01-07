@@ -1,5 +1,19 @@
 # Changelog
 
+### [2.4.3](https://github.com/2b3pro/roam-research-mcp/compare/v2.4.0...v2.4.3) (2026-01-07)
+
+
+### FIXED
+
+* **schemas:** update memory tool descriptions to prevent tag duplication ([b7ed793](https://github.com/2b3pro/roam-research-mcp/commit/b7ed793dc08ef698c4af4f5c4aa78991b74554db))
+
+
+### ADDED
+
+* **cli:** add standard input support to roam commands ([6b06ed4](https://github.com/2b3pro/roam-research-mcp/commit/6b06ed40b6c287919edb66c9ff33482943ab1764))
+
+# Changelog
+
 v2.4.2 - 2026-01-06
 
 - ENHANCED: `roam_remember` MCP tool now supports `include_memories_tag` to omit MEMORIES_TAG when desired
