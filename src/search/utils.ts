@@ -32,9 +32,10 @@ export class SearchUtils {
 
   /**
    * Format search results into a standard structure
+   * Supports both basic [uid, content, pageTitle?] and extended [uid, content, pageTitle?, created?, modified?] formats
    */
   static formatSearchResults(
-    results: [string, string, string?][],
+    results: [string, string, string?, number?, number?][],
     searchDescription: string,
     includePageTitle: boolean = true
   ): SearchResult {
@@ -46,10 +47,12 @@ export class SearchUtils {
       };
     }
 
-    const matches = results.map(([uid, content, pageTitle]) => ({
+    const matches = results.map(([uid, content, pageTitle, created, modified]) => ({
       block_uid: uid,
       content,
-      ...(includePageTitle && pageTitle && { page_title: pageTitle })
+      ...(includePageTitle && pageTitle && { page_title: pageTitle }),
+      ...(created && { created }),
+      ...(modified && { modified })
     }));
 
     return {
@@ -117,5 +120,38 @@ export class SearchUtils {
       case 3: return 'rd';
       default: return 'th';
     }
+  }
+
+  /**
+   * Fetch all tag references for a set of block UIDs
+   * Returns a map of block_uid -> array of tag titles
+   */
+  static async fetchBlockTags(graph: Graph, blockUids: string[]): Promise<Map<string, string[]>> {
+    if (blockUids.length === 0) {
+      return new Map();
+    }
+
+    // Build OR clause for all UIDs
+    const uidClauses = blockUids.map(uid => `[?b :block/uid "${uid}"]`).join(' ');
+
+    const queryStr = `[:find ?block-uid ?tag-title
+                      :where
+                      (or ${uidClauses})
+                      [?b :block/uid ?block-uid]
+                      [?b :block/refs ?ref]
+                      [?ref :node/title ?tag-title]]`;
+
+    const results = await q(graph, queryStr, []) as [string, string][];
+
+    // Group tags by block UID
+    const tagMap = new Map<string, string[]>();
+    for (const [uid, tag] of results) {
+      if (!tagMap.has(uid)) {
+        tagMap.set(uid, []);
+      }
+      tagMap.get(uid)!.push(tag);
+    }
+
+    return tagMap;
   }
 }

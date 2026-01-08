@@ -1,13 +1,18 @@
 import type { Graph } from '@roam-research/roam-api-sdk';
 
+export interface SearchMatch {
+  block_uid: string;
+  content: string;
+  page_title?: string;
+  created?: number;   // Unix timestamp (ms) from :create/time
+  modified?: number;  // Unix timestamp (ms) from :edit/time
+  tags?: string[];    // Tag references for grouping
+  [key: string]: any; // Additional context-specific fields
+}
+
 export interface SearchResult {
   success: boolean;
-  matches: Array<{
-    block_uid: string;
-    content: string;
-    page_title?: string;
-    [key: string]: any;  // Additional context-specific fields
-  }>;
+  matches: SearchMatch[];
   message: string;
   total_count?: number; // Added for total count of matches
 }

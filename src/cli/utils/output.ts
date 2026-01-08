@@ -1,4 +1,5 @@
 import type { RoamBlock } from '../../types/roam.js';
+import type { GroupedResults } from './sort-group.js';
 
 export interface OutputOptions {
   json?: boolean;
@@ -94,10 +95,9 @@ export function formatSearchResults(
 
   let output = `Found ${results.length} result(s):\n\n`;
 
-  results.forEach((result, index) => {
-    const pageInfo = result.page_title ? ` (${result.page_title})` : '';
-    output += `[${index + 1}] ${result.block_uid}${pageInfo}\n`;
-    output += `    ${result.content}\n\n`;
+  results.forEach((result) => {
+    const pageInfo = result.page_title ? ` — [[${result.page_title}]]` : '';
+    output += `[${result.block_uid}] ${result.content}${pageInfo}\n`;
   });
 
   return output.trim();
@@ -140,7 +140,41 @@ export function formatTodoOutput(
         .replace(/\{\{TODO\}\}\s*/g, '')
         .replace(/\{\{\[\[DONE\]\]\}\}\s*/g, '')
         .replace(/\{\{DONE\}\}\s*/g, '');
-      output += `- [${status === 'DONE' ? 'x' : ' '}] ${cleanContent} (${item.block_uid})\n`;
+      output += `[${item.block_uid}] [${status === 'DONE' ? 'x' : ' '}] ${cleanContent}\n`;
+    }
+  }
+
+  return output.trim();
+}
+
+/**
+ * Format grouped search results for output
+ */
+export function formatGroupedOutput(
+  grouped: GroupedResults,
+  options: OutputOptions
+): string {
+  if (options.json) {
+    return JSON.stringify(grouped, null, 2);
+  }
+
+  const { groups, meta } = grouped;
+  const groupKeys = Object.keys(groups);
+
+  if (groupKeys.length === 0) {
+    return 'No results found.';
+  }
+
+  let output = `Found ${meta.total} item(s) in ${meta.groups_count} group(s):\n`;
+
+  for (const groupName of groupKeys) {
+    const items = groups[groupName];
+    output += `\n## ${groupName}\n`;
+
+    for (const item of items) {
+      // Format: [uid] content with optional page reference
+      const pageRef = item.page_title ? ` — [[${item.page_title}]]` : '';
+      output += `[${item.block_uid}] ${item.content}${pageRef}\n`;
     }
   }
 

@@ -6,6 +6,7 @@ import {
   formatPageOutput,
   formatBlockOutput,
   formatTodoOutput,
+  formatGroupedOutput,
   flattenBlocks,
   blocksToMarkdown,
   printDebug,
@@ -16,6 +17,16 @@ import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 import { readStdin } from '../utils/input.js';
 import { resolveRefs } from '../../tools/helpers/refs.js';
 import { resolveRelativeDate } from '../../utils/helpers.js';
+import { SearchUtils } from '../../search/utils.js';
+import {
+  sortResults,
+  groupResults,
+  getDefaultDirection,
+  type SortField,
+  type SortDirection,
+  type GroupByField
+} from '../utils/sort-group.js';
+import type { SearchMatch } from '../../search/types.js';
 import type { RoamBlock } from '../../types/roam.js';
 import type { Graph } from '@roam-research/roam-api-sdk';
 
@@ -39,6 +50,10 @@ interface GetOptions extends GraphOptions {
   negtag?: string[];
   limit?: string;
   showall?: boolean;
+  sort?: string;
+  asc?: boolean;
+  desc?: boolean;
+  groupBy?: string;
 }
 
 /**
@@ -112,6 +127,10 @@ export function createGetCommand(): Command {
     }, [] as string[])
     .option('-n, --limit <n>', 'Limit number of blocks fetched (default: 20 for tag/text)', '20')
     .option('--showall', 'Show all results (no limit)')
+    .option('--sort <field>', 'Sort results by: created, modified, page')
+    .option('--asc', 'Sort ascending (default for page)')
+    .option('--desc', 'Sort descending (default for dates)')
+    .option('--group-by <field>', 'Group results by: page, tag')
     .option('-g, --graph <name>', 'Target graph key (multi-graph mode)')
     .option('--debug', 'Show query metadata')
     .addHelpText('after', `
@@ -154,6 +173,18 @@ Examples:
   roam get --text "meeting" --tag Project     # Combine text + tag filter
   roam get --text "TODO" -p today             # Text search on today's page
 
+  # Sorting
+  roam get --tag Convention --sort created    # Sort by creation date (newest first)
+  roam get --todo --sort modified --asc       # Sort by edit date (oldest first)
+  roam get --tag Project --sort page          # Sort alphabetically by page
+
+  # Grouping
+  roam get --tag Convention --group-by page   # Group by source page
+  roam get --tag Convention --group-by tag    # Group by subtags (Convention/*)
+
+  # Combined
+  roam get --tag Convention --group-by tag --sort modified
+
 Output format:
   Markdown: Content with hierarchy (no UIDs). Use --json for UIDs.
   JSON:     Full block structure including uid field.
@@ -187,6 +218,13 @@ Note: For flat results with UIDs, use 'roam search' instead.
           printDebug('Options', { depth, refs: refsDepth || 'off', ...outputOptions });
         }
 
+        // Parse sort/group options
+        const sortField = options.sort as SortField | undefined;
+        const groupByField = options.groupBy as GroupByField | undefined;
+        const sortDirection: SortDirection | undefined = sortField
+          ? (options.asc ? 'asc' : options.desc ? 'desc' : getDefaultDirection(sortField))
+          : undefined;
+
         // Handle --todo or --done flags (these ignore target arg usually, but could filter by page if target is used as page?)
         // The help says "-p" is for page. So we strictly follow flags.
         if (options.todo || options.done) {
@@ -194,6 +232,8 @@ Note: For flat results with UIDs, use 'roam search' instead.
 
           if (options.debug) {
             printDebug('Status search', { status, page: options.page, include: options.include, exclude: options.exclude });
+            if (sortField) printDebug('Sort', { field: sortField, direction: sortDirection });
+            if (groupByField) printDebug('Group by', groupByField);
           }
 
           const searchOps = new SearchOperations(graph);
@@ -204,7 +244,24 @@ Note: For flat results with UIDs, use 'roam search' instead.
             options.exclude
           );
 
-          console.log(formatTodoOutput(result.matches, status, outputOptions));
+          let matches: SearchMatch[] = result.matches;
+
+          // Apply sorting
+          if (sortField && sortDirection) {
+            matches = sortResults(matches, { field: sortField, direction: sortDirection });
+          }
+
+          // Apply grouping
+          if (groupByField) {
+            // For TODO/DONE, only page grouping makes sense (no tags on search results)
+            if (groupByField === 'tag') {
+              exitWithError('--group-by tag is not supported for TODO/DONE search. Use --group-by page instead.');
+            }
+            const grouped = groupResults(matches, { by: groupByField });
+            console.log(formatGroupedOutput(grouped, outputOptions));
+          } else {
+            console.log(formatTodoOutput(matches, status, outputOptions));
+          }
           return;
         }
 
@@ -228,10 +285,12 @@ Note: For flat results with UIDs, use 'roam search' instead.
               negtag: options.negtag,
               limit
             });
+            if (sortField) printDebug('Sort', { field: sortField, direction: sortDirection });
+            if (groupByField) printDebug('Group by', groupByField);
           }
 
           // Get initial matches
-          let matches: Array<{ block_uid: string; content: string; page_title?: string }> = [];
+          let matches: SearchMatch[] = [];
 
           if (options.text) {
             // Text search
@@ -273,6 +332,11 @@ Note: For flat results with UIDs, use 'roam search' instead.
             );
           }
 
+          // Apply sorting before limit (so we get the top N sorted items)
+          if (sortField && sortDirection) {
+            matches = sortResults(matches, { field: sortField, direction: sortDirection });
+          }
+
           // Apply limit
           const limitedMatches = matches.slice(0, limit);
 
@@ -281,7 +345,31 @@ Note: For flat results with UIDs, use 'roam search' instead.
             return;
           }
 
-          // Fetch full blocks with children
+          // For tag grouping, fetch all tags for matched blocks
+          if (groupByField === 'tag') {
+            const blockUids = limitedMatches.map(m => m.block_uid);
+            const tagMap = await SearchUtils.fetchBlockTags(graph, blockUids);
+
+            // Attach tags to matches
+            for (const match of limitedMatches) {
+              match.tags = tagMap.get(match.block_uid) || [];
+            }
+
+            // Group and output
+            const primaryTag = tags.length > 0 ? normalizeTag(tags[0]) : '';
+            const grouped = groupResults(limitedMatches, { by: 'tag', searchTag: primaryTag });
+            console.log(formatGroupedOutput(grouped, outputOptions));
+            return;
+          }
+
+          // For page grouping, output grouped matches
+          if (groupByField === 'page') {
+            const grouped = groupResults(limitedMatches, { by: 'page' });
+            console.log(formatGroupedOutput(grouped, outputOptions));
+            return;
+          }
+
+          // Standard output: fetch full blocks with children
           const blocks: RoamBlock[] = [];
           for (const match of limitedMatches) {
             let block = await blockOps.fetchBlockWithChildren(match.block_uid, depth);

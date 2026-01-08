@@ -75,7 +75,9 @@ export class TagSearchHandler extends BaseSearchHandler {
                       [?b :block/uid ?block-uid]
                       [?b :block/page ?p]
                       [?p :node/title ?page-title]
-                      [?p :edit/time ?page-edit-time]`; // Fetch page edit time for sorting
+                      [?p :edit/time ?page-edit-time]
+                      [(get-else $ ?b :create/time 0) ?block-create-time]
+                      [(get-else $ ?b :edit/time 0) ?block-edit-time]`; // Fetch page edit time for sorting, block timestamps for sort/group
 
     if (nearTagUid) {
       queryWhereClauses += `
@@ -95,9 +97,9 @@ export class TagSearchHandler extends BaseSearchHandler {
                       [?p :block/uid ?target-page-uid]`;
     }
 
-    const queryStr = `[:find ?block-uid ?block-str ?page-title
+    const queryStr = `[:find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time
                       ${inClause} ${queryLimit} ${queryOffset} ${queryOrder}
-                      :where 
+                      :where
                       ${queryWhereClauses}]`;
 
     const queryArgs: (string | number)[] = [];
@@ -105,7 +107,7 @@ export class TagSearchHandler extends BaseSearchHandler {
       queryArgs.push(targetPageUid);
     }
 
-    const rawResults = await q(this.graph, queryStr, queryArgs) as [string, string, string?][];
+    const rawResults = await q(this.graph, queryStr, queryArgs) as [string, string, string?, number?, number?][];
 
     // Query to get total count without limit
     const countQueryStr = `[:find (count ?b)
@@ -118,9 +120,9 @@ export class TagSearchHandler extends BaseSearchHandler {
 
     // Resolve block references in content
     const resolvedResults = await Promise.all(
-      rawResults.map(async ([uid, content, pageTitle]) => {
+      rawResults.map(async ([uid, content, pageTitle, created, modified]) => {
         const resolvedContent = await resolveRefs(this.graph, content);
-        return [uid, resolvedContent, pageTitle] as [string, string, string?];
+        return [uid, resolvedContent, pageTitle, created, modified] as [string, string, string?, number?, number?];
       })
     );
 

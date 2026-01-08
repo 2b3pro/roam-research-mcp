@@ -32,32 +32,37 @@ export class StatusSearchHandler extends BaseSearchHandler {
 
     // Search for "{{TODO" or "{{DONE" which matches both {{[[TODO]]}} and {{TODO}} formats
     if (targetPageUid) {
-      queryStr = `[:find ?block-uid ?block-str
+      queryStr = `[:find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time
                   :in $ ?status ?page-uid
                   :where [?p :block/uid ?page-uid]
+                         [?p :node/title ?page-title]
                          [?b :block/page ?p]
                          [?b :block/string ?block-str]
                          [?b :block/uid ?block-uid]
-                         [(clojure.string/includes? ?block-str (str "{{" ?status))]]`;
+                         [(clojure.string/includes? ?block-str (str "{{" ?status))]
+                         [(get-else $ ?b :create/time 0) ?block-create-time]
+                         [(get-else $ ?b :edit/time 0) ?block-edit-time]]`;
       queryParams = [status, targetPageUid];
     } else {
-      queryStr = `[:find ?block-uid ?block-str ?page-title
+      queryStr = `[:find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time
                   :in $ ?status
                   :where [?b :block/string ?block-str]
                          [?b :block/uid ?block-uid]
                          [?b :block/page ?p]
                          [?p :node/title ?page-title]
-                         [(clojure.string/includes? ?block-str (str "{{" ?status))]]`;
+                         [(clojure.string/includes? ?block-str (str "{{" ?status))]
+                         [(get-else $ ?b :create/time 0) ?block-create-time]
+                         [(get-else $ ?b :edit/time 0) ?block-edit-time]]`;
       queryParams = [status];
     }
 
-    const rawResults = await q(this.graph, queryStr, queryParams) as [string, string, string?][];
-    
+    const rawResults = await q(this.graph, queryStr, queryParams) as [string, string, string?, number?, number?][];
+
     // Resolve block references in content
     const resolvedResults = await Promise.all(
-      rawResults.map(async ([uid, content, pageTitle]) => {
+      rawResults.map(async ([uid, content, pageTitle, created, modified]) => {
         const resolvedContent = await resolveRefs(this.graph, content);
-        return [uid, resolvedContent, pageTitle] as [string, string, string?];
+        return [uid, resolvedContent, pageTitle, created, modified] as [string, string, string?, number?, number?];
       })
     );
     

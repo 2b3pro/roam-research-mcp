@@ -49,23 +49,25 @@ export class TextSearchHandler extends BaseSearchHandler {
                     [?b :block/uid ?block-uid]
                     [?b :block/page ?p]
                     [?p :node/title ?page-title]
-                    [?p :edit/time ?page-edit-time]`; // Fetch page edit time for sorting
+                    [?p :edit/time ?page-edit-time]
+                    [(get-else $ ?b :create/time 0) ?block-create-time]
+                    [(get-else $ ?b :edit/time 0) ?block-edit-time]`; // Fetch page edit time for sorting, block timestamps for sort/group
 
     if (targetPageUid) {
-      queryStr = `[:find ?block-uid ?block-str ?page-title
+      queryStr = `[:find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time
                     :in $ ?page-uid ${queryLimit} ${queryOffset} ${queryOrder}
                     :where
                     ${baseQueryWhereClauses}
                     [?p :block/uid ?page-uid]]`;
       queryParams = [targetPageUid];
     } else {
-      queryStr = `[:find ?block-uid ?block-str ?page-title
+      queryStr = `[:find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time
                     :in $ ${queryLimit} ${queryOffset} ${queryOrder}
                     :where
                     ${baseQueryWhereClauses}]`;
     }
 
-    const rawResults = await q(this.graph, queryStr, queryParams) as [string, string, string?][];
+    const rawResults = await q(this.graph, queryStr, queryParams) as [string, string, string?, number?, number?][];
 
     // Query to get total count without limit
     const countQueryStr = `[:find (count ?b)
@@ -78,9 +80,9 @@ export class TextSearchHandler extends BaseSearchHandler {
 
     // Resolve block references in content
     const resolvedResults = await Promise.all(
-      rawResults.map(async ([uid, content, pageTitle]) => {
+      rawResults.map(async ([uid, content, pageTitle, created, modified]) => {
         const resolvedContent = await resolveRefs(this.graph, content);
-        return [uid, resolvedContent, pageTitle] as [string, string, string?];
+        return [uid, resolvedContent, pageTitle, created, modified] as [string, string, string?, number?, number?];
       })
     );
 
