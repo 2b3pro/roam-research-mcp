@@ -6,6 +6,8 @@ import {
   formatPageOutput,
   formatBlockOutput,
   formatTodoOutput,
+  flattenBlocks,
+  blocksToMarkdown,
   printDebug,
   exitWithError,
   type OutputOptions
@@ -31,15 +33,24 @@ interface GetOptions extends GraphOptions {
   page?: string;
   include?: string;
   exclude?: string;
+  tag?: string[];
+  text?: string;
+  any?: boolean;
+  negtag?: string[];
+  limit?: string;
+  showall?: boolean;
 }
 
 /**
  * Recursively resolve block references in a RoamBlock tree
  */
-async function resolveBlockRefs(graph: Graph, block: RoamBlock, maxDepth: number): Promise<RoamBlock> {
-  const resolvedString = await resolveRefs(graph, block.string, 0, maxDepth);
+async function resolveBlockRefsInTree(graph: Graph, block: RoamBlock, maxDepth: number): Promise<RoamBlock> {
+  // Only resolve if string is valid
+  const resolvedString = typeof block.string === 'string'
+    ? await resolveRefs(graph, block.string, 0, maxDepth)
+    : block.string || '';
   const resolvedChildren = await Promise.all(
-    (block.children || []).map(child => resolveBlockRefs(graph, child, maxDepth))
+    (block.children || []).map(child => resolveBlockRefsInTree(graph, child, maxDepth))
   );
   return {
     ...block,
@@ -51,8 +62,29 @@ async function resolveBlockRefs(graph: Graph, block: RoamBlock, maxDepth: number
 /**
  * Resolve refs in an array of blocks
  */
-async function resolveBlocksRefs(graph: Graph, blocks: RoamBlock[], maxDepth: number): Promise<RoamBlock[]> {
-  return Promise.all(blocks.map(block => resolveBlockRefs(graph, block, maxDepth)));
+async function resolveBlocksRefsInTree(graph: Graph, blocks: RoamBlock[], maxDepth: number): Promise<RoamBlock[]> {
+  return Promise.all(blocks.map(block => resolveBlockRefsInTree(graph, block, maxDepth)));
+}
+
+/**
+ * Normalize a tag by stripping #, [[, ]] wrappers
+ */
+function normalizeTag(tag: string): string {
+  return tag.replace(/^#?\[?\[?/, '').replace(/\]?\]?$/, '');
+}
+
+/**
+ * Check if content contains a tag (handles #tag, [[tag]], #[[tag]] formats)
+ * Case-insensitive matching.
+ */
+function contentHasTag(content: string, tag: string): boolean {
+  const normalized = normalizeTag(tag).toLowerCase();
+  const lowerContent = content.toLowerCase();
+  return (
+    lowerContent.includes(`[[${normalized}]]`) ||
+    lowerContent.includes(`#${normalized}`) ||
+    lowerContent.includes(`#[[${normalized}]]`)
+  );
 }
 
 export function createGetCommand(): Command {
@@ -65,9 +97,21 @@ export function createGetCommand(): Command {
     .option('-f, --flat', 'Flatten hierarchy to single-level list')
     .option('--todo', 'Fetch TODO items')
     .option('--done', 'Fetch DONE items')
-    .option('-p, --page <ref>', 'Filter TODOs/DONEs by page title or UID')
+    .option('-p, --page <ref>', 'Scope to page title or UID (for TODOs, tags, text)')
     .option('-i, --include <terms>', 'Include items matching these terms (comma-separated)')
     .option('-e, --exclude <terms>', 'Exclude items matching these terms (comma-separated)')
+    .option('--tag <tag>', 'Get blocks with tag (repeatable, comma-separated)', (val, prev: string[]) => {
+      const tags = val.split(',').map(t => t.trim()).filter(Boolean);
+      return prev ? [...prev, ...tags] : tags;
+    }, [] as string[])
+    .option('--text <text>', 'Get blocks containing text')
+    .option('--any', 'Use OR logic for multiple tags (default is AND)')
+    .option('--negtag <tag>', 'Exclude blocks with tag (repeatable, comma-separated)', (val, prev: string[]) => {
+      const tags = val.split(',').map(t => t.trim()).filter(Boolean);
+      return prev ? [...prev, ...tags] : tags;
+    }, [] as string[])
+    .option('-n, --limit <n>', 'Limit number of blocks fetched (default: 20 for tag/text)', '20')
+    .option('--showall', 'Show all results (no limit)')
     .option('-g, --graph <name>', 'Target graph key (multi-graph mode)')
     .option('--debug', 'Show query metadata')
     .addHelpText('after', `
@@ -98,10 +142,29 @@ Examples:
   roam get --done                             # All completed items
   roam get --todo -p "Work"                   # TODOs on "Work" page
 
+  # Tag-based retrieval (returns blocks with children)
+  roam get --tag TODO                         # Blocks tagged with #TODO
+  roam get --tag Project,Active              # Blocks with both tags (AND)
+  roam get --tag Project --tag Active --any   # Blocks with either tag (OR)
+  roam get --tag Task --negtag Done           # Tasks excluding Done
+  roam get --tag Meeting -p "Work"            # Meetings on Work page
+
+  # Text-based retrieval
+  roam get --text "urgent"                    # Blocks containing "urgent"
+  roam get --text "meeting" --tag Project     # Combine text + tag filter
+  roam get --text "TODO" -p today             # Text search on today's page
+
+Output format:
+  Markdown: Content with hierarchy (no UIDs). Use --json for UIDs.
+  JSON:     Full block structure including uid field.
+
 JSON output fields:
   Page:      { title, children: [Block...] }
   Block:     { uid, string, order, heading?, children: [Block...] }
   TODO/DONE: [{ block_uid, content, page_title }]
+  Tag/Text:  [{ uid, string, order, heading?, children: [...] }]
+
+Note: For flat results with UIDs, use 'roam search' instead.
 `)
     .action(async (target: string | undefined, options: GetOptions) => {
       try {
@@ -145,6 +208,111 @@ JSON output fields:
           return;
         }
 
+        // Handle --tag and/or --text flags (search-based retrieval with full children)
+        const tags = options.tag || [];
+        if (tags.length > 0 || options.text) {
+          const searchOps = new SearchOperations(graph);
+          const blockOps = new BlockRetrievalOperations(graph);
+          const limit = options.showall ? Infinity : parseInt(options.limit || '20', 10);
+          const useOrLogic = options.any || false;
+
+          // Resolve page scope
+          const pageScope = options.page ? resolveRelativeDate(options.page) : undefined;
+
+          if (options.debug) {
+            printDebug('Tag/Text search', {
+              tags,
+              text: options.text,
+              page: pageScope,
+              any: useOrLogic,
+              negtag: options.negtag,
+              limit
+            });
+          }
+
+          // Get initial matches
+          let matches: Array<{ block_uid: string; content: string; page_title?: string }> = [];
+
+          if (options.text) {
+            // Text search
+            const result = await searchOps.searchByText({
+              text: options.text,
+              page_title_uid: pageScope
+            });
+            matches = result.matches;
+          } else if (tags.length > 0) {
+            // Tag search (use first tag as primary)
+            const normalizedTags = tags.map(normalizeTag);
+            const result = await searchOps.searchForTag(normalizedTags[0], pageScope);
+            matches = result.matches;
+          }
+
+          // Apply additional tag filters
+          if (tags.length > 0 && matches.length > 0) {
+            const normalizedTags = tags.map(normalizeTag);
+
+            // For text search with tags, filter by ALL tags
+            // For tag search with multiple tags, filter by remaining tags based on --any
+            if (options.text || normalizedTags.length > 1) {
+              matches = matches.filter(m => {
+                if (useOrLogic) {
+                  return normalizedTags.some(tag => contentHasTag(m.content, tag));
+                } else {
+                  return normalizedTags.every(tag => contentHasTag(m.content, tag));
+                }
+              });
+            }
+          }
+
+          // Apply negative tag filter
+          const negTags = options.negtag || [];
+          if (negTags.length > 0) {
+            const normalizedNegTags = negTags.map(normalizeTag);
+            matches = matches.filter(m =>
+              !normalizedNegTags.some(tag => contentHasTag(m.content, tag))
+            );
+          }
+
+          // Apply limit
+          const limitedMatches = matches.slice(0, limit);
+
+          if (limitedMatches.length === 0) {
+            console.log(options.json ? '[]' : 'No blocks found matching criteria.');
+            return;
+          }
+
+          // Fetch full blocks with children
+          const blocks: RoamBlock[] = [];
+          for (const match of limitedMatches) {
+            let block = await blockOps.fetchBlockWithChildren(match.block_uid, depth);
+            if (block) {
+              // Resolve refs if requested (default: enabled for tag/text search)
+              const effectiveRefsDepth = refsDepth > 0 ? refsDepth : 1;
+              block = await resolveBlockRefsInTree(graph, block, effectiveRefsDepth);
+              blocks.push(block);
+            }
+          }
+
+          // Output
+          if (options.json) {
+            const data = options.flat
+              ? blocks.flatMap(b => flattenBlocks([b]))
+              : blocks;
+            console.log(JSON.stringify(data, null, 2));
+          } else {
+            const displayBlocks = options.flat
+              ? blocks.flatMap(b => flattenBlocks([b]))
+              : blocks;
+
+            // Show count header
+            const countMsg = matches.length > limit
+              ? `Found ${matches.length} blocks (showing first ${limit}):\n\n`
+              : `Found ${blocks.length} block(s):\n\n`;
+            console.log(countMsg + blocksToMarkdown(displayBlocks));
+          }
+          return;
+        }
+
         // Determine targets
         let targets: string[] = [];
         if (target && target !== '-') {
@@ -153,7 +321,7 @@ JSON output fields:
           // Read from stdin if no target or explicit '-'
           if (process.stdin.isTTY && target !== '-') {
              // If TTY and no target, show error
-             exitWithError('Target is required. Use: roam get <page-title>, roam get --todo, or pipe targets via stdin');
+             exitWithError('Target is required. Use: roam get <page-title>, roam get --todo, roam get --tag <tag>, roam get --text <text>, or pipe targets via stdin');
           }
           const input = await readStdin();
           if (input) {
@@ -195,7 +363,7 @@ JSON output fields:
 
              // Resolve block references if requested
              if (refsDepth > 0) {
-               block = await resolveBlockRefs(graph, block, refsDepth);
+               block = await resolveBlockRefsInTree(graph, block, refsDepth);
              }
 
              return formatBlockOutput(block, outputOptions);
@@ -224,7 +392,7 @@ JSON output fields:
 
              // Resolve block references if requested
              if (refsDepth > 0) {
-               blocks = await resolveBlocksRefs(graph, blocks, refsDepth);
+               blocks = await resolveBlocksRefsInTree(graph, blocks, refsDepth);
              }
 
              return formatPageOutput(resolvedTarget, blocks, outputOptions);

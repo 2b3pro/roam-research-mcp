@@ -103,6 +103,10 @@ export async function resolveBlockRefs(
   const allRefUids = new Set<string>();
 
   for (const block of blocksToScan) {
+    // Skip blocks without valid string content
+    if (typeof block.string !== 'string') {
+      continue;
+    }
     // Reset lastIndex for REF_PATTERN reuse if using exec, or use matchAll
     // matchAll is safer with global regex state
     const matches = block.string.matchAll(REF_PATTERN);

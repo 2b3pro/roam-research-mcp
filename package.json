@@ -1,6 +1,6 @@
 {
   "name": "roam-research-mcp",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "description": "MCP server and CLI for Roam Research",
   "private": false,
   "repository": {

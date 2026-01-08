@@ -1,5 +1,24 @@
 # Changelog
 
+### [2.6.0](https://github.com/2b3pro/roam-research-mcp/compare/v2.5.1...v2.6.0) (2026-01-08)
+
+### ADDED
+
+* **cli/get:** add `--tag` and `--text` options for criteria-based block retrieval with full hierarchy
+* **cli/get:** add `--any` flag for OR logic when using multiple tags (default is AND)
+* **cli/get:** add `--negtag` option to exclude blocks with specific tags
+* **cli/get:** add `--showall` flag to return all results without limit
+
+### FIXED
+
+* **block-retrieval:** fix Datalog query result handling (array of tuples)
+* **refs:** add defensive guard for blocks with non-string content
+
+### ENHANCED
+
+* **cli/get:** clarify output format differences in help text (markdown vs JSON)
+* **cli/search:** clarify output format differences in help text
+
 ### [2.5.1](https://github.com/2b3pro/roam-research-mcp/compare/v2.5.0...v2.5.1) (2026-01-07)
 
 ### FIXED

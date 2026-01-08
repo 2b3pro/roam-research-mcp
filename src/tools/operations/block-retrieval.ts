@@ -65,13 +65,13 @@ export class BlockRetrievalOperations {
                                       [?b :block/string ?string]
                                       [?b :block/order ?order]
                                       [(get-else $ ?b :block/heading 0) ?heading]]`;
-      const rootBlockResult = await q(this.graph, rootBlockQuery, [block_uid]) as [string, number, number | null] | null;
+      const rootBlockResults = await q(this.graph, rootBlockQuery, [block_uid]) as [string, number, number | null][];
 
-      if (!rootBlockResult) {
+      if (!rootBlockResults || rootBlockResults.length === 0) {
         return null;
       }
 
-      const [rootString, rootOrder, rootHeading] = rootBlockResult;
+      const [rootString, rootOrder, rootHeading] = rootBlockResults[0];
       const childrenMap = await fetchChildren([block_uid], 0);
 
       const rootBlock: RoamBlock = {

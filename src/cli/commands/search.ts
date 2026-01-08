@@ -87,7 +87,11 @@ Examples:
   # Chaining with jq
   roam search TODO --json | jq '.[].block_uid'
 
-JSON output fields: block_uid, content, page_title
+Output format:
+  Markdown: Flat results with UIDs and content (no hierarchy).
+  JSON:     [{ block_uid, content, page_title }]
+
+Note: For hierarchical output with children, use 'roam get --tag/--text' instead.
 `)
     .action(async (terms: string[], options: SearchOptions) => {
       try {
