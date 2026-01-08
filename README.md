@@ -40,6 +40,9 @@ roam search "important" --json | jq .
 # Fetch a page by title
 roam get "Roam Research"
 
+# Sort and group results
+roam get --tag Project --sort created --group-by tag
+
 # Find references (backlinks) to a page
 roam refs "Project Alpha"
 
