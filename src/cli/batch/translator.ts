@@ -369,7 +369,7 @@ function translateRemember(cmd: RememberCommand, context: ResolutionContext): Ba
     memoryText = `${params.text} ${tags}`;
   }
 
-  // Add MEMORIES_TAG if configured (we'll handle this in the CLI command)
+  // Add ROAM_MEMORIES_TAG if configured (we'll handle this in the CLI command)
   // For now, just create the block
 
   let parentUid: string;

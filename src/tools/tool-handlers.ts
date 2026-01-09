@@ -25,12 +25,12 @@ export class ToolHandlers {
   private tableOps: TableOperations;
   private cachedCheatsheet: string | null = null;
 
-  constructor(private graph: Graph) {
+  constructor(private graph: Graph, memoriesTag: string = 'Memories') {
     this.pageOps = new PageOperations(graph);
     this.blockOps = new BlockOperations(graph);
     this.blockRetrievalOps = new BlockRetrievalOperations(graph);
     this.searchOps = new SearchOperations(graph);
-    this.memoryOps = new MemoryOperations(graph);
+    this.memoryOps = new MemoryOperations(graph, memoriesTag);
     this.todoOps = new TodoOperations(graph);
     this.outlineOps = new OutlineOperations(graph);
     this.batchOps = new BatchOperations(graph);

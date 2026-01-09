@@ -9,9 +9,11 @@ import { pageUidCache } from '../../cache/page-uid-cache.js';
 
 export class MemoryOperations {
   private searchOps: SearchOperations;
+  private memoriesTag: string;
 
-  constructor(private graph: Graph) {
+  constructor(private graph: Graph, memoriesTag: string = 'Memories') {
     this.searchOps = new SearchOperations(graph);
+    this.memoriesTag = memoriesTag;
   }
 
   async remember(
@@ -110,17 +112,8 @@ export class MemoryOperations {
       targetParentUid = pageUid;
     }
 
-    // Get memories tag from environment
-    let memoriesTag: string | undefined;
-    if (include_memories_tag) {
-      memoriesTag = process.env.MEMORIES_TAG;
-      if (!memoriesTag) {
-        throw new McpError(
-          ErrorCode.InternalError,
-          'MEMORIES_TAG environment variable not set'
-        );
-      }
-    }
+    // Get memories tag (use instance property)
+    const memoriesTag: string | undefined = include_memories_tag ? this.memoriesTag : undefined;
 
     // Format categories as Roam tags if provided
     const categoryTags = categories?.map(cat => {
@@ -170,14 +163,8 @@ export class MemoryOperations {
   }
 
   async recall(sort_by: 'newest' | 'oldest' = 'newest', filter_tag?: string): Promise<{ success: boolean; memories: string[] }> {
-    // Get memories tag from environment
-    var memoriesTag = process.env.MEMORIES_TAG;
-    if (!memoriesTag) {
-      memoriesTag = "Memories"
-    }
-
     // Extract the tag text, removing any formatting
-    const tagText = memoriesTag
+    const tagText = this.memoriesTag
       .replace(/^#/, '')  // Remove leading #
       .replace(/^\[\[/, '').replace(/\]\]$/, '');  // Remove [[ and ]]
 

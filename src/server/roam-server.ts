@@ -63,7 +63,8 @@ export class RoamServer {
       return cached;
     }
 
-    const handlers = new ToolHandlers(graph);
+    const memoriesTag = this.registry.getMemoriesTag(graphKey);
+    const handlers = new ToolHandlers(graph, memoriesTag);
     this.toolHandlersCache.set(graphKey, handlers);
     return handlers;
   }

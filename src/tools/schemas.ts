@@ -223,7 +223,7 @@ export const toolSchemas = {
   },
   roam_search_for_tag: {
     name: 'roam_search_for_tag',
-    description: 'Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag. This tool supports pagination via the `limit` and `offset` parameters. Use this tool to search for memories tagged with the MEMORIES_TAG.',
+    description: 'Search for blocks containing a specific tag and optionally filter by blocks that also contain another tag nearby or exclude blocks with a specific tag. This tool supports pagination via the `limit` and `offset` parameters. Use this tool to search for memories tagged with the ROAM_MEMORIES_TAG.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({
@@ -436,7 +436,7 @@ export const toolSchemas = {
   },
   roam_remember: {
     name: 'roam_remember',
-    description: 'Add a memory or piece of information to remember, stored on the daily page with MEMORIES_TAG tag and optional categories (unless include_memories_tag is false). \nNOTE on Roam-flavored markdown: For direct linking: use [[link]] syntax. For aliased linking, use [alias]([[link]]) syntax. Do not concatenate words in links/hashtags - correct: #[[multiple words]] #self-esteem (for typically hyphenated words).\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
+    description: 'Add a memory or piece of information to remember, stored on the daily page with ROAM_MEMORIES_TAG tag and optional categories (unless include_memories_tag is false). \nNOTE on Roam-flavored markdown: For direct linking: use [[link]] syntax. For aliased linking, use [alias]([[link]]) syntax. Do not concatenate words in links/hashtags - correct: #[[multiple words]] #self-esteem (for typically hyphenated words).\nIMPORTANT: Before using this tool, ensure that you have loaded into context the \'Roam Markdown Cheatsheet\' resource.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({
@@ -461,7 +461,7 @@ export const toolSchemas = {
         },
         include_memories_tag: {
           type: 'boolean',
-          description: 'Whether to append the MEMORIES_TAG tag to the memory block.',
+          description: 'Whether to append the ROAM_MEMORIES_TAG tag to the memory block.',
           default: true
         }
       }),
@@ -470,7 +470,7 @@ export const toolSchemas = {
   },
   roam_recall: {
     name: 'roam_recall',
-    description: 'Retrieve all stored memories on page titled MEMORIES_TAG, or tagged block content with the same name. Returns a combined, deduplicated list of memories. Optionally filter blcoks with a specific tag and sort by creation date.',
+    description: 'Retrieve all stored memories on page titled ROAM_MEMORIES_TAG, or tagged block content with the same name. Returns a combined, deduplicated list of memories. Optionally filter blcoks with a specific tag and sort by creation date.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({

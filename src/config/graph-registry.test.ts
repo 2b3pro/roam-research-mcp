@@ -1,7 +1,61 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GraphRegistry } from './graph-registry.js';
 
 describe('GraphRegistry', () => {
+  describe('getMemoriesTag', () => {
+    const originalEnv = process.env.ROAM_MEMORIES_TAG;
+
+    afterEach(() => {
+      // Restore original env
+      if (originalEnv !== undefined) {
+        process.env.ROAM_MEMORIES_TAG = originalEnv;
+      } else {
+        delete process.env.ROAM_MEMORIES_TAG;
+      }
+    });
+
+    it('returns per-graph memoriesTag when configured', () => {
+      const registry = new GraphRegistry(
+        {
+          personal: { token: 't1', graph: 'g1', memoriesTag: '#PersonalMemories' },
+          system: { token: 't2', graph: 'g2', memoriesTag: '#[[PAI/Memories]]' },
+        },
+        'personal'
+      );
+      expect(registry.getMemoriesTag('personal')).toBe('#PersonalMemories');
+      expect(registry.getMemoriesTag('system')).toBe('#[[PAI/Memories]]');
+    });
+
+    it('falls back to ROAM_MEMORIES_TAG env var when not configured per-graph', () => {
+      process.env.ROAM_MEMORIES_TAG = '#EnvMemories';
+      const registry = new GraphRegistry(
+        { default: { token: 't', graph: 'g' } },
+        'default'
+      );
+      expect(registry.getMemoriesTag()).toBe('#EnvMemories');
+    });
+
+    it('falls back to "Memories" when neither per-graph nor env configured', () => {
+      delete process.env.ROAM_MEMORIES_TAG;
+      const registry = new GraphRegistry(
+        { default: { token: 't', graph: 'g' } },
+        'default'
+      );
+      expect(registry.getMemoriesTag()).toBe('Memories');
+    });
+
+    it('uses default graph when key not specified', () => {
+      const registry = new GraphRegistry(
+        {
+          personal: { token: 't1', graph: 'g1', memoriesTag: '#Personal' },
+          work: { token: 't2', graph: 'g2', memoriesTag: '#Work' },
+        },
+        'personal'
+      );
+      expect(registry.getMemoriesTag()).toBe('#Personal');
+    });
+  });
+
   describe('getGraphInfoMarkdown', () => {
     it('returns empty string for single-graph mode with default key', () => {
       const registry = new GraphRegistry(

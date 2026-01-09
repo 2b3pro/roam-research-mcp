@@ -1,5 +1,17 @@
 # Changelog
 
+### v2.8.0 (2026-01-08)
+- **New:** Per-graph `memoriesTag` configuration in `ROAM_GRAPHS` JSON
+- **Changed:** Renamed env var `MEMORIES_TAG` → `ROAM_MEMORIES_TAG` for consistency
+- **Changed:** Fallback priority: per-graph config > `ROAM_MEMORIES_TAG` env > `"Memories"`
+
+### v2.7.0 (2026-01-08)
+- **New:** `--sort <field>` option for `roam get` — sort by `created`, `modified`, or `page`
+- **New:** `--asc` / `--desc` flags to control sort direction
+- **New:** `--group-by <field>` option — group results by `page` or `tag` (subtag clustering)
+- **Changed:** Output format now uses `[uid] content` prefix instead of `content (uid)` suffix
+- **Changed:** JSON output for tag/text queries now includes `created`, `modified`, `tags` fields
+
 ### [2.6.0](https://github.com/2b3pro/roam-research-mcp/compare/v2.5.1...v2.6.0) (2026-01-08)
 
 ### ADDED

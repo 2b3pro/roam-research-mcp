@@ -101,7 +101,8 @@ ROAM_GRAPH_NAME=your-graph-name
 ```
 
 *Optional:*
-- `ROAM_GRAPHS` / `ROAM_DEFAULT_GRAPH`: For multi-graph setups (use `"protected": true` + `ROAM_SYSTEM_WRITE_KEY` for write protection).
+- `ROAM_GRAPHS` / `ROAM_DEFAULT_GRAPH`: For multi-graph setups. Each graph can have: `"protected": true` (requires `ROAM_SYSTEM_WRITE_KEY`), `"memoriesTag": "#[[Tag]]"` for per-graph memory storage.
+- `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
 - `HTTP_STREAM_PORT`: To enable HTTP Stream (defaults to 8088).
 
 ### Running the Server

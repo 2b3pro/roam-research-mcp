@@ -19,6 +19,8 @@ export interface GraphConfig {
   graph: string;
   /** If true, writes require ROAM_SYSTEM_WRITE_KEY confirmation */
   protected?: boolean;
+  /** Tag used for roam_remember/roam_recall. Defaults to ROAM_MEMORIES_TAG env var or "Memories" */
+  memoriesTag?: string;
 }
 
 /**
@@ -87,6 +89,18 @@ export class GraphRegistry {
    */
   getAvailableGraphs(): string[] {
     return Array.from(this.configs.keys());
+  }
+
+  /**
+   * Get the memories tag for a graph
+   * Priority: graph config > ROAM_MEMORIES_TAG env var > "Memories"
+   */
+  getMemoriesTag(key?: string): string {
+    const resolvedKey = key ?? this.defaultKey;
+    const config = this.configs.get(resolvedKey);
+
+    // Priority: per-graph config > env var > default
+    return config?.memoriesTag ?? process.env.ROAM_MEMORIES_TAG ?? 'Memories';
   }
 
   /**
