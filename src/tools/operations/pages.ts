@@ -153,19 +153,49 @@ export class PageOperations {
         pageUid = findResults[0][0];
         pageUidCache.set(pageTitle, pageUid);
       } else {
-        // Create new page
+        // Create new page by adding a page reference to today's daily page
+        // This leverages Roam's native behavior: [[Page Title]] creates the page instantly
         try {
-          await createRoamPage(this.graph, {
-            action: 'create-page',
-            page: {
-              title: pageTitle
-            }
+          // Get today's daily page title
+          const today = new Date();
+          const day = today.getDate();
+          const month = today.toLocaleString('en-US', { month: 'long' });
+          const year = today.getFullYear();
+          const dailyPageTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
+
+          // Get or create daily page UID
+          const dailyPageQuery = `[:find ?uid . :where [?e :node/title "${dailyPageTitle}"] [?e :block/uid ?uid]]`;
+          let dailyPageUid = await q(this.graph, dailyPageQuery, []) as unknown as string | null;
+
+          if (!dailyPageUid) {
+            // Create daily page first
+            await createRoamPage(this.graph, {
+              action: 'create-page',
+              page: { title: dailyPageTitle }
+            });
+            // Small delay for daily page creation
+            await new Promise(resolve => setTimeout(resolve, 200));
+            dailyPageUid = await q(this.graph, dailyPageQuery, []) as unknown as string | null;
+          }
+
+          if (!dailyPageUid) {
+            throw new Error(`Could not resolve daily page "${dailyPageTitle}"`);
+          }
+
+          // Create block with page reference - this instantly creates the target page
+          await batchActions(this.graph, {
+            action: 'batch-actions',
+            actions: [{
+              action: 'create-block',
+              location: { 'parent-uid': dailyPageUid, order: 'last' },
+              block: { string: `Created page: [[${pageTitle}]]` }
+            }]
           });
 
-          // Get the new page's UID
+          // Now query for the page UID - should exist immediately
           const results = await q(this.graph, findQuery, [pageTitle]) as FindResult[];
           if (!results || results.length === 0) {
-            throw new Error('Could not find created page');
+            throw new Error(`Could not find created page "${pageTitle}"`);
           }
           pageUid = results[0][0];
           // Cache the newly created page
@@ -397,12 +427,14 @@ export class PageOperations {
     return { success: true, uid: pageUid };
   }
 
-  async fetchPageByTitle(
-    title: string,
-    format: 'markdown' | 'raw' = 'raw'
-  ): Promise<string | RoamBlock[]> {
+  /**
+   * Get the UID for a page by its title.
+   * Tries different case variations (original, capitalized, lowercase).
+   * Returns null if not found.
+   */
+  async getPageUid(title: string): Promise<string | null> {
     if (!title) {
-      throw new McpError(ErrorCode.InvalidRequest, 'title is required');
+      return null;
     }
 
     // Try different case variations
@@ -413,30 +445,40 @@ export class PageOperations {
     ];
 
     // Check cache first for any variation
-    let uid: string | null = null;
     for (const variation of variations) {
       const cachedUid = pageUidCache.get(variation);
       if (cachedUid) {
-        uid = cachedUid;
-        break;
+        return cachedUid;
       }
     }
 
     // If not cached, query the database
-    if (!uid) {
-      const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
-      const searchQuery = `[:find ?uid .
-                          :where [?e :block/uid ?uid]
-                                 (or ${orClause})]`;
+    const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
+    const searchQuery = `[:find ?uid .
+                        :where [?e :block/uid ?uid]
+                               (or ${orClause})]`;
 
-      const result = await q(this.graph, searchQuery, []);
-      uid = (result === null || result === undefined) ? null : String(result);
+    const result = await q(this.graph, searchQuery, []);
+    const uid = (result === null || result === undefined) ? null : String(result);
 
-      // Cache the result for the original title
-      if (uid) {
-        pageUidCache.set(title, uid);
-      }
+    // Cache the result for the original title
+    if (uid) {
+      pageUidCache.set(title, uid);
     }
+
+    return uid;
+  }
+
+  async fetchPageByTitle(
+    title: string,
+    format: 'markdown' | 'raw' = 'raw'
+  ): Promise<string> {
+    if (!title) {
+      throw new McpError(ErrorCode.InvalidRequest, 'title is required');
+    }
+
+    // Use getPageUid which handles caching and case variations
+    const uid = await this.getPageUid(title);
 
     if (!uid) {
       throw new McpError(
@@ -468,7 +510,7 @@ export class PageOperations {
 
     if (!blocks || blocks.length === 0) {
       if (format === 'raw') {
-        return [];
+        return '[]';  // Return JSON string, not array (MCP text field requires string)
       }
       return `${title} (no content found)`;
     }
