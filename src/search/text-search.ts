@@ -70,12 +70,25 @@ export class TextSearchHandler extends BaseSearchHandler {
     const rawResults = await q(this.graph, queryStr, queryParams) as [string, string, string?, number?, number?][];
 
     // Query to get total count without limit
-    const countQueryStr = `[:find (count ?b)
+    const baseCountWhere = baseQueryWhereClauses.replace(/\[\?p :edit\/time \?page-edit-time\]/, '');
+    let countQueryStr: string;
+    let countQueryParams: (string | number)[] = [];
+
+    if (targetPageUid) {
+      countQueryStr = `[:find (count ?b)
+                            :in $ ?page-uid
+                            :where
+                            ${baseCountWhere}
+                            [?p :block/uid ?page-uid]]`;
+      countQueryParams = [targetPageUid];
+    } else {
+      countQueryStr = `[:find (count ?b)
                             :in $
                             :where
-                            ${baseQueryWhereClauses.replace(/\[\?p :edit\/time \?page-edit-time\]/, '')}]`; // Remove edit time for count query
+                            ${baseCountWhere}]`;
+    }
 
-    const totalCountResults = await q(this.graph, countQueryStr, queryParams) as number[][];
+    const totalCountResults = await q(this.graph, countQueryStr, countQueryParams) as number[][];
     const totalCount = totalCountResults[0] ? totalCountResults[0][0] : 0;
 
     // Resolve block references in content

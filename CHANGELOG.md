@@ -1,5 +1,8 @@
 # Changelog
 
+### v2.8.2 (2026-01-09)
+- **Fixed:** `roam_search_by_text` now works with `page_title_uid` parameter — count query was missing `:in $ ?page-uid` clause
+
 ### v2.8.0 (2026-01-08)
 - **New:** Per-graph `memoriesTag` configuration in `ROAM_GRAPHS` JSON
 - **Changed:** Renamed env var `MEMORIES_TAG` → `ROAM_MEMORIES_TAG` for consistency
