@@ -48,6 +48,12 @@ roam refs "Project Alpha"
 
 # Update a block (e.g., toggle TODO status)
 roam update ((block-uid)) --todo
+
+# Multi-graph: read from a specific graph
+roam get "Page Title" -g work
+
+# Multi-graph: write to a protected graph
+roam save "Note" -g work --write-key "$ROAM_SYSTEM_WRITE_KEY"
 ```
 
 **Available Commands:** `get`, `search`, `save`, `refs`, `update`, `batch`, `rename`, `status`.
@@ -65,6 +71,8 @@ npm install -g roam-research-mcp
 ## MCP Server Tools
 
 The MCP server exposes these tools to AI assistants (like Claude), enabling them to read, write, and organize your Roam graph intelligently.
+
+> **Multi-Graph Support:** All tools accept optional `graph` and `write_key` parameters. Use `graph` to target a specific graph from your `ROAM_GRAPHS` config, and `write_key` for write operations on protected graphs.
 
 | Tool Name | Description |
 | :--- | :--- |
@@ -93,15 +101,42 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 
 ### Environment Variables
 
-You need a Roam API token and your graph name. Create a `.env` file or set these in your environment:
+#### Single Graph Mode
+
+For a single Roam graph, set these in your environment or a `.env` file:
 
 ```bash
 ROAM_API_TOKEN=your-api-token
 ROAM_GRAPH_NAME=your-graph-name
 ```
 
+#### Multi-Graph Mode (v2.0+)
+
+Connect to multiple Roam graphs from a single server instance:
+
+```bash
+ROAM_GRAPHS='{
+  "personal": {"token": "token-1", "graph": "personal-db", "memoriesTag": "#[[Personal Memories]]"},
+  "work": {"token": "token-2", "graph": "work-db", "protected": true, "memoriesTag": "#[[Work Memories]]"},
+  "research": {"token": "token-3", "graph": "research-db"}
+}'
+ROAM_DEFAULT_GRAPH=personal
+ROAM_SYSTEM_WRITE_KEY=your-secret-key
+```
+
+**Graph Configuration Options:**
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `token` | Yes | Roam API token for this graph |
+| `graph` | Yes | Graph name/database identifier |
+| `protected` | No | If `true`, writes require `ROAM_SYSTEM_WRITE_KEY` confirmation |
+| `memoriesTag` | No | Tag for `roam_remember`/`roam_recall` (overrides global default) |
+
+**Write Protection:**
+Protected graphs require the `write_key` parameter matching `ROAM_SYSTEM_WRITE_KEY` for any write operation. This prevents accidental writes to sensitive graphs.
+
 *Optional:*
-- `ROAM_GRAPHS` / `ROAM_DEFAULT_GRAPH`: For multi-graph setups. Each graph can have: `"protected": true` (requires `ROAM_SYSTEM_WRITE_KEY`), `"memoriesTag": "#[[Tag]]"` for per-graph memory storage.
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
 - `HTTP_STREAM_PORT`: To enable HTTP Stream (defaults to 8088).
 
@@ -133,6 +168,7 @@ docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
 
 Add to your MCP settings file (e.g., `~/Library/Application Support/Claude/claude_desktop_config.json`):
 
+*Single Graph:*
 ```json
 {
   "mcpServers": {
@@ -142,6 +178,23 @@ Add to your MCP settings file (e.g., `~/Library/Application Support/Claude/claud
       "env": {
         "ROAM_API_TOKEN": "your-token",
         "ROAM_GRAPH_NAME": "your-graph"
+      }
+    }
+  }
+}
+```
+
+*Multi-Graph:*
+```json
+{
+  "mcpServers": {
+    "roam-research": {
+      "command": "npx",
+      "args": ["-y", "roam-research-mcp"],
+      "env": {
+        "ROAM_GRAPHS": "{\"personal\":{\"token\":\"token-1\",\"graph\":\"personal-db\",\"memoriesTag\":\"#[[Memories]]\"},\"work\":{\"token\":\"token-2\",\"graph\":\"work-db\",\"protected\":true\"}}",
+        "ROAM_DEFAULT_GRAPH": "personal",
+        "ROAM_SYSTEM_WRITE_KEY": "your-secret-key"
       }
     }
   }
