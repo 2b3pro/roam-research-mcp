@@ -54,6 +54,7 @@ interface GetOptions extends GraphOptions {
   asc?: boolean;
   desc?: boolean;
   groupBy?: string;
+  uid?: boolean;
 }
 
 /**
@@ -110,6 +111,7 @@ export function createGetCommand(): Command {
     .option('-d, --depth <n>', 'Child levels to fetch (default: 4)', '4')
     .option('-r, --refs [n]', 'Expand ((uid)) refs in output (default depth: 1, max: 4)')
     .option('-f, --flat', 'Flatten hierarchy to single-level list')
+    .option('-u, --uid', 'Return only the page UID (resolve title to UID)')
     .option('--todo', 'Fetch TODO items')
     .option('--done', 'Fetch DONE items')
     .option('-p, --page <ref>', 'Scope to page title or UID (for TODOs, tags, text)')
@@ -139,6 +141,10 @@ Examples:
   roam get "Project Notes"                    # Page by title
   roam get today                              # Today's daily page
   roam get yesterday                          # Yesterday's daily page
+
+  # Resolve page title to UID
+  roam get "Project Notes" --uid              # Returns just the page UID
+  roam get today -u                           # Today's daily page UID
 
   # Fetch blocks
   roam get abc123def                          # Block by UID
@@ -215,7 +221,37 @@ Note: For flat results with UIDs, use 'roam search' instead.
         if (options.debug) {
           printDebug('Target', target || 'stdin');
           printDebug('Graph', options.graph || 'default');
-          printDebug('Options', { depth, refs: refsDepth || 'off', ...outputOptions });
+          printDebug('Options', { depth, refs: refsDepth || 'off', uid: options.uid || false, ...outputOptions });
+        }
+
+        // Handle --uid flag: return just the page UID
+        if (options.uid) {
+          if (!target || target === '-') {
+            exitWithError('--uid requires a page title argument');
+          }
+
+          const resolvedTarget = resolveRelativeDate(target);
+          if (options.debug && resolvedTarget !== target) {
+            printDebug('Resolved date', `${target} → ${resolvedTarget}`);
+          }
+
+          // Check if target is already a block UID
+          const uidMatch = resolvedTarget.match(BLOCK_UID_PATTERN);
+          if (uidMatch) {
+            // Already a UID, just output it
+            console.log(uidMatch[1]);
+            return;
+          }
+
+          const pageOps = new PageOperations(graph);
+          const pageUid = await pageOps.getPageUid(resolvedTarget);
+
+          if (!pageUid) {
+            exitWithError(`Page "${resolvedTarget}" not found`);
+          }
+
+          console.log(pageUid);
+          return;
         }
 
         // Parse sort/group options

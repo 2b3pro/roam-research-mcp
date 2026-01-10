@@ -102,6 +102,24 @@ function parseMarkdownHeadingLevel(text: string): { heading_level: number; conte
 }
 
 function convertToRoamMarkdown(text: string): string {
+  // Protect inline code and code blocks from transformation
+  const codeBlocks: string[] = [];
+  // Use null bytes to create a unique placeholder that won't be transformed
+  const PLACEHOLDER_START = '\x00\x01CB';
+  const PLACEHOLDER_END = '\x02\x00';
+
+  // Extract code blocks (``` ... ```) first
+  text = text.replace(/```[\s\S]*?```/g, (match) => {
+    codeBlocks.push(match);
+    return `${PLACEHOLDER_START}${codeBlocks.length - 1}${PLACEHOLDER_END}`;
+  });
+
+  // Extract inline code (` ... `)
+  text = text.replace(/`[^`]+`/g, (match) => {
+    codeBlocks.push(match);
+    return `${PLACEHOLDER_START}${codeBlocks.length - 1}${PLACEHOLDER_END}`;
+  });
+
   // Handle double asterisks/underscores (bold)
   text = text.replace(/\*\*(.+?)\*\*/g, '**$1**');  // Preserve double asterisks
 
@@ -118,6 +136,11 @@ function convertToRoamMarkdown(text: string): string {
 
   // Convert tables
   text = convertAllTables(text);
+
+  // Restore protected code blocks
+  text = text.replace(new RegExp(`${PLACEHOLDER_START}(\\d+)${PLACEHOLDER_END}`, 'g'), (_, index) => {
+    return codeBlocks[parseInt(index, 10)];
+  });
 
   return text;
 }

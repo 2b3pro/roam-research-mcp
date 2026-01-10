@@ -1,6 +1,6 @@
-# Roam Research CLI v2.4.0
+# Roam Research CLI v2.8.0
 
-As of 2026-01-04
+As of 2026-01-09
 
 Command-line interface for interacting with Roam Research graphs.
 
@@ -48,11 +48,22 @@ Options:
   -d, --depth <n>        Child levels to fetch (default: 4)
   -r, --refs [n]         Expand ((uid)) refs in output (default depth: 1, max: 4)
   -f, --flat             Flatten hierarchy to single-level list
+  -u, --uid              Return only the page UID (resolve title to UID)
   --todo                 Fetch TODO items
   --done                 Fetch DONE items
-  -p, --page <ref>       Filter TODOs/DONEs by page title or UID
+  -p, --page <ref>       Scope to page title or UID (for TODOs, tags, text)
   -i, --include <terms>  Include items matching these terms (comma-separated)
   -e, --exclude <terms>  Exclude items matching these terms (comma-separated)
+  --tag <tag>            Get blocks with tag (repeatable, comma-separated)
+  --text <text>          Get blocks containing text
+  --any                  Use OR logic for multiple tags (default is AND)
+  --negtag <tag>         Exclude blocks with tag (repeatable, comma-separated)
+  -n, --limit <n>        Limit number of blocks fetched (default: 20 for tag/text)
+  --showall              Show all results (no limit)
+  --sort <field>         Sort results by: created, modified, page
+  --asc                  Sort ascending (default for page)
+  --desc                 Sort descending (default for dates)
+  --group-by <field>     Group results by: page, tag
   -g, --graph <name>     Target graph key (multi-graph mode)
   --debug                Show query metadata
 ```
@@ -65,6 +76,10 @@ roam get "Project Notes"                    # Page by title
 roam get today                              # Today's daily page
 roam get yesterday                          # Yesterday's daily page
 roam get tomorrow                           # Tomorrow's daily page
+
+# Resolve page title to UID
+roam get "Project Notes" --uid              # Returns just the page UID
+roam get today -u                           # Today's daily page UID
 
 # Fetch blocks
 roam get abc123def                          # Block by UID
@@ -88,6 +103,31 @@ roam get --done                             # All completed items
 roam get --todo -p "Work"                   # TODOs on "Work" page
 roam get --todo -i "urgent,blocker"         # TODOs containing these terms
 roam get --todo -e "someday,maybe"          # Exclude items with terms
+
+# Tag-based retrieval (returns blocks WITH children)
+roam get --tag TODO                         # Blocks tagged with #TODO
+roam get --tag Project,Active               # Blocks with BOTH tags (AND)
+roam get --tag Project --tag Active --any   # Blocks with EITHER tag (OR)
+roam get --tag Task --negtag Done           # Tasks excluding #Done
+roam get --tag Meeting -p "Work"            # Meetings on Work page
+roam get --tag TODO --showall               # All results (no limit)
+
+# Text-based retrieval
+roam get --text "urgent"                    # Blocks containing "urgent"
+roam get --text "meeting" --tag Project     # Combine text + tag filter
+roam get --text "TODO" -p today             # Text search on today's page
+
+# Sorting
+roam get --tag Convention --sort created    # Sort by creation date (newest first)
+roam get --todo --sort modified --asc       # Sort by edit date (oldest first)
+roam get --tag Project --sort page          # Sort alphabetically by page
+
+# Grouping
+roam get --tag Convention --group-by page   # Group by source page
+roam get --tag Convention --group-by tag    # Group by subtags (Convention/*)
+
+# Combined
+roam get --tag Convention --group-by tag --sort modified
 ```
 
 ---
@@ -451,11 +491,11 @@ roam status --json
 ### Example Output
 
 ```
-Roam Research MCP v2.4.0
+Roam Research MCP v2.8.0
 
 Graphs:
-  • personal (default)  ✓ connected
-  • work [protected]    ✓ connected
+  * personal (default)  connected
+  * work [protected]    connected
 
 Write-protected graphs require --write-key flag for modifications.
 ```
