@@ -112,7 +112,9 @@ function adjustLevelsForHeadingHierarchy(
 function isBlockUid(value: string): boolean {
   // Strip (( )) wrapper if present
   const cleaned = value.replace(/^\(\(|\)\)$/g, '');
-  return /^[a-zA-Z0-9_-]{9}$/.test(cleaned);
+  // Require at least one digit — real Roam UIDs are randomly generated and
+  // virtually always contain numbers, while page titles like "Learnings" don't.
+  return /^[a-zA-Z0-9_-]{9}$/.test(cleaned) && /\d/.test(cleaned);
 }
 
 /**

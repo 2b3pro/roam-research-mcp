@@ -1,5 +1,9 @@
 # Changelog
 
+### v2.15.1 (2026-02-10)
+- **Fix:** CLI `roam save -p` failed for page titles that are exactly 9 letters (e.g., "Learnings")
+  - `isBlockUid()` now requires at least one digit, preventing all-letter titles from being misidentified as Roam block UIDs
+
 ### v2.15.0 (2026-02-06)
 - **Feature:** Cheatsheet v2.2.0 — added Advanced Components section with hidden/undocumented Roam features
   - Dropdowns (`{{or:}}`), tooltips (`{{=:}}`), template buttons, daily templates
