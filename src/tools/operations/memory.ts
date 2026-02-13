@@ -2,6 +2,7 @@ import { Graph, q } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { generateBlockUid } from '../../markdown-utils.js';
 import { ANCESTOR_RULE } from '../../search/ancestor-rule.js';
+import { sanitizeTagName } from '../../utils/helpers.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { getOrCreateTodayPage } from '../helpers/page-resolution.js';
 import { executeBatch } from '../helpers/batch-utils.js';
@@ -69,9 +70,9 @@ export class MemoryOperations {
           : `#${this.memoriesTag}`)
       : undefined;
 
-    // Format categories as Roam tags if provided
-    const categoryTags = categories?.map(cat => {
-      // Handle multi-word categories
+    // Format categories as Roam tags if provided (strip any pre-existing # or [[ ]] wrappers)
+    const categoryTags = categories?.map(raw => {
+      const cat = sanitizeTagName(raw);
       return cat.includes(' ') ? `#[[${cat}]]` : `#${cat}`;
     }) ?? [];
 

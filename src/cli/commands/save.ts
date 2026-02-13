@@ -8,7 +8,7 @@ import { parseMarkdown, generateBlockUid, parseMarkdownHeadingLevel } from '../.
 import { printDebug, exitWithError } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 import { readStdin } from '../utils/input.js';
-import { formatRoamDate } from '../../utils/helpers.js';
+import { formatRoamDate, sanitizeTagName } from '../../utils/helpers.js';
 import { q, createPage as roamCreatePage } from '@roam-research/roam-api-sdk';
 
 interface MarkdownNode {
@@ -588,8 +588,9 @@ JSON format (--json):
           targetParentUid = pageUid;
         }
 
-        // Format categories as Roam tags if provided
-        const categoryTags = categories?.map(cat => {
+        // Format categories as Roam tags if provided (strip any pre-existing # or [[ ]] wrappers)
+        const categoryTags = categories?.map(raw => {
+          const cat = sanitizeTagName(raw);
           return cat.includes(' ') ? `#[[${cat}]]` : `#${cat}`;
         }).join(' ') || '';
 

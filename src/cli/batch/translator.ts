@@ -22,6 +22,7 @@ import {
   generatePlaceholder,
   getDailyPageTitle
 } from './resolver.js';
+import { sanitizeTagName } from '../../utils/helpers.js';
 
 /**
  * Translate a single command to batch actions
@@ -362,10 +363,13 @@ function translateOutline(cmd: OutlineCommand, context: ResolutionContext): Batc
 function translateRemember(cmd: RememberCommand, context: ResolutionContext): BatchAction[] {
   const { params } = cmd;
 
-  // Build memory text with categories
+  // Build memory text with categories (strip any pre-existing # or [[ ]] wrappers)
   let memoryText = params.text;
   if (params.categories && params.categories.length > 0) {
-    const tags = params.categories.map(cat => `#[[${cat}]]`).join(' ');
+    const tags = params.categories.map(raw => {
+      const cat = sanitizeTagName(raw);
+      return `#[[${cat}]]`;
+    }).join(' ');
     memoryText = `${params.text} ${tags}`;
   }
 

@@ -48,6 +48,18 @@ export function isRoamUid(str: string): boolean {
 }
 
 /**
+ * Sanitize a tag/category name by stripping Roam formatting artifacts.
+ * Handles: "#Tag" → "Tag", "#[[Tag]]" → "Tag", "[[Tag]]" → "Tag", "##Tag" → "Tag"
+ * Allows callers to safely prepend their own # or #[[...]] formatting.
+ */
+export function sanitizeTagName(tag: string): string {
+  let cleaned = tag.trim();
+  cleaned = cleaned.replace(/^#+/, '');
+  cleaned = cleaned.replace(/^\[\[/, '').replace(/\]\]$/, '');
+  return cleaned.trim();
+}
+
+/**
  * Resolve relative date keywords to Roam date format.
  * Returns the original string if not a recognized keyword.
  */
