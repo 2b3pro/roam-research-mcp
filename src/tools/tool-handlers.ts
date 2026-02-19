@@ -177,7 +177,7 @@ export class ToolHandlers {
 
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const cheatsheetPath = path.join(__dirname, '../../Roam_Markdown_Cheatsheet.md');
+    const cheatsheetPath = path.join(__dirname, '../Roam_Markdown_Cheatsheet.md');
 
     try {
       let cheatsheetContent = await fs.promises.readFile(cheatsheetPath, 'utf-8');
