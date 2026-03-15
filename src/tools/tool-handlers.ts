@@ -57,6 +57,10 @@ export class ToolHandlers {
     return this.fullPageViewOps.fetchPageFullView(title, children_depth);
   }
 
+  async getSubPages(prefix: string, filter_tag?: string, include_content?: boolean) {
+    return this.fullPageViewOps.fetchSubPages(prefix, filter_tag, include_content);
+  }
+
   // Block Operations
   async fetchBlock(block_uid: string, depth?: number, include_ancestors?: boolean) {
     return this.blockRetrievalOps.fetchBlock(block_uid, depth, include_ancestors);

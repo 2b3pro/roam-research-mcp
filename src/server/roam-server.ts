@@ -195,6 +195,18 @@ export class RoamServer {
             };
           }
 
+          case 'roam_get_subpages': {
+            const { prefix, filter_tag, include_content } = cleanedArgs as {
+              prefix: string;
+              filter_tag?: string;
+              include_content?: boolean;
+            };
+            const content = await toolHandlers.getSubPages(prefix, filter_tag, include_content);
+            return {
+              content: [{ type: 'text', text: content }],
+            };
+          }
+
           case 'roam_fetch_page_by_title': {
             const { title, format } = cleanedArgs as {
               title: string;

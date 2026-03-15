@@ -735,6 +735,29 @@ export const toolSchemas = {
       required: ['title']
     }
   },
+  roam_get_subpages: {
+    name: 'roam_get_subpages',
+    description: 'Fetch all sub-pages (namespace children) of a given page prefix. In Roam, pages titled "Prefix/Something" are sub-pages of "Prefix" and appear in the Hierarchy section of that page. Optionally filter to only sub-pages containing a specific tag (e.g. filter active projects with filter_tag="active"), and optionally include each sub-page\'s full block content.',
+    inputSchema: {
+      type: 'object',
+      properties: withMultiGraphParams({
+        prefix: {
+          type: 'string',
+          description: 'The namespace prefix to search under, e.g. "Project", "Zettel", "Framework". The trailing "/" is added automatically if omitted.'
+        },
+        filter_tag: {
+          type: 'string',
+          description: 'Optional. Only return sub-pages that contain at least one block referencing this tag. Matches both #tag and [[tag]] usage. Example: "active" to find active projects.'
+        },
+        include_content: {
+          type: 'boolean',
+          description: 'If true, include each sub-page\'s block content in the output. Defaults to false (list only).',
+          default: false
+        }
+      }),
+      required: ['prefix']
+    }
+  },
   roam_rename_page: {
     name: 'roam_rename_page',
     description: 'Rename a page by changing its title. Identifies the page by current title or UID.',

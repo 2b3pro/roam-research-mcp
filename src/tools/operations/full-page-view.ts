@@ -323,6 +323,64 @@ export class FullPageViewOperations {
     return result;
   }
 
+  // ─── Public: fetch sub-pages (namespace children) ────────────────────────────
+
+  async fetchSubPages(prefix: string, filter_tag?: string, include_content: boolean = false): Promise<string> {
+    const normalizedPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
+
+    let pages: [string, string][];
+
+    if (filter_tag) {
+      const query = `[:find ?title ?uid
+                     :in $ ?prefix ?tag
+                     :where [?p :node/title ?title]
+                            [?p :block/uid ?uid]
+                            [(clojure.string/starts-with? ?title ?prefix)]
+                            [?tag-page :node/title ?tag]
+                            [?b :block/refs ?tag-page]
+                            [?b :block/page ?p]]`;
+      pages = await q(this.graph, query, [normalizedPrefix, filter_tag]) as [string, string][];
+    } else {
+      const query = `[:find ?title ?uid
+                     :in $ ?prefix
+                     :where [?p :node/title ?title]
+                            [?p :block/uid ?uid]
+                            [(clojure.string/starts-with? ?title ?prefix)]]`;
+      pages = await q(this.graph, query, [normalizedPrefix]) as [string, string][];
+    }
+
+    if (!pages || pages.length === 0) {
+      return `No sub-pages found for "${normalizedPrefix}"${filter_tag ? ` with tag "[[${filter_tag}]]"` : ''}.`;
+    }
+
+    pages.sort((a, b) => a[0].localeCompare(b[0]));
+
+    const lines: string[] = [];
+    lines.push(`# Sub-pages of "${prefix}" (${pages.length})`);
+    if (filter_tag) lines.push(`*Filtered by tag: [[${filter_tag}]]*`);
+    lines.push('');
+
+    if (include_content) {
+      for (const [title, uid] of pages) {
+        lines.push(`## [[${title}]]`);
+        lines.push('');
+        const blocks = await this.fetchPageBlocks(uid);
+        if (blocks.length > 0) {
+          lines.push(this.renderBlocks(blocks, 0));
+        } else {
+          lines.push('*(no content)*');
+        }
+        lines.push('');
+      }
+    } else {
+      for (const [title] of pages) {
+        lines.push(`- [[${title}]]`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
   // ─── Private: render the full view as markdown ───────────────────────────────
 
   private renderMarkdown(
