@@ -714,6 +714,27 @@ export const toolSchemas = {
       required: ['title', 'markdown']
     }
   },
+  roam_fetch_page_full_view: {
+    name: 'roam_fetch_page_full_view',
+    description: 'Fetch a complete page view that mirrors what Roam Research shows in its UI: the page\'s own content, plus all linked references (backlinks) grouped by source page, each with their ancestor breadcrumb context and children expanded to the specified depth. Use this when you need the full picture of a page — both what is written on it and everything else in the graph that references it.',
+    inputSchema: {
+      type: 'object',
+      properties: withMultiGraphParams({
+        title: {
+          type: 'string',
+          description: 'Title of the page to fetch. For date pages use ordinal format e.g. "January 2nd, 2025".'
+        },
+        children_depth: {
+          type: 'integer',
+          description: 'How many levels deep to expand children of each referring block. Defaults to 4.',
+          minimum: 0,
+          maximum: 10,
+          default: 4
+        }
+      }),
+      required: ['title']
+    }
+  },
   roam_rename_page: {
     name: 'roam_rename_page',
     description: 'Rename a page by changing its title. Identifies the page by current title or UID.',

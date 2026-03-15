@@ -184,6 +184,17 @@ export class RoamServer {
             };
           }
 
+          case 'roam_fetch_page_full_view': {
+            const { title, children_depth } = cleanedArgs as {
+              title: string;
+              children_depth?: number;
+            };
+            const content = await toolHandlers.fetchPageFullView(title, children_depth);
+            return {
+              content: [{ type: 'text', text: content }],
+            };
+          }
+
           case 'roam_fetch_page_by_title': {
             const { title, format } = cleanedArgs as {
               title: string;
