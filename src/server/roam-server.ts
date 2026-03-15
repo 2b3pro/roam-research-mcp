@@ -237,7 +237,7 @@ export class RoamServer {
               page_title,
               parent_uid,
               parent_string,
-              order = 'first'
+              order = 'last'
             } = cleanedArgs as {
               content: string;
               page_uid?: string;
