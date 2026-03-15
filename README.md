@@ -156,6 +156,8 @@ Best for local integration (e.g., Claude Desktop, IDE extensions).
 npx roam-research-mcp
 ```
 
+Note: Stdio mode does not use any network ports.
+
 **2. HTTP Stream Mode**
 Best for remote access or web clients.
 
@@ -166,7 +168,7 @@ HTTP_STREAM_PORT=8088 npx roam-research-mcp
 **3. Docker**
 
 ```bash
-docker run -p 3000:3000 -p 8088:8088 --env-file .env roam-research-mcp
+docker run -p 8088:8088 --env-file .env roam-research-mcp
 ```
 
 ### Configuring in LLMs

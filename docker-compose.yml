@@ -6,8 +6,6 @@ services:
     build: .
     container_name: roam-mcp
     ports:
-      - "3010:3000"
-      - "8047:8087"
       - "8048:8088"
     env_file:
       - .env

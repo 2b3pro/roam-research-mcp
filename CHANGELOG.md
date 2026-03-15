@@ -1,5 +1,16 @@
 # Changelog
 
+### v2.15.3 (2026-03-15)
+- **Fix:** Cheatsheet path resolution for npx/installed environments (#14)
+  - `getCheatsheetPath()` now resolves relative to `__dirname` instead of `process.cwd()`, fixing "file not found" errors when the server is invoked via `npx` or from a global install
+
+### v2.15.2 (2026-02-28)
+- **Fix:** Sanitize category/tag inputs to prevent double-hash formatting
+  - Categories passed with `#` prefix or `[[]]` wrappers are now cleaned before the tool prepends its own Roam tag formatting, preventing `##Tag` or `#[[#Tag]]`
+  - Affects: `roam_remember`, CLI `roam save`, CLI `roam batch` translator
+  - Added `sanitizeTagInput()` utility in `src/utils/helpers.ts` with tests
+- **Fix:** Docker build — copy `.roam/` directory and cheatsheet into builder and release stages
+
 ### v2.15.1 (2026-02-10)
 - **Fix:** CLI `roam save -p` failed for page titles that are exactly 9 letters (e.g., "Learnings")
   - `isBlockUid()` now requires at least one digit, preventing all-letter titles from being misidentified as Roam block UIDs
