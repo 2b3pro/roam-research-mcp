@@ -595,9 +595,9 @@ export const toolSchemas = {
       required: ['actions']
     }
   },
-  roam_fetch_block_with_children: {
-    name: 'roam_fetch_block_with_children',
-    description: 'Fetch a block by its UID along with its hierarchical children down to a specified depth. Returns a nested object structure containing the block\'s UID, text, order, and an array of its children.',
+  roam_fetch_block: {
+    name: 'roam_fetch_block',
+    description: 'Fetch a block by its UID with optional children (down to a specified depth) and/or ancestors (up to page root). Returns the block\'s UID, text, order, children array, and optionally an ancestors array with the chain to the page root.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({
@@ -607,9 +607,14 @@ export const toolSchemas = {
         },
         depth: {
           type: 'integer',
-          description: 'Optional: The number of levels deep to fetch children. Defaults to 4.',
+          description: 'Optional: The number of levels deep to fetch children. Defaults to 4. Set to 0 to skip children.',
           minimum: 0,
           maximum: 10
+        },
+        include_ancestors: {
+          type: 'boolean',
+          description: 'Optional: Include the ancestor chain from the block up to the page root. Each ancestor includes uid, string/title, and depth. Defaults to false.',
+          default: false
         }
       }),
       required: ['block_uid']

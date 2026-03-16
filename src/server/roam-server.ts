@@ -395,12 +395,13 @@ export class RoamServer {
             };
           }
 
-          case 'roam_fetch_block_with_children': {
-            const { block_uid, depth } = cleanedArgs as {
+          case 'roam_fetch_block': {
+            const { block_uid, depth, include_ancestors } = cleanedArgs as {
               block_uid: string;
               depth?: number;
+              include_ancestors?: boolean;
             };
-            const result = await toolHandlers.fetchBlockWithChildren(block_uid, depth);
+            const result = await toolHandlers.fetchBlock(block_uid, depth, include_ancestors);
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };

@@ -43,6 +43,10 @@ roam search --namespace "Convention"    # Finds all Convention/* pages
 # Fetch a page by title
 roam get "Roam Research"
 
+# Fetch a block with ancestors (parent chain to page root)
+roam get abc123def -a              # Block + children + ancestors
+roam get abc123def -a -d 0         # Ancestors only, no children
+
 # Fetch page by UID or Roam URL
 roam get page abc123def
 roam get page "https://roamresearch.com/#/app/my-graph/page/abc123def"
@@ -84,7 +88,7 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 | Tool Name | Description |
 | :--- | :--- |
 | `roam_fetch_page_by_title` | Fetch page content by title. |
-| `roam_fetch_block_with_children` | Fetch a block and its nested children by UID (resolves refs). |
+| `roam_fetch_block` | Fetch a block by UID with optional children (depth) and/or ancestors (up to page root). |
 | `roam_create_page` | Create new pages, optionally with mixed text and table content. |
 | `roam_update_page_markdown` | Update a page using smart diff (preserves block UIDs). |
 | `roam_search_by_text` | Full-text search across the graph or within specific pages. Supports namespace prefix search for page titles. |

@@ -123,7 +123,7 @@ Examples:
           if (isStatusUpdate) {
             // Must fetch to apply status safely
             const blockRetrieval = new BlockRetrievalOperations(graph);
-            const block = await blockRetrieval.fetchBlockWithChildren(blockUid, 0);
+            const block = await blockRetrieval.fetchBlock(blockUid, 0);
             if (!block) {
                exitWithError(`Block ${blockUid} not found`);
             }

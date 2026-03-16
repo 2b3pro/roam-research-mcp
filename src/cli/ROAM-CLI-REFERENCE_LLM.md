@@ -1,7 +1,7 @@
 ---
-version: 2.9.2
+version: 2.16.0
 date: 2026-01-12
-last_modified: 2026-01-18
+last_modified: 2026-03-16
 ---
 
 # Roam CLI Reference (LLM-Optimized)
@@ -30,7 +30,7 @@ roam get --tag <tag> [--negtag <tag>] [-p <page>] [--any] [-n limit]
 roam get --text <text> [-p <page>]
 ```
 
-Options: `-j` json, `-d N` depth, `-r [N]` expand refs, `-f` flat, `--sort created|modified|page`, `--group-by page|tag`
+Options: `-j` json, `-d N` depth (0=no children), `-a` ancestors (chain to page root), `-r [N]` expand refs, `-f` flat, `--sort created|modified|page`, `--group-by page|tag`
 
 **Subcommand:** `roam get page <identifier>` - fetches page by UID, Roam URL, or title explicitly
 
@@ -143,6 +143,8 @@ roam status --json                              # for scripting
 | Blocks with tag | `roam get --tag "Tag"` |
 | Multiple tags (AND) | `roam get --tag Tag1 --tag Tag2` |
 | Multiple tags (OR) | `roam get --tag Tag1 --tag Tag2 --any` |
+| Block + ancestors | `roam get <uid> -a` |
+| Ancestors only | `roam get <uid> -a -d 0` |
 | Quick note | `roam save "Note"` |
 | Note to page | `roam save "Note" -p "Page"` |
 | Under heading | `roam save --parent "## Section" "Note"` |

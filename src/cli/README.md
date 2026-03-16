@@ -1,6 +1,7 @@
 ---
-version: 2.9.1
+version: 2.16.0
 date: 2026-01-12
+last_modified: 2026-03-16
 ---
 
 # Roam Research CLI
@@ -48,7 +49,9 @@ Arguments:
 
 Options:
   -j, --json             Output as JSON instead of markdown
-  -d, --depth <n>        Child levels to fetch (default: 4)
+  -s, --structure        Output flattened structure with UIDs and order
+  -d, --depth <n>        Child levels to fetch (default: 4, 0 = no children)
+  -a, --ancestors        Include ancestor chain up to page root
   -r, --refs [n]         Expand ((uid)) refs in output (default depth: 1, max: 4)
   -f, --flat             Flatten hierarchy to single-level list
   -u, --uid              Return only the page UID (resolve title to UID)
@@ -97,6 +100,9 @@ cat uids.txt | roam get --json              # Fetch multiple blocks (NDJSON outp
 roam get "Page" -j                          # JSON output
 roam get "Page" -f                          # Flat list (no hierarchy)
 roam get abc123def -d 2                     # Limit depth to 2 levels
+roam get abc123def -a                       # Include ancestors up to page root
+roam get abc123def -a -d 0                  # Ancestors only, no children
+roam get abc123def -a -d 0 -j              # Ancestors only, JSON output
 roam get "Page" -r                          # Expand block refs (depth 1)
 roam get "Page" -r 3                        # Expand refs up to 3 levels deep
 
@@ -494,7 +500,7 @@ roam status --json
 ### Example Output
 
 ```
-Roam Research MCP v2.8.0
+Roam Research MCP v2.16.0
 
 Graphs:
   * personal (default)  connected

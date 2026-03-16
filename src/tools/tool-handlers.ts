@@ -51,8 +51,8 @@ export class ToolHandlers {
   }
 
   // Block Operations
-  async fetchBlockWithChildren(block_uid: string, depth?: number) {
-    return this.blockRetrievalOps.fetchBlockWithChildren(block_uid, depth);
+  async fetchBlock(block_uid: string, depth?: number, include_ancestors?: boolean) {
+    return this.blockRetrievalOps.fetchBlock(block_uid, depth, include_ancestors);
   }
 
   async moveBlock(block_uid: string, parent_uid: string, order: number | 'first' | 'last' = 'last') {

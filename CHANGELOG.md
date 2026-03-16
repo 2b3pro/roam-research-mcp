@@ -1,5 +1,15 @@
 # Changelog
 
+### v2.16.0 (2026-03-16)
+- **Feature:** Renamed `roam_fetch_block_with_children` → `roam_fetch_block` with bidirectional traversal
+  - New `include_ancestors` parameter (default: false) returns the ancestor chain from the block up to the page root
+  - Each ancestor includes UID, content string (or title for page root), and depth
+  - Uses Datomic `:block/parents` pull pattern — single API call, no recursion
+  - Existing `depth` parameter (children) unchanged — fully backward compatible
+  - `depth: 0` + `include_ancestors: true` fetches ancestors only (lightweight alternative to fetching entire page)
+  - CLI: `roam get -a` / `--ancestors` flag for ancestor traversal from the command line
+  - Deprecated `fetchBlockWithChildren()` method kept as backward-compatible alias
+
 ### v2.15.3 (2026-03-15)
 - **Fix:** Cheatsheet path resolution for npx/installed environments (#14)
   - `getCheatsheetPath()` now resolves relative to `__dirname` instead of `process.cwd()`, fixing "file not found" errors when the server is invoked via `npx` or from a global install

@@ -39,7 +39,7 @@ describe('BlockRetrievalOperations', () => {
     // 4. resolveBlockRefs query for ref2 (depth 2)
     qMock.mockResolvedValueOnce([[ref2Uid, 'Ref 2 content', 0]]);
 
-    const result = await ops.fetchBlockWithChildren('root-uid');
+    const result = await ops.fetchBlock('root-uid');
 
     expect(result).toBeDefined();
     expect(result?.uid).toBe('root-uid');
@@ -78,7 +78,7 @@ describe('BlockRetrievalOperations', () => {
 
     // No more queries - Content A and B have no refs
 
-    const result = await ops.fetchBlockWithChildren('root-uid');
+    const result = await ops.fetchBlock('root-uid');
 
     expect(result?.refs).toHaveLength(2);
     const uids = result?.refs?.map(r => r.uid).sort();
@@ -103,7 +103,7 @@ describe('BlockRetrievalOperations', () => {
     // 4. resolveBlockRefs query for 'shared' - fetched once, attached to both
     qMock.mockResolvedValueOnce([[sharedUid, 'Shared Content', 0]]);
 
-    const result = await ops.fetchBlockWithChildren('root-uid');
+    const result = await ops.fetchBlock('root-uid');
 
     const child1 = result?.children.find(c => c.uid === 'child1uid');
     const child2 = result?.children.find(c => c.uid === 'child2uid');
@@ -113,5 +113,69 @@ describe('BlockRetrievalOperations', () => {
 
     expect(child2?.refs).toHaveLength(1);
     expect(child2?.refs![0].uid).toBe(sharedUid);
+  });
+
+  it('does not include ancestors when include_ancestors is false (default)', async () => {
+    qMock.mockResolvedValueOnce([['Block content', 0, 0]]);
+    qMock.mockResolvedValueOnce([]); // no children
+
+    const result = await ops.fetchBlock('test-uid');
+
+    expect(result).toBeDefined();
+    expect(result?.uid).toBe('test-uid');
+    expect(result?.ancestors).toBeUndefined();
+    expect(result?.page_title).toBeUndefined();
+  });
+
+  it('includes ancestors when include_ancestors is true', async () => {
+    // 1. Root block query
+    qMock.mockResolvedValueOnce([['Deep block content', 0, 0]]);
+    // 2. Children query (depth 0 = no children fetch attempt, but depth defaults to 4)
+    qMock.mockResolvedValueOnce([]);
+
+    // 3. Ancestor pull query
+    qMock.mockResolvedValueOnce([[{
+      ':block/uid': 'test-uid',
+      ':block/string': 'Deep block content',
+      ':block/parents': [
+        { ':block/uid': 'parent1', ':block/string': 'Parent block' },
+        { ':block/uid': 'page-uid', ':node/title': 'My Page' }
+      ]
+    }]]);
+
+    // 4. Order query (direct parent relationships)
+    qMock.mockResolvedValueOnce([
+      ['test-uid', 'parent1'],
+      ['parent1', 'page-uid']
+    ]);
+
+    const result = await ops.fetchBlock('test-uid', 4, true);
+
+    expect(result).toBeDefined();
+    expect(result?.ancestors).toBeDefined();
+    expect(result?.ancestors).toHaveLength(2);
+
+    // First ancestor should be direct parent
+    expect(result?.ancestors![0].uid).toBe('parent1');
+    expect(result?.ancestors![0].string).toBe('Parent block');
+
+    // Last ancestor should be the page root
+    const pageAncestor = result?.ancestors!.find(a => a.is_page);
+    expect(pageAncestor).toBeDefined();
+    expect(pageAncestor?.title).toBe('My Page');
+    expect(pageAncestor?.depth).toBe(0);
+
+    expect(result?.page_title).toBe('My Page');
+  });
+
+  it('fetchBlockWithChildren is backward compatible alias', async () => {
+    qMock.mockResolvedValueOnce([['Content', 0, 0]]);
+    qMock.mockResolvedValueOnce([]);
+
+    const result = await ops.fetchBlockWithChildren('test-uid');
+
+    expect(result).toBeDefined();
+    expect(result?.uid).toBe('test-uid');
+    expect(result?.string).toBe('Content');
   });
 });

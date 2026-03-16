@@ -56,6 +56,7 @@ interface GetOptions extends GraphOptions {
   groupBy?: string;
   uid?: boolean;
   structure?: boolean;
+  ancestors?: boolean;
 }
 
 /**
@@ -253,7 +254,8 @@ export function createGetCommand(): Command {
     .argument('[target]', 'Page title, block UID, or relative date. Reads from stdin if "-" or omitted.')
     .option('-j, --json', 'Output as JSON instead of markdown')
     .option('-s, --structure', 'Output flattened structure with UIDs and order (for surgical updates)')
-    .option('-d, --depth <n>', 'Child levels to fetch (default: 4)', '4')
+    .option('-d, --depth <n>', 'Child levels to fetch (default: 4, 0 = no children)', '4')
+    .option('-a, --ancestors', 'Include ancestor chain up to page root')
     .option('-r, --refs [n]', 'Expand ((uid)) refs in output (default depth: 1, max: 4)')
     .option('-f, --flat', 'Flatten hierarchy to single-level list')
     .option('-u, --uid', 'Return only the page UID (resolve title to UID)')
@@ -308,6 +310,8 @@ Examples:
   roam get "Page" -j                          # JSON output
   roam get "Page" -f                          # Flat list (no hierarchy)
   roam get abc123def -d 2                     # Limit depth to 2 levels
+  roam get abc123def -a                       # Include ancestors up to page root
+  roam get abc123def -a -d 0                  # Ancestors only, no children
   roam get "Page" -r                          # Expand block refs (depth 1)
   roam get "Page" -r 3                        # Expand refs up to 3 levels deep
 
@@ -357,6 +361,7 @@ Note: For flat results with UIDs, use 'roam search' instead.
         const graph = resolveGraph(options, false);
 
         const depth = parseInt(options.depth || '4', 10);
+        const ancestors = options.ancestors || false;
         // Parse refs: true/string means enabled, number sets max depth (default 1, max 4)
         const refsDepth = options.refs !== undefined
           ? Math.min(4, Math.max(1, parseInt(options.refs as string, 10) || 1))
@@ -574,7 +579,7 @@ Note: For flat results with UIDs, use 'roam search' instead.
           // Standard output: fetch full blocks with children
           const blocks: RoamBlock[] = [];
           for (const match of limitedMatches) {
-            let block = await blockOps.fetchBlockWithChildren(match.block_uid, depth);
+            let block = await blockOps.fetchBlock(match.block_uid, depth, ancestors);
             if (block) {
               // Resolve refs if requested (default: enabled for tag/text search)
               const effectiveRefsDepth = refsDepth > 0 ? refsDepth : 1;
@@ -641,7 +646,7 @@ Note: For flat results with UIDs, use 'roam search' instead.
              if (options.debug) printDebug('Fetching block', { uid: blockUid });
 
              const blockOps = new BlockRetrievalOperations(graph);
-             let block = await blockOps.fetchBlockWithChildren(blockUid, depth);
+             let block = await blockOps.fetchBlock(blockUid, depth, ancestors);
 
              if (!block) {
                // If fetching multiple, maybe warn instead of exit?

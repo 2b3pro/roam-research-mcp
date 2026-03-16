@@ -192,7 +192,7 @@ SEARCHING:
 ├─ Block refs → roam_search_block_refs
 ├─ Modified today → roam_find_pages_modified_today
 ├─ Page content → roam_fetch_page_by_title
-├─ Block + children → roam_fetch_block_with_children
+├─ Block (children/ancestors) → roam_fetch_block
 ├─ Memories → roam_recall
 └─ Complex → roam_datomic_query
 ```
