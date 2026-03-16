@@ -53,8 +53,8 @@ export class ToolHandlers {
     return this.pageOps.fetchPageByTitle(title, format);
   }
 
-  async fetchPageFullView(title: string, children_depth?: number) {
-    return this.fullPageViewOps.fetchPageFullView(title, children_depth);
+  async fetchPageFullView(title: string, children_depth?: number, max_references?: number) {
+    return this.fullPageViewOps.fetchPageFullView(title, children_depth, max_references);
   }
 
   async getSubPages(prefix: string, filter_tag?: string, include_content?: boolean) {

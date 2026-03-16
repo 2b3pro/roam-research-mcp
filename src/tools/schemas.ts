@@ -730,6 +730,12 @@ export const toolSchemas = {
           minimum: 0,
           maximum: 10,
           default: 4
+        },
+        max_references: {
+          type: 'integer',
+          description: 'Maximum number of linked references to return. Prevents timeouts on heavily-referenced pages (e.g. TODO, common tags). Defaults to 200.',
+          minimum: 1,
+          default: 200
         }
       }),
       required: ['title']

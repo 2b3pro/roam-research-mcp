@@ -25,7 +25,7 @@ interface LinkedReferenceGroup {
 export class FullPageViewOperations {
   constructor(private graph: Graph, private pageOps: PageOperations) {}
 
-  async fetchPageFullView(title: string, children_depth: number = 4): Promise<string> {
+  async fetchPageFullView(title: string, children_depth: number = 4, max_references: number = 200): Promise<string> {
     // 1. Get page UID
     const pageUid = await getPageUidHelper(this.graph, title);
     if (!pageUid) {
@@ -39,13 +39,15 @@ export class FullPageViewOperations {
     // 3. Fetch all referring blocks (backlinks)
     const refResults = await this.fetchReferringBlocks(title);
 
-    // Deduplicate by block_uid
+    // Deduplicate by block_uid, then cap at max_references
     const seenUids = new Set<string>();
-    const uniqueRefs = refResults.filter(r => {
+    const allUniqueRefs = refResults.filter(r => {
       if (seenUids.has(r.block_uid)) return false;
       seenUids.add(r.block_uid);
       return true;
     });
+    const truncated = allUniqueRefs.length > max_references;
+    const uniqueRefs = truncated ? allUniqueRefs.slice(0, max_references) : allUniqueRefs;
 
     const refBlockUids = uniqueRefs.map(r => r.block_uid);
 
@@ -124,7 +126,7 @@ export class FullPageViewOperations {
     const linkedReferenceGroups = Array.from(groupMap.values());
 
     // 7. Render as markdown
-    return this.renderMarkdown(title, pageBlocks, linkedReferenceGroups);
+    return this.renderMarkdown(title, pageBlocks, linkedReferenceGroups, truncated ? allUniqueRefs.length : undefined);
   }
 
   // ─── Private: fetch all blocks that reference this page ──────────────────────
@@ -266,7 +268,8 @@ export class FullPageViewOperations {
   private renderMarkdown(
     title: string,
     pageBlocks: RoamBlock[],
-    linkedRefs: LinkedReferenceGroup[]
+    linkedRefs: LinkedReferenceGroup[],
+    totalAvailable?: number
   ): string {
     const lines: string[] = [];
 
@@ -281,10 +284,13 @@ export class FullPageViewOperations {
 
     // Linked references section
     const totalRefs = linkedRefs.reduce((sum, g) => sum + g.references.length, 0);
+    const truncationNote = totalAvailable !== undefined
+      ? ` — *capped at ${totalRefs} of ${totalAvailable}; use max_references to increase*`
+      : '';
     lines.push('');
     lines.push('---');
     lines.push('');
-    lines.push(`## Linked References (${totalRefs} reference${totalRefs !== 1 ? 's' : ''} from ${linkedRefs.length} page${linkedRefs.length !== 1 ? 's' : ''})`);
+    lines.push(`## Linked References (${totalRefs} reference${totalRefs !== 1 ? 's' : ''} from ${linkedRefs.length} page${linkedRefs.length !== 1 ? 's' : ''}${truncationNote})`);
 
     if (totalRefs === 0) {
       lines.push('');

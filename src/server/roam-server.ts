@@ -185,11 +185,12 @@ export class RoamServer {
           }
 
           case 'roam_fetch_page_full_view': {
-            const { title, children_depth } = cleanedArgs as {
+            const { title, children_depth, max_references } = cleanedArgs as {
               title: string;
               children_depth?: number;
+              max_references?: number;
             };
-            const content = await toolHandlers.fetchPageFullView(title, children_depth);
+            const content = await toolHandlers.fetchPageFullView(title, children_depth, max_references);
             return {
               content: [{ type: 'text', text: content }],
             };
