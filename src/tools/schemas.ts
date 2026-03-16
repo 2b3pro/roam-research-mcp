@@ -213,9 +213,9 @@ export const toolSchemas = {
         },
         order: {
           type: 'string',
-          description: 'Optional: Where to add the content under the parent ("first" or "last"). Defaults to "last" to append content at the bottom.',
+          description: 'Optional: Where to add the content under the parent ("first" or "last"). Defaults to "first".',
           enum: ['first', 'last'],
-          default: 'last'
+          default: 'first'
         }
       }),
       required: ['content']
