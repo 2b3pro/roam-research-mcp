@@ -37,7 +37,7 @@ export class ToolHandlers {
     this.outlineOps = new OutlineOperations(graph);
     this.batchOps = new BatchOperations(graph);
     this.tableOps = new TableOperations(graph);
-    this.fullPageViewOps = new FullPageViewOperations(graph);
+    this.fullPageViewOps = new FullPageViewOperations(graph, this.pageOps);
   }
 
   // Page Operations

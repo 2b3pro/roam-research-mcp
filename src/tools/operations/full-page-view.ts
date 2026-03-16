@@ -1,9 +1,10 @@
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { ANCESTOR_RULE } from '../../search/ancestor-rule.js';
 import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
 import { resolveRefs } from '../helpers/refs.js';
+import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import type { RoamBlock } from '../types/index.js';
+import type { PageOperations } from './pages.js';
 
 interface Breadcrumb {
   uid: string;
@@ -22,7 +23,7 @@ interface LinkedReferenceGroup {
 }
 
 export class FullPageViewOperations {
-  constructor(private graph: Graph) {}
+  constructor(private graph: Graph, private pageOps: PageOperations) {}
 
   async fetchPageFullView(title: string, children_depth: number = 4): Promise<string> {
     // 1. Get page UID
@@ -31,8 +32,9 @@ export class FullPageViewOperations {
       throw new McpError(ErrorCode.InvalidRequest, `Page "${title}" not found`);
     }
 
-    // 2. Fetch page's own blocks
-    const pageBlocks = await this.fetchPageBlocks(pageUid);
+    // 2. Fetch page's own blocks (reuse PageOperations to avoid duplication)
+    const pageResult = await this.pageOps.fetchPageByUid(pageUid);
+    const pageBlocks = pageResult?.blocks ?? [];
 
     // 3. Fetch all referring blocks (backlinks)
     const refResults = await this.fetchReferringBlocks(title);
@@ -50,7 +52,7 @@ export class FullPageViewOperations {
     // 4. Fetch breadcrumbs (up) and children (down) in parallel
     const [breadcrumbsMap, childrenMap] = await Promise.all([
       this.fetchBreadcrumbs(refBlockUids),
-      this.fetchChildrenForBlocks(refBlockUids, children_depth)
+      fetchChildrenByDepth(this.graph, refBlockUids, children_depth)
     ]);
 
     // 5. Resolve ((uid)) refs in all text before rendering
@@ -123,67 +125,6 @@ export class FullPageViewOperations {
 
     // 7. Render as markdown
     return this.renderMarkdown(title, pageBlocks, linkedReferenceGroups);
-  }
-
-  // ─── Private: fetch page's own blocks ────────────────────────────────────────
-
-  private async fetchPageBlocks(pageUid: string): Promise<RoamBlock[]> {
-    const blocksQuery = `[:find ?block-uid ?block-str ?order ?parent-uid
-                        :in $ % ?page-uid
-                        :where [?page :block/uid ?page-uid]
-                               [?block :block/string ?block-str]
-                               [?block :block/uid ?block-uid]
-                               [?block :block/order ?order]
-                               (ancestor ?block ?page)
-                               [?parent :block/children ?block]
-                               [?parent :block/uid ?parent-uid]]`;
-    const blocks = await q(this.graph, blocksQuery, [ANCESTOR_RULE, pageUid]) as [string, string, number, string][];
-    if (!blocks || blocks.length === 0) return [];
-
-    const headingsQuery = `[:find ?block-uid ?heading
-                          :in $ % ?page-uid
-                          :where [?page :block/uid ?page-uid]
-                                 [?block :block/uid ?block-uid]
-                                 [?block :block/heading ?heading]
-                                 (ancestor ?block ?page)]`;
-    const headings = await q(this.graph, headingsQuery, [ANCESTOR_RULE, pageUid]) as [string, number][];
-    const headingMap = new Map<string, number>();
-    if (headings) {
-      for (const [uid, heading] of headings) headingMap.set(uid, heading);
-    }
-
-    const blockMap = new Map<string, RoamBlock>();
-    const rootBlocks: RoamBlock[] = [];
-
-    for (const [blockUid, blockStr, order, parentUid] of blocks) {
-      const block: RoamBlock = {
-        uid: blockUid,
-        string: blockStr,
-        order,
-        heading: headingMap.get(blockUid) || undefined,
-        children: []
-      };
-      blockMap.set(blockUid, block);
-      if (!parentUid || parentUid === pageUid) rootBlocks.push(block);
-    }
-
-    for (const [blockUid, , , parentUid] of blocks) {
-      if (parentUid && parentUid !== pageUid) {
-        const child = blockMap.get(blockUid);
-        const parent = blockMap.get(parentUid);
-        if (child && parent && !parent.children.includes(child)) {
-          parent.children.push(child);
-        }
-      }
-    }
-
-    const sortBlocks = (bs: RoamBlock[]) => {
-      bs.sort((a, b) => a.order - b.order);
-      bs.forEach(b => { if (b.children.length > 0) sortBlocks(b.children); });
-    };
-    sortBlocks(rootBlocks);
-
-    return rootBlocks;
   }
 
   // ─── Private: fetch all blocks that reference this page ──────────────────────
@@ -261,68 +202,6 @@ export class FullPageViewOperations {
     return result;
   }
 
-  // ─── Private: walk DOWN to fetch children, same pattern as block-retrieval ───
-
-  private async fetchChildrenForBlocks(
-    rootUids: string[],
-    maxDepth: number
-  ): Promise<Record<string, RoamBlock[]>> {
-    if (rootUids.length === 0) return {};
-
-    const childrenQuery = `[:find ?parentUid ?childUid ?childString ?childOrder ?childHeading
-                           :in $ [?parentUid ...]
-                           :where [?parent :block/uid ?parentUid]
-                                  [?parent :block/children ?child]
-                                  [?child :block/uid ?childUid]
-                                  [?child :block/string ?childString]
-                                  [?child :block/order ?childOrder]
-                                  [(get-else $ ?child :block/heading 0) ?childHeading]]`;
-
-    const fetchChildren = async (
-      parentUids: string[],
-      currentDepth: number
-    ): Promise<Record<string, RoamBlock[]>> => {
-      if (currentDepth >= maxDepth || parentUids.length === 0) return {};
-
-      const results = await q(this.graph, childrenQuery, [parentUids]) as [string, string, string, number, number][];
-      if (!results || results.length === 0) return {};
-
-      const childrenByParent: Record<string, RoamBlock[]> = {};
-      const allChildUids: string[] = [];
-
-      for (const [parentUid, childUid, childString, childOrder, childHeading] of results) {
-        if (!childrenByParent[parentUid]) childrenByParent[parentUid] = [];
-        childrenByParent[parentUid].push({
-          uid: childUid,
-          string: childString,
-          order: childOrder,
-          heading: childHeading || undefined,
-          children: []
-        });
-        allChildUids.push(childUid);
-      }
-
-      const grandChildren = await fetchChildren(allChildUids, currentDepth + 1);
-
-      for (const parentUid in childrenByParent) {
-        for (const child of childrenByParent[parentUid]) {
-          child.children = grandChildren[child.uid] || [];
-        }
-        childrenByParent[parentUid].sort((a, b) => a.order - b.order);
-      }
-
-      return childrenByParent;
-    };
-
-    const allChildren = await fetchChildren(rootUids, 0);
-
-    const result: Record<string, RoamBlock[]> = {};
-    for (const uid of rootUids) {
-      result[uid] = allChildren[uid] || [];
-    }
-    return result;
-  }
-
   // ─── Public: fetch sub-pages (namespace children) ────────────────────────────
 
   async fetchSubPages(prefix: string, filter_tag?: string, include_content: boolean = false): Promise<string> {
@@ -364,7 +243,8 @@ export class FullPageViewOperations {
       for (const [title, uid] of pages) {
         lines.push(`## [[${title}]]`);
         lines.push('');
-        const blocks = await this.fetchPageBlocks(uid);
+        const pageData = await this.pageOps.fetchPageByUid(uid);
+        const blocks = pageData?.blocks ?? [];
         if (blocks.length > 0) {
           lines.push(this.renderBlocks(blocks, 0));
         } else {
