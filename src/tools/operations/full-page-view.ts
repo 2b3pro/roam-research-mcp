@@ -5,8 +5,22 @@ import { resolveRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import type { RoamBlock } from '../types/index.js';
 import type { PageOperations } from './pages.js';
-import { renderMarkdown, renderBlocks, type Breadcrumb, type LinkedReferenceGroup } from './render-utils.js';
-import { reconstructBreadcrumbChains } from './breadcrumb-utils.js';
+
+interface Breadcrumb {
+  uid: string;
+  string: string;
+}
+
+interface ReferenceWithContext {
+  breadcrumbs: Breadcrumb[];
+  block: RoamBlock;
+}
+
+interface LinkedReferenceGroup {
+  source_page_title: string;
+  source_page_uid: string;
+  references: ReferenceWithContext[];
+}
 
 export class FullPageViewOperations {
   constructor(private graph: Graph, private pageOps: PageOperations) {}
@@ -112,7 +126,7 @@ export class FullPageViewOperations {
     const linkedReferenceGroups = Array.from(groupMap.values());
 
     // 7. Render as markdown
-    return renderMarkdown(title, pageBlocks, linkedReferenceGroups, truncated ? allUniqueRefs.length : undefined);
+    return this.renderMarkdown(title, pageBlocks, linkedReferenceGroups, truncated ? allUniqueRefs.length : undefined);
   }
 
   // ─── Private: fetch all blocks that reference this page ──────────────────────
@@ -173,7 +187,21 @@ export class FullPageViewOperations {
     }
 
     // Reconstruct root-first breadcrumb chains per referring block
-    return reconstructBreadcrumbChains(blockUids, childToParent);
+    const result: Record<string, Breadcrumb[]> = {};
+    for (const refUid of blockUids) {
+      const chain: Breadcrumb[] = [];
+      let current = refUid;
+      const seen = new Set<string>();
+      while (childToParent.has(current) && !seen.has(current)) {
+        seen.add(current);
+        const parent = childToParent.get(current)!;
+        chain.unshift({ uid: parent.uid, string: parent.string }); // prepend = root first
+        current = parent.uid;
+      }
+      result[refUid] = chain;
+    }
+
+    return result;
   }
 
   // ─── Public: fetch sub-pages (namespace children) ────────────────────────────
@@ -220,7 +248,7 @@ export class FullPageViewOperations {
         const pageData = await this.pageOps.fetchPageByUid(uid);
         const blocks = pageData?.blocks ?? [];
         if (blocks.length > 0) {
-          lines.push(renderBlocks(blocks, 0));
+          lines.push(this.renderBlocks(blocks, 0));
         } else {
           lines.push('*(no content)*');
         }
@@ -236,5 +264,87 @@ export class FullPageViewOperations {
   }
 
   // ─── Private: render the full view as markdown ───────────────────────────────
+  // NOTE: Unit tests for renderMarkdown, renderBlocks, and the breadcrumb chain
+  // reconstruction logic were considered but not added. Doing so would require
+  // extracting these private methods into exported module-level functions, which
+  // changes the class encapsulation. Left as a decision for the project owner.
 
+  private renderMarkdown(
+    title: string,
+    pageBlocks: RoamBlock[],
+    linkedRefs: LinkedReferenceGroup[],
+    totalAvailable?: number
+  ): string {
+    const lines: string[] = [];
+
+    // Page header and own content
+    lines.push(`# ${title}`);
+    lines.push('');
+    if (pageBlocks.length > 0) {
+      lines.push(this.renderBlocks(pageBlocks, 0));
+    } else {
+      lines.push('*(no content)*');
+    }
+
+    // Linked references section
+    const totalRefs = linkedRefs.reduce((sum, g) => sum + g.references.length, 0);
+    const truncationNote = totalAvailable !== undefined
+      ? ` — *capped at ${totalRefs} of ${totalAvailable}; use max_references to increase*`
+      : '';
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push(`## Linked References (${totalRefs} reference${totalRefs !== 1 ? 's' : ''} from ${linkedRefs.length} page${linkedRefs.length !== 1 ? 's' : ''}${truncationNote})`);
+
+    if (totalRefs === 0) {
+      lines.push('');
+      lines.push('*(no linked references)*');
+    } else {
+      for (const group of linkedRefs) {
+        lines.push('');
+        lines.push('---');
+        lines.push('');
+        lines.push(`### [[${group.source_page_title}]]`);
+        lines.push('');
+
+        for (const ref of group.references) {
+          // Breadcrumbs rendered as nested blockquotes (one > per level)
+          // This mirrors Roam's ancestor context display
+          for (let i = 0; i < ref.breadcrumbs.length; i++) {
+            const prefix = '> '.repeat(i + 1);
+            lines.push(`${prefix}${ref.breadcrumbs[i].string}`);
+          }
+
+          // The referring block itself, indented to sit visually under its breadcrumbs
+          const refIndent = '  '.repeat(ref.breadcrumbs.length);
+          lines.push(`${refIndent}- ${ref.block.string}`);
+
+          // Children of the referring block
+          if (ref.block.children.length > 0) {
+            lines.push(this.renderBlocks(ref.block.children, ref.breadcrumbs.length + 1));
+          }
+
+          lines.push('');
+        }
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  private renderBlocks(blocks: RoamBlock[], baseIndent: number): string {
+    const renderBlock = (block: RoamBlock, depth: number): string => {
+      const indent = '  '.repeat(depth);
+      let line: string;
+      if (block.heading && block.heading > 0) {
+        const hashes = '#'.repeat(block.heading);
+        line = `${indent}${hashes} ${block.string}`;
+      } else {
+        line = `${indent}- ${block.string}`;
+      }
+      const childLines = block.children.map(c => renderBlock(c, depth + 1)).join('\n');
+      return childLines ? `${line}\n${childLines}` : line;
+    };
+    return blocks.map(b => renderBlock(b, baseIndent)).join('\n');
+  }
 }
