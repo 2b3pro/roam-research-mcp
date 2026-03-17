@@ -1,7 +1,7 @@
 ---
-version: 2.16.0
+version: 2.17.0
 date: 2026-01-12
-last_modified: 2026-03-16
+last_modified: 2026-03-17
 ---
 
 # Roam CLI Reference (LLM-Optimized)
@@ -23,6 +23,8 @@ roam batch -g system --write-key "$ROAM_SYSTEM_WRITE_KEY" commands.json
 roam get <title|today|yesterday|tomorrow>       # page by title
 roam get <9-char-uid>                           # block by UID
 roam get page <uid|url|title>                   # explicit page (URL/UID/title)
+roam get full <title>                           # full view: content + linked refs
+roam get subpages <prefix>                      # list namespace sub-pages
 roam get --uid <title>                          # resolve title→UID only
 roam get --todo [-p <page>] [-i terms] [-e terms]
 roam get --done [-p <page>]
@@ -32,7 +34,10 @@ roam get --text <text> [-p <page>]
 
 Options: `-j` json, `-d N` depth (0=no children), `-a` ancestors (chain to page root), `-r [N]` expand refs, `-f` flat, `--sort created|modified|page`, `--group-by page|tag`
 
-**Subcommand:** `roam get page <identifier>` - fetches page by UID, Roam URL, or title explicitly
+**Subcommands:**
+- `roam get page <identifier>` - fetches page by UID, Roam URL, or title explicitly
+- `roam get full <title>` - full page view: content + all linked references with breadcrumb context. Options: `-d N` depth (default 4), `-n N` max refs (default 200)
+- `roam get subpages <prefix>` - list sub-pages under namespace prefix (e.g. "Project/"). Options: `--filter-tag <tag>`, `--content`
 
 ### `roam search` - Query
 
@@ -145,6 +150,8 @@ roam status --json                              # for scripting
 | Multiple tags (OR) | `roam get --tag Tag1 --tag Tag2 --any` |
 | Block + ancestors | `roam get <uid> -a` |
 | Ancestors only | `roam get <uid> -a -d 0` |
+| Full view + backlinks | `roam get full "Page"` |
+| List sub-pages | `roam get subpages "Prefix"` |
 | Quick note | `roam save "Note"` |
 | Note to page | `roam save "Note" -p "Page"` |
 | Under heading | `roam save --parent "## Section" "Note"` |

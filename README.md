@@ -88,9 +88,11 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 | Tool Name | Description |
 | :--- | :--- |
 | `roam_fetch_page_by_title` | Fetch page content by title. |
+| `roam_fetch_page_full_view` | Fetch a page's content plus all linked references with breadcrumb context and children. |
 | `roam_fetch_block` | Fetch a block by UID with optional children (depth) and/or ancestors (up to page root). |
 | `roam_create_page` | Create new pages, optionally with mixed text and table content. |
 | `roam_update_page_markdown` | Update a page using smart diff (preserves block UIDs). |
+| `roam_get_subpages` | List sub-pages under a namespace prefix (e.g. "Project/") with optional tag filter. |
 | `roam_search_by_text` | Full-text search across the graph or within specific pages. Supports namespace prefix search for page titles. |
 | `roam_search_block_refs` | Find blocks that reference a page, tag, or block UID. |
 | `roam_search_by_status` | Find TODO or DONE items. |

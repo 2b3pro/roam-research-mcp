@@ -1,10 +1,21 @@
 # Changelog
 
-### v2.16.1 (2026-03-17)
+### v2.17.0 (2026-03-17)
+- **Feature:** Add `roam_fetch_page_full_view` tool + CLI `roam get full` — full page view with content + linked references (#15)
+  - Page's own content (blocks + heading structure)
+  - All linked references grouped by source page with breadcrumb context
+  - Children of each referring block expanded to configurable depth (default 4)
+  - `max_references` safety valve (default 200) prevents timeouts on heavily-referenced pages
+  - CLI: `roam get full "Page Title" [-d depth] [-n max-refs]`
+- **Feature:** Add `roam_get_subpages` tool + CLI `roam get subpages` — namespace-based sub-page listing
+  - Lists pages under a prefix (e.g. "Project/", "Framework/")
+  - Optional `filter_tag` to filter sub-pages containing a specific tag
+  - Optional `include_content` to include full block content
+  - CLI: `roam get subpages "Prefix" [--filter-tag tag] [--content]`
+- **Refactor:** Extract `fetchChildrenByDepth` into shared helper (`src/tools/helpers/fetch-children.ts`)
+- **Fix:** `convertToRoamActions` now correctly passes through `'first'`/`'last'` order strings instead of replacing with index
 - **Fix:** CLI `roam save <file.md> -p <page>` ignored `-p` flag and created a page from the filename
-  - When a file was passed as input, the command unconditionally entered PAGE MODE even when `-p` specified a target page
-  - Now file inputs with `-p` correctly append content to the specified page instead of deriving a page title from the filename
-  - Affected: any pipeline using `roam save <file> -p <page>` (e.g., AIIntel nightly delivery)
+- **Fix:** Typo in `roam_add_content` schema description
 
 ### v2.16.0 (2026-03-16)
 - **Feature:** Renamed `roam_fetch_block_with_children` → `roam_fetch_block` with bidirectional traversal

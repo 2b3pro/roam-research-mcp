@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { PageOperations } from '../../tools/operations/pages.js';
 import { BlockRetrievalOperations } from '../../tools/operations/block-retrieval.js';
 import { SearchOperations } from '../../tools/operations/search/index.js';
+import { FullPageViewOperations } from '../../tools/operations/full-page-view.js';
 import {
   formatPageOutput,
   formatBlockOutput,
@@ -241,6 +242,86 @@ Examples:
         }
 
         console.log(formatPageOutput(displayTitle, blocks, outputOptions));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        exitWithError(message);
+      }
+    });
+}
+
+/**
+ * Create the 'full' subcommand for full page view (content + linked references)
+ */
+function createFullSubcommand(): Command {
+  return new Command('full')
+    .description('Fetch full page view: content + linked references with breadcrumb context')
+    .argument('<title>', 'Page title (for date pages use "January 2nd, 2025")')
+    .option('-d, --depth <n>', 'Child depth for referring blocks (default: 4)', '4')
+    .option('-n, --max-refs <n>', 'Max linked references (default: 200)', '200')
+    .option('-g, --graph <name>', 'Target graph key (multi-graph mode)')
+    .option('--debug', 'Show debug information')
+    .addHelpText('after', `
+Examples:
+  roam get full "Project Notes"              # Full view with backlinks
+  roam get full "TODO" -n 50                 # Cap references at 50
+  roam get full "Meeting Notes" -d 2         # Shallow children depth
+`)
+    .action(async (title: string, options: GraphOptions & { depth?: string; maxRefs?: string; debug?: boolean }) => {
+      try {
+        const resolvedTitle = resolveRelativeDate(title);
+        const depth = parseInt(options.depth || '4', 10);
+        const maxRefs = parseInt(options.maxRefs || '200', 10);
+
+        if (options.debug) {
+          printDebug('Title', resolvedTitle);
+          printDebug('Children depth', depth);
+          printDebug('Max references', maxRefs);
+          printDebug('Graph', options.graph || 'default');
+        }
+
+        const graph = resolveGraph(options, false);
+        const pageOps = new PageOperations(graph);
+        const fullViewOps = new FullPageViewOperations(graph, pageOps);
+        const result = await fullViewOps.fetchPageFullView(resolvedTitle, depth, maxRefs);
+        console.log(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        exitWithError(message);
+      }
+    });
+}
+
+/**
+ * Create the 'subpages' subcommand for namespace-based sub-page listing
+ */
+function createSubpagesSubcommand(): Command {
+  return new Command('subpages')
+    .description('List sub-pages under a namespace prefix (e.g. "Project/", "Framework/")')
+    .argument('<prefix>', 'Namespace prefix (trailing "/" added automatically)')
+    .option('--filter-tag <tag>', 'Only sub-pages containing this tag')
+    .option('--content', 'Include each sub-page\'s block content')
+    .option('-g, --graph <name>', 'Target graph key (multi-graph mode)')
+    .option('--debug', 'Show debug information')
+    .addHelpText('after', `
+Examples:
+  roam get subpages "Project"                # List all Project/* pages
+  roam get subpages "Framework" --content    # With block content
+  roam get subpages "Project" --filter-tag active  # Only active projects
+`)
+    .action(async (prefix: string, options: GraphOptions & { filterTag?: string; content?: boolean; debug?: boolean }) => {
+      try {
+        if (options.debug) {
+          printDebug('Prefix', prefix);
+          printDebug('Filter tag', options.filterTag || 'none');
+          printDebug('Include content', options.content || false);
+          printDebug('Graph', options.graph || 'default');
+        }
+
+        const graph = resolveGraph(options, false);
+        const pageOps = new PageOperations(graph);
+        const fullViewOps = new FullPageViewOperations(graph, pageOps);
+        const result = await fullViewOps.fetchSubPages(prefix, options.filterTag, options.content);
+        console.log(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         exitWithError(message);
@@ -708,6 +789,8 @@ Note: For flat results with UIDs, use 'roam search' instead.
 
   // Add subcommands
   cmd.addCommand(createPageSubcommand());
+  cmd.addCommand(createFullSubcommand());
+  cmd.addCommand(createSubpagesSubcommand());
 
   return cmd;
 }
