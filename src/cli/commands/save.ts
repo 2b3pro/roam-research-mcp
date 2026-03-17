@@ -236,6 +236,7 @@ interface SaveOptions extends GraphOptions {
   json?: boolean;            // Force JSON format interpretation
   flatten?: boolean;         // Disable heading hierarchy inference
   lines?: boolean;           // Treat each non-empty line as a separate block (skip markdown parsing)
+  order?: string;            // Insertion position: "first", "last", or integer (default: "last")
 }
 
 interface ContentBlock {
@@ -258,6 +259,7 @@ export function createSaveCommand(): Command {
     .option('--json', 'Force JSON array format: [{text, level, heading?}, ...]')
     .option('--flatten', 'Disable heading hierarchy inference (all blocks at root level)')
     .option('--lines', 'Treat each non-empty line as a separate block (bypass markdown parsing)')
+    .option('--order <position>', 'Insertion position for top-level blocks: "first", "last", or integer (default: "last")')
     .option('-g, --graph <name>', 'Target graph key (multi-graph mode)')
     .option('--write-key <key>', 'Write confirmation key (non-default graphs)')
     .option('--debug', 'Show debug information')
@@ -287,6 +289,10 @@ Examples:
   echo "Quick capture" | roam save -p "Inbox"     # Pipe to specific page
   pbpaste | roam save --lines --title "Clipboard" # Each line = separate block
   cat list.txt | roam save --lines -p "Notes"     # Lines to blocks on page
+
+  # Insertion order
+  roam save -p "Changelog" --order first "v2.18.0"   # Prepend to top
+  roam save -p "Log" --order 1 "After first block"    # Insert at position
 
   # Combine options
   roam save -p "Work" --parent "## Today" "Done with task" -c "wins"
@@ -434,12 +440,29 @@ JSON format (--json):
           }
         }
 
+        // Parse --order option
+        let orderValue: 'first' | 'last' | number = 'last';
+        if (options.order !== undefined) {
+          if (options.order === 'first') {
+            orderValue = 'first';
+          } else if (options.order === 'last') {
+            orderValue = 'last';
+          } else {
+            const parsed = parseInt(options.order, 10);
+            if (isNaN(parsed) || parsed < 0) {
+              exitWithError('--order must be "first", "last", or a non-negative integer');
+            }
+            orderValue = parsed;
+          }
+        }
+
         if (options.debug) {
           printDebug('Input', input || 'stdin');
           printDebug('Is file', isFile);
           printDebug('Is JSON', isJson);
           printDebug('Lines mode', options.lines || false);
           printDebug('Flatten mode', options.flatten || false);
+          printDebug('Order', orderValue);
           printDebug('Graph', options.graph || 'default');
           printDebug('Content blocks', contentBlocks.length);
           printDebug('Parent UID', parentUid || 'none');
@@ -520,8 +543,15 @@ JSON format (--json):
 
             // Determine parent for this block
             let blockParent: string;
+            let blockOrder: 'first' | 'last' | number;
             if (block.level === 1) {
               blockParent = parentUid;
+              // Apply --order to top-level blocks only
+              if (typeof orderValue === 'number') {
+                blockOrder = orderValue + i;
+              } else {
+                blockOrder = orderValue;
+              }
             } else {
               // Find the closest ancestor at level - 1
               let ancestorIndex = i - 1;
@@ -533,13 +563,14 @@ JSON format (--json):
               } else {
                 blockParent = parentUid;
               }
+              blockOrder = 'last';
             }
 
             actions.push({
               action: 'create-block',
               location: {
                 'parent-uid': blockParent,
-                order: 'last'
+                order: blockOrder
               },
               string: block.text,
               uid: `{{uid:${uidPlaceholder}}}`,
@@ -606,8 +637,15 @@ JSON format (--json):
 
           // Determine parent for this block
           let blockParent: string;
+          let blockOrder: 'first' | 'last' | number;
           if (block.level === 1) {
             blockParent = targetParentUid;
+            // Apply --order to top-level blocks only
+            if (typeof orderValue === 'number') {
+              blockOrder = orderValue + i;
+            } else {
+              blockOrder = orderValue;
+            }
           } else {
             // Find the closest ancestor at level - 1
             let ancestorIndex = i - 1;
@@ -619,6 +657,7 @@ JSON format (--json):
             } else {
               blockParent = targetParentUid;
             }
+            blockOrder = 'last';
           }
 
           // Append category tags to first block only
@@ -630,7 +669,7 @@ JSON format (--json):
             action: 'create-block',
             location: {
               'parent-uid': blockParent,
-              order: 'last'
+              order: blockOrder
             },
             string: blockText,
             uid: `{{uid:${uidPlaceholder}}}`,

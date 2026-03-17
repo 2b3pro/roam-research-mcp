@@ -146,8 +146,8 @@ export class ToolHandlers {
   }
 
   // Outline Operations
-  async createOutline(outline: Array<{ text: string | undefined; level: number }>, page_title_uid?: string, block_text_uid?: string) {
-    return this.outlineOps.createOutline(outline, page_title_uid, block_text_uid);
+  async createOutline(outline: Array<{ text: string | undefined; level: number }>, page_title_uid?: string, block_text_uid?: string, order?: 'first' | 'last' | number) {
+    return this.outlineOps.createOutline(outline, page_title_uid, block_text_uid, order);
   }
 
   async importMarkdown(

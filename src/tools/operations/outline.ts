@@ -227,7 +227,8 @@ export class OutlineOperations {
   async createOutline(
     outline: Array<OutlineItem>,
     page_title_uid?: string,
-    block_text_uid?: string
+    block_text_uid?: string,
+    order?: 'first' | 'last' | number
   ): Promise<{ success: boolean; page_uid: string; parent_uid: string; created_uids: NestedBlock[] }> {
     // Validate input
     if (!Array.isArray(outline) || outline.length === 0) {
@@ -355,7 +356,8 @@ export class OutlineOperations {
       });
 
       // Convert nodes to batch actions (flat list)
-      const actions = convertToRoamActions(nodes, targetParentUid, 'last');
+      const resolvedOrder: 'first' | 'last' | number = order !== undefined ? order : 'last';
+      const actions = convertToRoamActions(nodes, targetParentUid, resolvedOrder);
 
       if (actions.length === 0) {
         throw new McpError(

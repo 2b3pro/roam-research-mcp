@@ -269,15 +269,17 @@ export class RoamServer {
           }
 
           case 'roam_create_outline': {
-            const { outline, page_title_uid, block_text_uid } = cleanedArgs as {
+            const { outline, page_title_uid, block_text_uid, order } = cleanedArgs as {
               outline: Array<{ text: string | undefined; level: number }>;
               page_title_uid?: string;
               block_text_uid?: string;
+              order?: 'first' | 'last' | number;
             };
             const result = await toolHandlers.createOutline(
               outline,
               page_title_uid,
-              block_text_uid
+              block_text_uid,
+              order
             );
             return {
               content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],

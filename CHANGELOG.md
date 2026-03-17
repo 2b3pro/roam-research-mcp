@@ -1,5 +1,16 @@
 # Changelog
 
+### v2.18.0 (2026-03-17)
+- **Feature:** Add `--order` flag to `roam save` CLI — control insertion position of top-level blocks
+  - `--order first` prepends to top of page/parent
+  - `--order last` appends (default, backwards-compatible)
+  - `--order N` inserts at specific 0-indexed position
+  - Applies to all save modes: text, file, stdin, `--todo`, `--json`, `--lines`
+  - Children maintain relative order underneath their parent
+- **Feature:** Add `order` parameter to `roam_create_outline` MCP tool
+  - Accepts `"first"`, `"last"`, or integer for insertion position
+  - Controls position of first level-1 block relative to existing page children
+
 ### v2.17.0 (2026-03-17)
 - **Feature:** Add `roam_fetch_page_full_view` tool + CLI `roam get full` — full page view with content + linked references (#15)
   - Page's own content (blocks + heading structure)

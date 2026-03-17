@@ -180,6 +180,10 @@ export const toolSchemas = {
             },
             required: ['text', 'level']
           }
+        },
+        order: {
+          type: ['string', 'integer'],
+          description: 'Insertion position for the first level-1 block relative to existing page/block children. Accepts "first", "last", or a non-negative integer (0-indexed). Default: "last".'
         }
       }),
       required: ['outline']

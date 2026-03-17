@@ -34,6 +34,9 @@ cat meeting_notes.md | roam save --title "Meeting: Project Alpha"
 # Create a TODO item on today's daily page
 echo "Buy milk" | roam save --todo
 
+# Prepend to top of page (newest-first ordering)
+roam save -p "Changelog" --order first "v2.18.0 release"
+
 # Search your graph and pipe results to another tool
 roam search "important" --json | jq .
 
