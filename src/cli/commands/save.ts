@@ -467,7 +467,7 @@ JSON format (--json):
         const hasTitle = options.title;
         const wantsPage = hasTitle && !hasParent;
 
-        if (wantsPage || (isFile && !hasParent)) {
+        if (wantsPage || (isFile && !hasParent && !options.page)) {
           // PAGE MODE: create a page
           const pageTitle = options.title || (sourceFilename ? basename(sourceFilename, '.md').replace('.json', '') : undefined);
 

@@ -1,5 +1,11 @@
 # Changelog
 
+### v2.16.1 (2026-03-17)
+- **Fix:** CLI `roam save <file.md> -p <page>` ignored `-p` flag and created a page from the filename
+  - When a file was passed as input, the command unconditionally entered PAGE MODE even when `-p` specified a target page
+  - Now file inputs with `-p` correctly append content to the specified page instead of deriving a page title from the filename
+  - Affected: any pipeline using `roam save <file> -p <page>` (e.g., AIIntel nightly delivery)
+
 ### v2.16.0 (2026-03-16)
 - **Feature:** Renamed `roam_fetch_block_with_children` → `roam_fetch_block` with bidirectional traversal
   - New `include_ancestors` parameter (default: false) returns the ancestor chain from the block up to the page root
