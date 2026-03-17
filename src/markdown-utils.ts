@@ -481,7 +481,7 @@ function convertToRoamActions(
         action: 'create-block',
         location: {
           'parent-uid': parentUid,
-          order: typeof order === 'number' ? order + i : i
+          order: typeof order === 'number' ? order + i : order
         },
         block: {
           uid: block.uid,
@@ -540,7 +540,7 @@ function convertToRoamActionsStaged(
         action: 'create-block',
         location: {
           'parent-uid': parentUid,
-          order: typeof order === 'number' ? order + i : i
+          order: typeof order === 'number' ? order + i : order
         },
         block: {
           uid: block.uid,

@@ -213,7 +213,7 @@ export const toolSchemas = {
         },
         order: {
           type: 'string',
-          description: 'Optional: Where to add the content undeIs this tr the parent ("first" or "last")',
+          description: 'Optional: Where to add the content under the parent ("first" or "last"). Defaults to "first".',
           enum: ['first', 'last'],
           default: 'first'
         }
@@ -712,6 +712,56 @@ export const toolSchemas = {
         }
       }),
       required: ['title', 'markdown']
+    }
+  },
+  roam_fetch_page_full_view: {
+    name: 'roam_fetch_page_full_view',
+    description: 'Fetch a complete page view that mirrors what Roam Research shows in its UI: the page\'s own content, plus all linked references (backlinks) grouped by source page, each with their ancestor breadcrumb context and children expanded to the specified depth. Use this when you need the full picture of a page — both what is written on it and everything else in the graph that references it.',
+    inputSchema: {
+      type: 'object',
+      properties: withMultiGraphParams({
+        title: {
+          type: 'string',
+          description: 'Title of the page to fetch. For date pages use ordinal format e.g. "January 2nd, 2025".'
+        },
+        children_depth: {
+          type: 'integer',
+          description: 'How many levels deep to expand children of each referring block. Defaults to 4.',
+          minimum: 0,
+          maximum: 10,
+          default: 4
+        },
+        max_references: {
+          type: 'integer',
+          description: 'Maximum number of linked references to return. Prevents timeouts on heavily-referenced pages (e.g. TODO, common tags). Defaults to 200.',
+          minimum: 1,
+          default: 200
+        }
+      }),
+      required: ['title']
+    }
+  },
+  roam_get_subpages: {
+    name: 'roam_get_subpages',
+    description: 'Fetch all sub-pages (namespace children) of a given page prefix. Matches by page title prefix — pages titled "Prefix/Something" are sub-pages of "Prefix" and appear in the Hierarchy section of that page. This is namespace/title-prefix matching, distinct from roam_search_hierarchy which traverses block parent/child relationships. Optionally filter to only sub-pages containing a specific tag (e.g. filter active projects with filter_tag="active"), and optionally include each sub-page\'s full block content.',
+    inputSchema: {
+      type: 'object',
+      properties: withMultiGraphParams({
+        prefix: {
+          type: 'string',
+          description: 'The namespace prefix to search under, e.g. "Project", "Zettel", "Framework". The trailing "/" is added automatically if omitted.'
+        },
+        filter_tag: {
+          type: 'string',
+          description: 'Optional. Only return sub-pages that contain at least one block referencing this tag. Matches both #tag and [[tag]] usage. Example: "active" to find active projects.'
+        },
+        include_content: {
+          type: 'boolean',
+          description: 'If true, include each sub-page\'s block content in the output. Defaults to false (list only).',
+          default: false
+        }
+      }),
+      required: ['prefix']
     }
   },
   roam_rename_page: {

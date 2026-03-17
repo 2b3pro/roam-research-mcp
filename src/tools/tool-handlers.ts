@@ -12,6 +12,7 @@ import { OutlineOperations } from './operations/outline.js';
 import { BatchOperations } from './operations/batch.js';
 import { TableOperations, type TableInput } from './operations/table.js';
 import { DatomicSearchHandlerImpl } from './operations/search/handlers.js';
+import { FullPageViewOperations } from './operations/full-page-view.js';
 
 export class ToolHandlers {
   private pageOps: PageOperations;
@@ -23,6 +24,7 @@ export class ToolHandlers {
   private outlineOps: OutlineOperations;
   private batchOps: BatchOperations;
   private tableOps: TableOperations;
+  private fullPageViewOps: FullPageViewOperations;
   private cachedCheatsheet: string | null = null;
 
   constructor(private graph: Graph, memoriesTag: string | null = 'Memories') {
@@ -35,6 +37,7 @@ export class ToolHandlers {
     this.outlineOps = new OutlineOperations(graph);
     this.batchOps = new BatchOperations(graph);
     this.tableOps = new TableOperations(graph);
+    this.fullPageViewOps = new FullPageViewOperations(graph, this.pageOps);
   }
 
   // Page Operations
@@ -48,6 +51,14 @@ export class ToolHandlers {
 
   async fetchPageByTitle(title: string, format?: 'markdown' | 'raw' | 'structure') {
     return this.pageOps.fetchPageByTitle(title, format);
+  }
+
+  async fetchPageFullView(title: string, children_depth?: number, max_references?: number) {
+    return this.fullPageViewOps.fetchPageFullView(title, children_depth, max_references);
+  }
+
+  async getSubPages(prefix: string, filter_tag?: string, include_content?: boolean) {
+    return this.fullPageViewOps.fetchSubPages(prefix, filter_tag, include_content);
   }
 
   // Block Operations

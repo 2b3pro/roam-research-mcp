@@ -184,6 +184,30 @@ export class RoamServer {
             };
           }
 
+          case 'roam_fetch_page_full_view': {
+            const { title, children_depth, max_references } = cleanedArgs as {
+              title: string;
+              children_depth?: number;
+              max_references?: number;
+            };
+            const content = await toolHandlers.fetchPageFullView(title, children_depth, max_references);
+            return {
+              content: [{ type: 'text', text: content }],
+            };
+          }
+
+          case 'roam_get_subpages': {
+            const { prefix, filter_tag, include_content } = cleanedArgs as {
+              prefix: string;
+              filter_tag?: string;
+              include_content?: boolean;
+            };
+            const content = await toolHandlers.getSubPages(prefix, filter_tag, include_content);
+            return {
+              content: [{ type: 'text', text: content }],
+            };
+          }
+
           case 'roam_fetch_page_by_title': {
             const { title, format } = cleanedArgs as {
               title: string;
