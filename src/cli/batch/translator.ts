@@ -67,7 +67,9 @@ function getParentUid(
 ): string {
   // Direct parent UID or placeholder
   if (params.parent) {
-    return resolveParentRef(params.parent, context) || params.parent;
+    const resolved = resolveParentRef(params.parent, context);
+    if (resolved) return resolved;
+    throw new Error(`Parent "${params.parent}" could not be resolved to a UID. Page may not exist.`);
   }
 
   // Page UID

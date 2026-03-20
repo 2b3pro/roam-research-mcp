@@ -1,5 +1,11 @@
 # Changelog
 
+### v2.18.1 (2026-03-20)
+- **Fix:** `roam batch` with `parent: "Page Title"` now resolves page titles to UIDs instead of passing raw strings to the API
+  - Titles in the `parent` field are resolved just like the `page` field
+  - If the page doesn't exist, it is auto-created before batch execution
+  - `resolveParentRef()` no longer silently passes unresolvable strings as UIDs
+
 ### v2.18.0 (2026-03-17)
 - **Feature:** Add `--order` flag to `roam save` CLI — control insertion position of top-level blocks
   - `--order first` prepends to top of page/parent

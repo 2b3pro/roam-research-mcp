@@ -277,7 +277,7 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
 
         const graph = resolveGraph(options, true);
 
-        // Phase 1: Collect and resolve page titles
+        // Phase 1: Collect and resolve page titles (from 'page' AND 'parent' params)
         const context = createResolutionContext();
         const pageTitles = collectPageTitles(commands);
 
@@ -291,10 +291,24 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
             context.pageUids.set(title, uid);
           }
 
-          // Check for unresolved pages
+          // Auto-create unresolved pages (e.g., parent: "Page Title" for a page that doesn't exist yet)
           const unresolved = Array.from(pageTitles).filter(t => !context.pageUids.has(t));
           if (unresolved.length > 0) {
-            exitWithError(`Page(s) not found: ${unresolved.map(t => `"${t}"`).join(', ')}`);
+            if (options.debug) {
+              printDebug('Auto-creating pages', unresolved);
+            }
+            const pageOps = new PageOperations(graph);
+            for (const title of unresolved) {
+              const result = await pageOps.createPage(title);
+              if (result.success && result.uid) {
+                context.pageUids.set(title, result.uid);
+                if (options.debug) {
+                  printDebug(`Auto-created "${title}"`, result.uid);
+                }
+              } else {
+                exitWithError(`Failed to create page "${title}"`);
+              }
+            }
           }
 
           if (options.debug) {

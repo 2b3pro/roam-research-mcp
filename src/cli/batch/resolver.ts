@@ -57,6 +57,19 @@ export async function resolveDailyPageUid(graph: Graph): Promise<string | null> 
 }
 
 /**
+ * Check if a string looks like a valid Roam UID (not a page title)
+ */
+export function isUidFormat(ref: string): boolean {
+  // 9 alphanumeric characters (standard block UID)
+  if (/^[a-zA-Z0-9_-]{9}$/.test(ref)) return true;
+  // MM-DD-YYYY daily page UID
+  if (/^\d{2}-\d{2}-\d{4}$/.test(ref)) return true;
+  // Placeholder {{name}}
+  if (/^\{\{[^}]+\}\}$/.test(ref)) return true;
+  return false;
+}
+
+/**
  * Collect all unique page titles that need resolution from commands
  */
 export function collectPageTitles(commands: BatchCommand[]): Set<string> {
@@ -68,6 +81,14 @@ export function collectPageTitles(commands: BatchCommand[]): Set<string> {
     // Commands that can have 'page' param
     if ('page' in params && typeof params.page === 'string') {
       titles.add(params.page);
+    }
+
+    // Commands that can have 'parent' param — if it looks like a page title, resolve it
+    if ('parent' in params && typeof params.parent === 'string') {
+      const parent = params.parent;
+      if (!isUidFormat(parent)) {
+        titles.add(parent);
+      }
     }
 
     // Remember command can have heading that needs parent page resolution
@@ -160,8 +181,14 @@ export function resolveParentRef(
     return context.pageUids.get(ref)!;
   }
 
-  // Assume it's a direct UID
-  return ref;
+  // If it looks like a UID, return as-is
+  if (isUidFormat(ref)) {
+    return ref;
+  }
+
+  // Not a UID and not resolved — this is a page title that wasn't collected/resolved
+  // Return null so callers can handle it (should not happen if collectPageTitles is correct)
+  return null;
 }
 
 /**
