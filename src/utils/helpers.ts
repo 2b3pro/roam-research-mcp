@@ -59,9 +59,148 @@ export function sanitizeTagName(tag: string): string {
   return cleaned.trim();
 }
 
+const MONTHS_LONG = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const MONTHS_SHORT: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+};
+
 /**
- * Resolve relative date keywords to Roam date format.
- * Returns the original string if not a recognized keyword.
+ * Attempt to parse a string as a date and return Roam format ("March 21st, 2026").
+ * Returns null if the string doesn't look like a date.
+ *
+ * Handles:
+ *   - ISO:           2026-03-21
+ *   - US slash/dash:  03/21/2026, 3/21/2026, 03-21-2026
+ *   - Named:          March 21, 2026 / Mar 21, 2026 / March 21 2026
+ *   - Named w/ ord:   March 21st, 2026 (already correct — returned as-is)
+ *   - No year:        March 21 / Mar 21 (assumes current year)
+ *   - EU day-first:   21 March 2026 / 21 Mar 2026 / 21-Mar-2026 / 21 March
+ *   - Roam UID style: MM-DD-YYYY (daily page UIDs, also caught by US dash)
+ */
+export function normalizeToRoamDate(input: string): string | null {
+  const s = input.trim();
+  if (!s) return null;
+
+  let month: number | undefined;
+  let day: number | undefined;
+  let year: number | undefined;
+
+  // Already in Roam format? (e.g., "March 21st, 2026")
+  const roamFmt = /^([A-Z][a-z]+)\s+(\d{1,2})(st|nd|rd|th),\s*(\d{4})$/;
+  const roamMatch = s.match(roamFmt);
+  if (roamMatch) {
+    const mi = MONTHS_LONG.indexOf(roamMatch[1]);
+    if (mi !== -1) return s; // already correct
+  }
+
+  // ISO: 2026-03-21
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+  const isoMatch = s.match(iso);
+  if (isoMatch) {
+    year = parseInt(isoMatch[1]);
+    month = parseInt(isoMatch[2]) - 1;
+    day = parseInt(isoMatch[3]);
+  }
+
+  // Numeric slash or dash: 03/21/2026, 14/03/2025, 03-21-2026
+  // If first number > 12, it can't be a month → unambiguously EU (DD/MM/YYYY)
+  // Otherwise assume US (MM/DD/YYYY)
+  if (month === undefined) {
+    const numeric = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/;
+    const numMatch = s.match(numeric);
+    if (numMatch) {
+      const a = parseInt(numMatch[1]);
+      const b = parseInt(numMatch[2]);
+      year = parseInt(numMatch[3]);
+      if (a > 12 && b <= 12) {
+        // Unambiguously EU: DD/MM/YYYY (first number can't be a month)
+        day = a;
+        month = b - 1;
+      } else {
+        // US default: MM/DD/YYYY
+        month = a - 1;
+        day = b;
+      }
+    }
+  }
+
+  // Named month with day and year: "March 21, 2026" / "Mar 21 2026"
+  if (month === undefined) {
+    const named = /^([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})$/;
+    const namedMatch = s.match(named);
+    if (namedMatch) {
+      const mi = MONTHS_SHORT[namedMatch[1].toLowerCase().slice(0, 3)];
+      if (mi !== undefined) {
+        month = mi;
+        day = parseInt(namedMatch[2]);
+        year = parseInt(namedMatch[3]);
+      }
+    }
+  }
+
+  // EU day-first with named month and year: "21 March 2026" / "21 Mar 2026" / "21-Mar-2026"
+  if (month === undefined) {
+    const eu = /^(\d{1,2})[\s-]([A-Za-z]+)[\s-](\d{4})$/;
+    const euMatch = s.match(eu);
+    if (euMatch) {
+      const mi = MONTHS_SHORT[euMatch[2].toLowerCase().slice(0, 3)];
+      if (mi !== undefined) {
+        day = parseInt(euMatch[1]);
+        month = mi;
+        year = parseInt(euMatch[3]);
+      }
+    }
+  }
+
+  // EU day-first with named month, no year: "21 March" / "21 Mar"
+  if (month === undefined) {
+    const euNoYear = /^(\d{1,2})[\s-]([A-Za-z]+)$/;
+    const euNoYearMatch = s.match(euNoYear);
+    if (euNoYearMatch) {
+      const mi = MONTHS_SHORT[euNoYearMatch[2].toLowerCase().slice(0, 3)];
+      if (mi !== undefined) {
+        day = parseInt(euNoYearMatch[1]);
+        month = mi;
+        year = new Date().getFullYear();
+      }
+    }
+  }
+
+  // Named month with day, no year: "March 21" / "Mar 21"
+  if (month === undefined) {
+    const noYear = /^([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?$/;
+    const noYearMatch = s.match(noYear);
+    if (noYearMatch) {
+      const mi = MONTHS_SHORT[noYearMatch[1].toLowerCase().slice(0, 3)];
+      if (mi !== undefined) {
+        month = mi;
+        day = parseInt(noYearMatch[2]);
+        year = new Date().getFullYear();
+      }
+    }
+  }
+
+  // Validate parsed values
+  if (month === undefined || day === undefined || year === undefined) return null;
+  if (month < 0 || month > 11) return null;
+  if (day < 1 || day > 31) return null;
+  if (year < 1900 || year > 2100) return null;
+
+  // Extra validation: ensure the date is real (e.g., Feb 30 is invalid)
+  const dateObj = new Date(year, month, day);
+  if (dateObj.getMonth() !== month || dateObj.getDate() !== day) return null;
+
+  return `${MONTHS_LONG[month]} ${day}${getOrdinalSuffix(day)}, ${year}`;
+}
+
+/**
+ * Resolve relative date keywords and common date formats to Roam date format.
+ * Returns the original string if not a recognized date pattern.
  */
 export function resolveRelativeDate(input: string): string {
   const lower = input.toLowerCase().trim();
@@ -79,6 +218,6 @@ export function resolveRelativeDate(input: string): string {
       tomorrow.setDate(today.getDate() + 1);
       return formatRoamDate(tomorrow);
     default:
-      return input;
+      return normalizeToRoamDate(input) ?? input;
   }
 }

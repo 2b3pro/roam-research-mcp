@@ -1,5 +1,14 @@
 # Changelog
 
+### v2.18.2 (2026-03-21)
+- **Feature:** Automatic date normalization across all tools and CLI commands
+  - Date-like inputs are automatically converted to Roam's daily page format (`March 21st, 2026`)
+  - Supports: ISO (`2026-03-21`), US (`03/21/2026`), named (`March 21, 2026` / `Mar 21`), EU day-first named (`21 March 2026` / `21-Mar-2026`), and EU numeric when unambiguous (`14/03/2025` where first > 12 must be day)
+  - Works in `roam get`, `roam_fetch_page_by_title`, all search tools (`page_title_uid` param), and page resolution helpers
+  - `resolveRelativeDate()` now normalizes date formats as fallback (in addition to `today`/`yesterday`/`tomorrow`)
+  - New `normalizeToRoamDate()` utility exported from `helpers.ts` — validates dates, rejects impossible dates (Feb 30, etc.)
+  - No-year inputs (`March 21`, `Mar 21`) assume current year
+
 ### v2.18.1 (2026-03-20)
 - **Fix:** `roam batch` with `parent: "Page Title"` now resolves page titles to UIDs instead of passing raw strings to the API
   - Titles in the `parent` field are resolved just like the `page` field

@@ -46,6 +46,12 @@ roam search --namespace "Convention"    # Finds all Convention/* pages
 # Fetch a page by title
 roam get "Roam Research"
 
+# Fetch daily pages using any date format (auto-normalized)
+roam get today                          # Today's daily page
+roam get 2026-03-21                     # ISO date → "March 21st, 2026"
+roam get "03/21/2026"                   # US date → "March 21st, 2026"
+roam get "March 21"                     # Named (assumes current year)
+
 # Fetch a block with ancestors (parent chain to page root)
 roam get abc123def -a              # Block + children + ancestors
 roam get abc123def -a -d 0         # Ancestors only, no children

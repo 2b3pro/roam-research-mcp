@@ -3,7 +3,7 @@
  */
 import { Graph, q, createPage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { formatRoamDate } from '../../utils/helpers.js';
+import { formatRoamDate, normalizeToRoamDate } from '../../utils/helpers.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { capitalizeWords } from './text.js';
 
@@ -17,8 +17,12 @@ export async function getPageUid(graph: Graph, title: string): Promise<string | 
     return null;
   }
 
+  // If the title looks like a date, normalize to Roam format
+  const roamDate = normalizeToRoamDate(title);
+
   const variations = [
     title,
+    ...(roamDate && roamDate !== title ? [roamDate] : []),
     capitalizeWords(title),
     title.toLowerCase()
   ];
@@ -107,8 +111,12 @@ export async function findOrCreatePage(
 ): Promise<string> {
   const { maxRetries = 3, delayMs = 500 } = options;
 
+  // If the input looks like a date, normalize to Roam format
+  const roamDate = normalizeToRoamDate(titleOrUid);
+
   const variations = [
     titleOrUid,
+    ...(roamDate && roamDate !== titleOrUid ? [roamDate] : []),
     capitalizeWords(titleOrUid),
     titleOrUid.toLowerCase()
   ];

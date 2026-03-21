@@ -2,24 +2,35 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { q } from '@roam-research/roam-api-sdk';
 import type { Graph } from '@roam-research/roam-api-sdk';
 import type { SearchResult } from './types.js';
+import { normalizeToRoamDate } from '../utils/helpers.js';
 
 export class SearchUtils {
   /**
-   * Find a page by title or UID
+   * Find a page by title or UID.
+   * Automatically normalizes date-like strings to Roam format.
    */
   static async findPageByTitleOrUid(graph: Graph, titleOrUid: string): Promise<string> {
-    // Try to find page by title
+    // Try to find page by title (original input first)
     const findQuery = `[:find ?uid :in $ ?title :where [?e :node/title ?title] [?e :block/uid ?uid]]`;
     const findResults = await q(graph, findQuery, [titleOrUid]) as [string][];
-    
+
     if (findResults && findResults.length > 0) {
       return findResults[0][0];
+    }
+
+    // If input looks like a date, try normalized Roam format
+    const roamDate = normalizeToRoamDate(titleOrUid);
+    if (roamDate && roamDate !== titleOrUid) {
+      const dateResults = await q(graph, findQuery, [roamDate]) as [string][];
+      if (dateResults && dateResults.length > 0) {
+        return dateResults[0][0];
+      }
     }
 
     // Try as UID
     const uidQuery = `[:find ?uid :where [?e :block/uid "${titleOrUid}"] [?e :block/uid ?uid]]`;
     const uidResults = await q(graph, uidQuery, []) as [string][];
-    
+
     if (!uidResults || uidResults.length === 0) {
       throw new McpError(
         ErrorCode.InvalidRequest,
