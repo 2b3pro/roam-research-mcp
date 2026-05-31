@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseMarkdown, convertToRoamActions } from './markdown-utils.js';
+import { parseMarkdown, convertToRoamActions, convertToRoamActionsWithBlocks, nestUnderHeadings, type MarkdownNode } from './markdown-utils.js';
 
 describe('markdown-utils', () => {
   describe('parseMarkdown - numbered lists', () => {
@@ -153,6 +153,142 @@ And this--too`;
       // First action is the parent block
       const parentAction = actions[0] as any;
       expect(parentAction.block['children-view-type']).toBe('numbered');
+    });
+  });
+
+  describe('convertToRoamActionsWithBlocks', () => {
+    it('returns a minted block tree whose UIDs match the create-block actions, across 3 nested levels', () => {
+      const markdown = `- Level 1 — Alpha
+  - Level 2 — Alpha.1
+    - Level 3 — Alpha.1.a
+    - Level 3 — Alpha.1.b
+  - Level 2 — Alpha.2
+    - Level 3 — Alpha.2.a
+- Level 1 — Beta
+  - Level 2 — Beta.1
+    - Level 3 — Beta.1.a`;
+
+      const nodes = parseMarkdown(markdown);
+      const { actions, blocks } = convertToRoamActionsWithBlocks(nodes, 'PARENT123', 'last');
+
+      // 9 source bullets → more than the old VERIFICATION_THRESHOLD of 5
+      expect(actions.length).toBe(9);
+
+      // Collect every UID from the returned block tree
+      const treeUids = new Set<string>();
+      const walk = (bs: typeof blocks) => bs.forEach(b => { treeUids.add(b.uid); walk(b.children); });
+      walk(blocks);
+
+      // The tree UIDs must be exactly the action UIDs (no re-query, same minted ids)
+      const actionUids = actions.map(a => (a as any).block.uid as string);
+      expect(treeUids.size).toBe(actions.length);
+      actionUids.forEach(uid => expect(treeUids.has(uid)).toBe(true));
+
+      // Nesting is preserved end-to-end
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0].content).toBe('Level 1 — Alpha');
+      expect(blocks[0].children).toHaveLength(2);          // Alpha.1, Alpha.2
+      expect(blocks[0].children[0].children).toHaveLength(2); // Alpha.1.a, Alpha.1.b
+      expect(blocks[1].children[0].children).toHaveLength(1); // Beta.1.a
+    });
+  });
+
+  describe('nestUnderHeadings', () => {
+    const node = (content: string, heading_level = 0, children: MarkdownNode[] = []): MarkdownNode =>
+      ({ content, level: 1, heading_level, children });
+
+    it('nests content and deeper headings under their section heading', () => {
+      const flat: MarkdownNode[] = [
+        node('Section A', 2),
+        node('Body of A'),
+        node('Sub A1', 3),
+        node('Body of A1'),
+        node('Section B', 2),
+        node('Body of B'),
+      ];
+
+      const nested = nestUnderHeadings(flat);
+
+      // Two H2 sections at root
+      expect(nested).toHaveLength(2);
+      expect(nested[0].content).toBe('Section A');
+      // Section A absorbs its body AND the deeper H3 section
+      expect(nested[0].children.map(c => c.content)).toEqual(['Body of A', 'Sub A1']);
+      const subA1 = nested[0].children[1];
+      expect(subA1.heading_level).toBe(3);
+      expect(subA1.children.map(c => c.content)).toEqual(['Body of A1']);
+      expect(nested[1].content).toBe('Section B');
+      expect(nested[1].children.map(c => c.content)).toEqual(['Body of B']);
+    });
+
+    it('keeps content before the first heading at root', () => {
+      const flat: MarkdownNode[] = [
+        node('Date:: [[May 30th, 2026]]'),
+        node('Section A', 2),
+        node('Body'),
+      ];
+
+      const nested = nestUnderHeadings(flat);
+
+      expect(nested.map(c => c.content)).toEqual(['Date:: [[May 30th, 2026]]', 'Section A']);
+      expect(nested[1].children.map(c => c.content)).toEqual(['Body']);
+    });
+
+    it('treats same-level headings as siblings, deeper levels as nested', () => {
+      const flat: MarkdownNode[] = [
+        node('H2 first', 2),
+        node('H2 second', 2),
+      ];
+
+      const nested = nestUnderHeadings(flat);
+
+      expect(nested.map(c => c.content)).toEqual(['H2 first', 'H2 second']);
+      expect(nested[0].children).toHaveLength(0);
+    });
+
+    it('leaves heading-free indented structure unchanged (backward compatible)', () => {
+      const original: MarkdownNode[] = [
+        node('Parent', 0, [ node('Child', 0, [ node('Grandchild') ]) ]),
+      ];
+
+      const nested = nestUnderHeadings(original);
+
+      expect(nested).toHaveLength(1);
+      expect(nested[0].content).toBe('Parent');
+      expect(nested[0].children).toHaveLength(1);
+      expect(nested[0].children[0].children.map(c => c.content)).toEqual(['Grandchild']);
+    });
+
+    it('end-to-end: flush-left heading markdown parses + nests into a section tree (reproduces the pilot-page bug input)', () => {
+      const markdown = [
+        '## TL;DR',
+        'continue InjectionGate',
+        '## Telemetry rollup',
+        '### Day-by-day',
+        '2026-05-25 — 293 calls',
+        '### By caller',
+        'AutoWorkCreation',
+        '## Recommendation',
+        'continue all',
+      ].join('\n');
+
+      const nested = nestUnderHeadings(parseMarkdown(markdown));
+
+      // Top level is exactly the three H2 sections — not nine flat siblings
+      expect(nested.map(n => n.content)).toEqual(['TL;DR', 'Telemetry rollup', 'Recommendation']);
+      expect(nested.every(n => n.heading_level === 2)).toBe(true);
+
+      // TL;DR holds its body line
+      expect(nested[0].children.map(c => c.content)).toEqual(['continue InjectionGate']);
+
+      // Telemetry holds two H3 subsections, each nesting its own body line
+      const telemetry = nested[1];
+      expect(telemetry.children.map(c => c.content)).toEqual(['Day-by-day', 'By caller']);
+      expect(telemetry.children[0].children.map(c => c.content)).toEqual(['2026-05-25 — 293 calls']);
+      expect(telemetry.children[1].children.map(c => c.content)).toEqual(['AutoWorkCreation']);
+
+      // Recommendation holds its body
+      expect(nested[2].children.map(c => c.content)).toEqual(['continue all']);
     });
   });
 });

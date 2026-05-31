@@ -16,7 +16,7 @@ export type BatchAction =
   | RoamDeletePage
   | RoamMoveBlock;
 
-interface MarkdownNode {
+export interface MarkdownNode {
   content: string;
   level: number;
   heading_level?: number;  // Optional heading level (1-3) for heading nodes
@@ -445,7 +445,47 @@ export function generateBlockUid(): string {
   return uid;
 }
 
-interface BlockInfo {
+/**
+ * Reorganise a parsed markdown node list into a "section tree" based on heading
+ * levels: each heading (e.g. ##) becomes a parent, and the blocks that follow it
+ * nest under it until a heading of equal-or-higher level closes the section;
+ * deeper headings (###) nest further. Blocks before the first heading — and
+ * inputs with no headings at all — are returned unchanged, so indentation-only
+ * markdown and intentional flat lists are unaffected.
+ *
+ * This fixes flush-left, heading-structured markdown (e.g. report skeletons)
+ * that would otherwise import as a flat list of root-level siblings, because
+ * neither indentation-based nesting nor explicit levels capture the document
+ * outline encoded in the heading syntax.
+ */
+function nestUnderHeadings(nodes: MarkdownNode[]): MarkdownNode[] {
+  const result: MarkdownNode[] = [];
+  const stack: MarkdownNode[] = []; // currently-open heading nodes, shallow → deep
+
+  for (const original of nodes) {
+    // Recurse first so headings appearing inside indented structure nest too
+    const node: MarkdownNode = { ...original, children: nestUnderHeadings(original.children) };
+    const level = node.heading_level ?? 0;
+
+    if (level > 0) {
+      // A heading at the same or shallower level closes open equal/deeper sections
+      while (stack.length > 0 && (stack[stack.length - 1].heading_level ?? 0) >= level) {
+        stack.pop();
+      }
+    }
+
+    // Attach under the deepest open heading, or at root when no section is open
+    (stack.length > 0 ? stack[stack.length - 1].children : result).push(node);
+
+    if (level > 0) {
+      stack.push(node);
+    }
+  }
+
+  return result;
+}
+
+export interface BlockInfo {
   uid: string;
   content: string;
   heading_level?: number;  // Optional heading level (1-3) for heading nodes
@@ -463,13 +503,11 @@ function convertNodesToBlocks(nodes: MarkdownNode[]): BlockInfo[] {
   }));
 }
 
-function convertToRoamActions(
-  nodes: MarkdownNode[],
+function buildActionsFromBlocks(
+  blocks: BlockInfo[],
   parentUid: string,
   order: 'first' | 'last' | number = 'last'
 ): BatchAction[] {
-  // First convert nodes to blocks with UIDs
-  const blocks = convertNodesToBlocks(nodes);
   const actions: BatchAction[] = [];
 
   // Helper function to recursively create actions
@@ -504,6 +542,30 @@ function convertToRoamActions(
   createBlockActions(blocks, parentUid, order);
 
   return actions;
+}
+
+function convertToRoamActions(
+  nodes: MarkdownNode[],
+  parentUid: string,
+  order: 'first' | 'last' | number = 'last'
+): BatchAction[] {
+  // First convert nodes to blocks with UIDs
+  return buildActionsFromBlocks(convertNodesToBlocks(nodes), parentUid, order);
+}
+
+/**
+ * Like convertToRoamActions, but also returns the minted block tree (with the
+ * same client-generated UIDs used in the actions). Lets callers report exactly
+ * what was created WITHOUT a post-write re-query — Roam's write API does not
+ * echo back transacted UIDs, and we already know them because we minted them.
+ */
+function convertToRoamActionsWithBlocks(
+  nodes: MarkdownNode[],
+  parentUid: string,
+  order: 'first' | 'last' | number = 'last'
+): { actions: BatchAction[]; blocks: BlockInfo[] } {
+  const blocks = convertNodesToBlocks(nodes);
+  return { actions: buildActionsFromBlocks(blocks, parentUid, order), blocks };
 }
 
 /**
@@ -568,7 +630,9 @@ function convertToRoamActionsStaged(
 // Export public functions and types
 export {
   parseMarkdown,
+  nestUnderHeadings,
   convertToRoamActions,
+  convertToRoamActionsWithBlocks,
   convertToRoamActionsStaged,
   hasMarkdownTable,
   convertAllTables,

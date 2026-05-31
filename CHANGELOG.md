@@ -1,5 +1,16 @@
 # Changelog
 
+### v2.19.0 (2026-05-30)
+- **Feature:** `roam_import_markdown` now nests content by markdown heading level
+  - A heading (`##`) becomes a parent block; following content and deeper headings (`###`) nest under it until a heading of equal-or-higher level closes the section
+  - Fixes flush-left, heading-structured markdown (e.g. report skeletons) that previously imported as a flat list of root-level siblings
+  - Backward-compatible: indentation-only markdown and heading-free flat lists are unchanged — only heading-structured input nests differently
+  - New `nestUnderHeadings()` transform in `markdown-utils.ts`, applied in the import path
+- **Fix:** `roam_import_markdown` returns the created block UIDs in `created_uids`
+  - Previously returned `[]` for imports over 5 blocks (a verification short-circuit), and otherwise re-queried the graph (fragile, exposed to write→read consistency races)
+  - Roam's write API does not echo back transacted UIDs, so the tool now reports the UIDs it mints client-side via `convertToRoamActionsWithBlocks()` — no post-write re-query
+- **Internal:** removed the now-dead `fetchNestedStructure()` re-query; added unit + end-to-end tests for both changes
+
 ### v2.18.2 (2026-03-21)
 - **Feature:** Automatic date normalization across all tools and CLI commands
   - Date-like inputs are automatically converted to Roam's daily page format (`March 21st, 2026`)

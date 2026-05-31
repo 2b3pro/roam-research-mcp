@@ -6,16 +6,34 @@ import { findOrCreatePage, getPageUid, getOrCreateTodayPage } from '../helpers/p
 import { executeBatch } from '../helpers/batch-utils.js';
 import {
   parseMarkdown,
+  nestUnderHeadings,
   convertToRoamActions,
+  convertToRoamActionsWithBlocks,
   convertToRoamMarkdown,
   hasMarkdownTable,
-  type BatchAction
+  type BatchAction,
+  type BlockInfo
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
 import type { OutlineItem, NestedBlock } from '../types/index.js';
 
 // Threshold for skipping child fetch during verification
 const VERIFICATION_THRESHOLD = 5;
+
+/**
+ * Map the client-minted block tree (from convertToRoamActionsWithBlocks) into
+ * the NestedBlock shape returned to callers. No API calls — the UIDs are the
+ * ones we generated and sent in the create-block actions.
+ */
+function blockInfoToNestedBlocks(blocks: BlockInfo[], level = 0): NestedBlock[] {
+  return blocks.map((block, index) => ({
+    uid: block.uid,
+    text: block.content,
+    level,
+    order: index,
+    children: block.children.length > 0 ? blockInfoToNestedBlocks(block.children, level + 1) : undefined
+  }));
+}
 
 export class OutlineOperations {
   constructor(private graph: Graph) { }
@@ -174,39 +192,6 @@ export class OutlineOperations {
       );
     }
   };
-
-  /**
-   * Recursively fetches a nested structure of blocks under a given root block UID.
-   */
-  private async fetchNestedStructure(rootUid: string): Promise<NestedBlock[]> {
-    const query = `[:find ?child-uid ?child-string ?child-order
-                    :in $ ?parent-uid
-                    :where
-                      [?parent :block/uid ?parent-uid]
-                      [?parent :block/children ?child]
-                      [?child :block/uid ?child-uid]
-                      [?child :block/string ?child-string]
-                      [?child :block/order ?child-order]]`;
-    const directChildrenResult = await q(this.graph, query, [rootUid]) as [string, string, number][];
-
-    if (directChildrenResult.length === 0) {
-      return [];
-    }
-
-    const nestedBlocks: NestedBlock[] = [];
-    for (const [childUid, childString, childOrder] of directChildrenResult) {
-      const children = await this.fetchNestedStructure(childUid);
-      nestedBlocks.push({
-        uid: childUid,
-        text: childString,
-        level: 0, // Level is not easily determined here, so we set it to 0
-        children: children,
-        order: childOrder
-      });
-    }
-
-    return nestedBlocks.sort((a, b) => a.order - b.order);
-  }
 
   /**
    * Creates an outline structure on a Roam Research page, optionally under a specific block.
@@ -494,37 +479,27 @@ export class OutlineOperations {
     const isMultilined = content.includes('\n');
 
     if (isMultilined) {
-      // Parse markdown into hierarchical structure
+      // Parse markdown into hierarchical structure, then nest by heading level so
+      // flush-left, heading-structured markdown (e.g. report skeletons) imports as
+      // a proper outline instead of a flat list of root-level siblings.
       const convertedContent = convertToRoamMarkdown(content);
-      const nodes = parseMarkdown(convertedContent);
+      const nodes = nestUnderHeadings(parseMarkdown(convertedContent));
 
-      // Convert markdown nodes to batch actions
-      const actions = convertToRoamActions(nodes, targetParentUid, order);
+      // Convert markdown nodes to batch actions, keeping the minted block tree.
+      // Roam's write API does not echo back transacted UIDs, so we report the
+      // UIDs we generated client-side rather than issuing a fragile post-write
+      // re-query (which was also skipped entirely past VERIFICATION_THRESHOLD,
+      // leaving created_uids empty for larger imports).
+      const { actions, blocks } = convertToRoamActionsWithBlocks(nodes, targetParentUid, order);
 
       // Execute batch actions to add content
       await executeBatch(this.graph, actions, 'import nested markdown content');
-
-      // Skip nested structure fetch for large imports to reduce API calls
-      const skipNestedFetch = actions.length > VERIFICATION_THRESHOLD;
-
-      if (skipNestedFetch) {
-        // Large import: return success with block count, skip recursive queries
-        return {
-          success: true,
-          page_uid: targetPageUid,
-          parent_uid: targetParentUid,
-          created_uids: []
-        };
-      }
-
-      // Small import: get all nested UIDs under the parent (current behavior)
-      const createdUids = await this.fetchNestedStructure(targetParentUid);
 
       return {
         success: true,
         page_uid: targetPageUid,
         parent_uid: targetParentUid,
-        created_uids: createdUids
+        created_uids: blockInfoToNestedBlocks(blocks)
       };
     } else {
       // Create a simple block for non-nested content

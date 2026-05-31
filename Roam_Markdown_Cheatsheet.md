@@ -184,6 +184,12 @@ CREATING:
 ├─ Memory → roam_remember
 └─ Todos → roam_add_todo
 
+NESTING (roam_import_markdown): nests by BOTH indentation AND markdown heading
+level — content and deeper headings fold under their heading (## under #, ### under
+##). Use it for heading-structured docs. roam_create_page nests ONLY by explicit
+per-item `level` integers, so heading-structured markdown sent to create_page
+imports flat. Don't use `---` dividers; they become horizontal-rule blocks.
+
 SEARCHING:
 ├─ By tag → roam_search_for_tag
 ├─ By text → roam_search_by_text
