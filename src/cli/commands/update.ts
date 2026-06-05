@@ -27,7 +27,7 @@ const ANY_STATUS_PATTERN = /\{\{(\[\[)?(TODO|DONE)(\]\])?\}\}\s*/g;
  * - If opposite status exists, replace it
  * - If no status exists, prepend
  */
-function applyStatus(content: string, status: 'TODO' | 'DONE'): string {
+export function applyStatus(content: string, status: 'TODO' | 'DONE'): string {
   const marker = `{{[[${status}]]}} `;
   const hasStatus = status === 'TODO'
     ? TODO_PATTERN.test(content)
@@ -55,8 +55,34 @@ function applyStatus(content: string, status: 'TODO' | 'DONE'): string {
 /**
  * Remove any TODO/DONE status from content
  */
-function clearStatus(content: string): string {
+export function clearStatus(content: string): string {
   return content.replace(ANY_STATUS_PATTERN, '').trim();
+}
+
+/**
+ * Resolve the "new text" for an update from the positional content arg and stdin.
+ *
+ * Returns `undefined` when no real text was supplied — INCLUDING the case where
+ * stdin was readable but empty. A subprocess invoked without a stdin pipe (e.g.
+ * `Bun.spawn(['roam', 'update', uid, '--done'])`) has stdin = /dev/null: non-TTY,
+ * but empty. The caller treats `undefined` as "leave the existing block text and
+ * only apply metadata/status changes". Returning `''` here would make a status-only
+ * update erase the block (it would skip the fetch-existing-text path and prepend the
+ * marker to an empty string). See update.test.ts.
+ */
+export async function resolveUpdateContent(
+  contentArg: string | undefined,
+  readPipedStdin: () => Promise<string>,
+  stdinIsTTY: boolean,
+): Promise<string | undefined> {
+  if (contentArg && contentArg !== '-') {
+    return contentArg;
+  }
+  if (contentArg === '-' || (!contentArg && !stdinIsTTY)) {
+    const piped = (await readPipedStdin()).trim();
+    return piped.length > 0 ? piped : undefined;
+  }
+  return undefined;
 }
 
 export function createUpdateCommand(): Command {
@@ -104,15 +130,16 @@ Examples:
         const blockUid = uid.replace(/^\(\(|\)\)$/g, '');
         const graph = resolveGraph(options, true); // This is a write operation
 
-        let finalContent: string | undefined;
-
-        // 1. Determine new content from args or stdin
-        if (content && content !== '-') {
-          finalContent = content;
-        } else if (content === '-' || (!content && !process.stdin.isTTY)) {
-          finalContent = await readStdin();
-          finalContent = finalContent.trim();
-        }
+        // 1. Determine new content from args or stdin.
+        //    Empty/whitespace stdin resolves to `undefined` (not ''), so a
+        //    status-only update like `roam update <uid> --done` from a subprocess
+        //    falls through to the fetch-existing-text path below instead of
+        //    erasing the block. See resolveUpdateContent + update.test.ts.
+        let finalContent = await resolveUpdateContent(
+          content,
+          readStdin,
+          Boolean(process.stdin.isTTY),
+        );
 
         // 2. Identify if we need to fetch existing content
         const isStatusUpdate = options.todo || options.done || options.clearStatus;
