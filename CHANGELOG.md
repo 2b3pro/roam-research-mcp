@@ -1,5 +1,11 @@
 # Changelog
 
+### v2.19.1 (2026-06-05)
+- **Fix:** `roam update <uid> --done` (and `--todo` / `--clear-status`) no longer erases block text when run from a subprocess
+  - A non-interactive caller (stdin = `/dev/null`, e.g. `Bun.spawn(['roam','update',uid,'--done'])`) is non-TTY but has empty stdin. The old heuristic read that empty stdin and stored `''` as the new content, skipping the "fetch existing block text" path, so `applyStatus` prepended the marker to an empty string — replacing the block with a bare `{{[[DONE]]}} `
+  - New `resolveUpdateContent()` maps empty/whitespace stdin to "no new text", so status-only updates fetch the existing text and find-replace the `{{[[TODO]]}}`/`{{[[DONE]]}}` marker in place
+  - Added `update.test.ts` (14 cases) covering stdin resolution and `applyStatus` text preservation; verified end-to-end on a live block
+
 ### v2.19.0 (2026-05-30)
 - **Feature:** `roam_import_markdown` now nests content by markdown heading level
   - A heading (`##`) becomes a parent block; following content and deeper headings (`###`) nest under it until a heading of equal-or-higher level closes the section
