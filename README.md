@@ -76,7 +76,7 @@ roam get "Page Title" -g work
 roam save "Note" -g work --write-key "$ROAM_SYSTEM_WRITE_KEY"
 ```
 
-**Available Commands:** `get`, `search`, `save`, `refs`, `update`, `batch`, `rename`, `status`.
+**Available Commands:** `get`, `search`, `save`, `refs`, `update`, `batch`, `rename`, `status`, `server`.
 Run `roam <command> --help` for details on any command.
 
 ### Installation
@@ -162,6 +162,7 @@ Protected graphs require the `write_key` parameter matching `ROAM_SYSTEM_WRITE_K
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
 - `HTTP_STREAM_PORT`: Port for the HTTP Stream transport (defaults to 8088).
 - `HTTP_STREAM_HOST`: Host to bind the HTTP transport to in `--server` mode (defaults to `127.0.0.1`, loopback-only). Set to `0.0.0.0` to expose on the LAN.
+- `HTTP_AUTH_TOKEN`: Optional bearer token for the HTTP MCP endpoint (**authentication**). Unset = open (fine for loopback). When set, every HTTP MCP request must send `Authorization: Bearer <token>` (`GET /health` stays open). Use it whenever you bind beyond `127.0.0.1`. This is separate from `ROAM_SYSTEM_WRITE_KEY` (per-graph write authorization).
 
 ### Running the Server
 
@@ -178,6 +179,18 @@ Best for a single long-lived, HTTP-only daemon that **multiple MCP clients share
 ```bash
 HTTP_STREAM_PORT=8088 npx roam-research-mcp --server
 ```
+
+Or manage it through the `roam` CLI, which adds start/stop/status/logs:
+
+```bash
+roam server start            # start the shared daemon in the background
+roam server start -H 0.0.0.0 # expose on the LAN (no transport auth!)
+roam server status           # is it up? version, graphs, active sessions
+roam server logs -f          # follow the log
+roam server stop             # stop a CLI-started daemon
+```
+
+`roam server status` works no matter how the daemon was launched (it probes `/health`), so it also reports a daemon started by a LaunchAgent/systemd unit. State (pidfile + log) lives in `~/.roam/` (override with `ROAM_HOME`).
 
 In `--server` mode the server:
 - runs **HTTP-only** (no stdio transport),
@@ -198,6 +211,33 @@ Point MCP clients at it with an HTTP transport config:
 ```
 
 Env vars (tokens, graphs) live with the **server** process, not the client config.
+
+**Securing an exposed server (two layers):**
+If you bind beyond loopback (`-H 0.0.0.0`), add the perimeter lock:
+
+```bash
+HTTP_AUTH_TOKEN=$(openssl rand -hex 32) roam server start -H 0.0.0.0
+```
+
+Clients then send the token as a header:
+
+```json
+{
+  "mcpServers": {
+    "roam-research-mcp": {
+      "type": "http",
+      "url": "http://<host>:8088/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+These are two **distinct** layers — keep both:
+- **`HTTP_AUTH_TOKEN`** = *authentication* (who may connect). Gates **all** requests — reads and writes, every graph.
+- **`ROAM_SYSTEM_WRITE_KEY`** = *authorization* (what a connected caller may do). Gates only **writes** to `protected` graphs; it does **not** protect reads.
+
+> ⚠️ `write_key` is **not** transport auth. On an exposed server without `HTTP_AUTH_TOKEN`, anyone on the network can still **read every graph** and write non-protected graphs. For anything beyond loopback, set `HTTP_AUTH_TOKEN`.
 
 **Keeping it running (macOS LaunchAgent):**
 Create `~/Library/LaunchAgents/com.example.roam-mcp.plist` with `RunAtLoad` + `KeepAlive`, your env vars under `EnvironmentVariables`, and `--server` as the last `ProgramArguments` entry. Keep `StandardOutPath`/`StandardErrorPath` on a **local** path (e.g. `~/Library/Logs/`), then:

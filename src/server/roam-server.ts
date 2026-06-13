@@ -12,7 +12,8 @@ import {
   ListPromptsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type Graph } from '@roam-research/roam-api-sdk';
-import { HTTP_STREAM_PORT, HTTP_STREAM_HOST, validateEnvironment } from '../config/environment.js';
+import { HTTP_STREAM_PORT, HTTP_STREAM_HOST, HTTP_AUTH_TOKEN, validateEnvironment } from '../config/environment.js';
+import { isBearerAuthorized } from '../utils/auth.js';
 import { createRegistryFromEnv, GraphRegistry, isWriteOperation } from '../config/graph-registry.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
@@ -553,9 +554,26 @@ export class RoamServer {
             name: 'roam-research-mcp',
             version: serverVersion,
             mode: serverMode ? 'server' : 'stdio+http',
+            auth: HTTP_AUTH_TOKEN ? 'required' : 'none',
             graphs: this.registry.getAvailableGraphs(),
             defaultGraph: this.registry.defaultKey,
             activeSessions: activeSessions.size,
+          }));
+          return;
+        }
+
+        // Transport authentication (perimeter): when HTTP_AUTH_TOKEN is set,
+        // every MCP request must carry `Authorization: Bearer <token>`. /health
+        // and OPTIONS are intentionally exempt (handled above). Unset = open.
+        if (HTTP_AUTH_TOKEN && !isBearerAuthorized(req.headers['authorization'], HTTP_AUTH_TOKEN)) {
+          res.writeHead(401, {
+            'Content-Type': 'application/json',
+            'WWW-Authenticate': 'Bearer',
+          });
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            error: { code: -32001, message: 'Unauthorized: missing or invalid bearer token' },
+            id: null,
           }));
           return;
         }

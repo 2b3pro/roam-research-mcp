@@ -12,6 +12,7 @@ import { createUpdateCommand } from './commands/update.js';
 import { createBatchCommand } from './commands/batch.js';
 import { createRenameCommand } from './commands/rename.js';
 import { createStatusCommand } from './commands/status.js';
+import { createServerCommand } from './commands/server.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,6 +38,7 @@ program.addCommand(createUpdateCommand());
 program.addCommand(createBatchCommand());
 program.addCommand(createRenameCommand());
 program.addCommand(createStatusCommand());
+program.addCommand(createServerCommand());
 
 // Parse arguments
 program.parse();

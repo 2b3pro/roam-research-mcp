@@ -18,6 +18,11 @@ const HTTP_STREAM_PORT = process.env.HTTP_STREAM_PORT || '8088';
 // Host to bind the HTTP transport to. Only applied in --server (daemon) mode.
 // Defaults to loopback so a shared server is not exposed beyond this machine.
 const HTTP_STREAM_HOST = process.env.HTTP_STREAM_HOST || '127.0.0.1';
+// Optional transport-level bearer token (authentication). When set, every HTTP
+// MCP request must send `Authorization: Bearer <token>` (the /health probe stays
+// open). Unset = open, i.e. unchanged. This is the perimeter lock; it is separate
+// from ROAM_SYSTEM_WRITE_KEY, which is per-graph write authorization.
+const HTTP_AUTH_TOKEN = process.env.HTTP_AUTH_TOKEN;
 const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:5678,https://roamresearch.com')
   .split(',')
   .map(origin => origin.trim());
@@ -94,4 +99,4 @@ export function validateEnvironment(): void {
   }
 }
 
-export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, HTTP_STREAM_HOST, CORS_ORIGINS, ROAM_GRAPHS, ROAM_DEFAULT_GRAPH };
+export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, HTTP_STREAM_HOST, HTTP_AUTH_TOKEN, CORS_ORIGINS, ROAM_GRAPHS, ROAM_DEFAULT_GRAPH };

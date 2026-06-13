@@ -1,5 +1,20 @@
 # Changelog
 
+### v2.22.0 (2026-06-13)
+- **Feature:** Optional transport-level bearer token (`HTTP_AUTH_TOKEN`) for the HTTP MCP endpoint — the perimeter lock for when the server is bound beyond loopback (e.g. `-H 0.0.0.0`).
+  - **Unset = open (default, unchanged)** — loopback deployments need nothing.
+  - **Set →** every HTTP MCP request must send `Authorization: Bearer <token>`; otherwise `401` with `WWW-Authenticate: Bearer`. Constant-time comparison (`crypto.timingSafeEqual`) avoids token recovery via timing.
+  - `GET /health` stays open (so `roam server status`, launchd, and monitors work tokenlessly) and reports `auth: "required" | "none"`. `roam server status` shows the auth state.
+  - This is **authentication** (who may connect) and is separate from `ROAM_SYSTEM_WRITE_KEY`, which is per-graph write **authorization**. Layered, not redundant: the bearer token also protects *reads*, which `write_key` does not. See README → Running the Server.
+
+### v2.21.0 (2026-06-13)
+- **Feature:** `roam server` CLI command group to run and manage the shared HTTP daemon, so the server is discoverable from `roam --help` (previously `--server` only existed on the `roam-research-mcp` server binary, invisible to the CLI).
+  - `roam server start [-p <port>] [-H <host>] [-f]` — starts the HTTP-only daemon (background by default, `-f` for foreground); refuses to double-start if one is already serving the address.
+  - `roam server status [--json]` — launch-agnostic: probes `GET /health`, so it reports a daemon started by a LaunchAgent/systemd unit too (version, mode, graphs, default graph, active sessions); also shows whether it's CLI-managed.
+  - `roam server stop` — stops a CLI-started daemon (pidfile-tracked); if the running daemon is service-managed, it says so instead of pretending to stop it.
+  - `roam server logs [-f] [-n <n>]` — tails the CLI-managed log.
+  - State (pidfile + log) lives in `~/.roam/`, overridable via `ROAM_HOME`.
+
 ### v2.20.0 (2026-06-13)
 - **Feature:** `--server` flag runs a long-lived, HTTP-only MCP daemon meant to be kept running (e.g. by a LaunchAgent) and **shared by multiple clients** — instead of every session spawning its own stdio subprocess (each of which also opened a drifting HTTP port). Saves memory and gives clients a stable URL.
   - HTTP-only: skips the stdio transport (no client reads it in a daemon)
