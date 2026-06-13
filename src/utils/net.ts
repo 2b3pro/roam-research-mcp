@@ -3,9 +3,14 @@ import { createServer } from 'node:net';
 /**
  * Checks if a given port is currently in use.
  * @param port The port to check.
+ * @param host Optional host to probe. When omitted, probes the wildcard address
+ *   (any interface) — matching `findAvailablePort`'s "globally free" semantics.
+ *   Pass a specific host (e.g. `127.0.0.1`) to check only that interface, so a
+ *   listener bound to a different interface (e.g. wildcard) doesn't register as
+ *   a conflict for a host-specific bind.
  * @returns A promise that resolves to true if the port is in use, and false otherwise.
  */
-export function isPortInUse(port: number): Promise<boolean> {
+export function isPortInUse(port: number, host?: string): Promise<boolean> {
   return new Promise((resolve) => {
     const server = createServer();
 
@@ -23,7 +28,11 @@ export function isPortInUse(port: number): Promise<boolean> {
       resolve(false);
     });
 
-    server.listen(port);
+    if (host) {
+      server.listen(port, host);
+    } else {
+      server.listen(port);
+    }
   });
 }
 

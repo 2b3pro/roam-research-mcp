@@ -12,7 +12,7 @@ import {
   ListPromptsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type Graph } from '@roam-research/roam-api-sdk';
-import { HTTP_STREAM_PORT, validateEnvironment } from '../config/environment.js';
+import { HTTP_STREAM_PORT, HTTP_STREAM_HOST, validateEnvironment } from '../config/environment.js';
 import { createRegistryFromEnv, GraphRegistry, isWriteOperation } from '../config/graph-registry.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { findAvailablePort } from '../utils/net.js';
+import { findAvailablePort, isPortInUse } from '../utils/net.js';
 import { CORS_ORIGINS } from '../config/environment.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -506,13 +506,18 @@ export class RoamServer {
     });
   }
 
-  async run() {
+  async run(options: { serverMode?: boolean } = {}) {
+    const { serverMode = false } = options;
 
     try {
 
-      const stdioMcpServer = this.createMcpServer();
-      const stdioTransport = new StdioServerTransport();
-      await stdioMcpServer.connect(stdioTransport);
+      // In --server (daemon) mode we run HTTP-only: no client reads the stdio
+      // transport, so we skip it. Otherwise behavior is unchanged (stdio + HTTP).
+      if (!serverMode) {
+        const stdioMcpServer = this.createMcpServer();
+        const stdioTransport = new StdioServerTransport();
+        await stdioMcpServer.connect(stdioTransport);
+      }
 
 
       // Track active transports by session ID for proper session management
@@ -535,6 +540,23 @@ export class RoamServer {
         if (req.method === 'OPTIONS') {
           res.writeHead(204); // No Content
           res.end();
+          return;
+        }
+
+        // Liveness probe — cheap, no MCP handshake required. Useful for the
+        // LaunchAgent/health checks (a bare GET on the MCP endpoint returns 406).
+        const requestPath = (req.url || '/').split('?')[0];
+        if (req.method === 'GET' && requestPath === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            status: 'ok',
+            name: 'roam-research-mcp',
+            version: serverVersion,
+            mode: serverMode ? 'server' : 'stdio+http',
+            graphs: this.registry.getAvailableGraphs(),
+            defaultGraph: this.registry.defaultKey,
+            activeSessions: activeSessions.size,
+          }));
           return;
         }
 
@@ -594,10 +616,31 @@ export class RoamServer {
         }
       });
 
-      const availableHttpPort = await findAvailablePort(parseInt(HTTP_STREAM_PORT));
-      httpServer.listen(availableHttpPort, () => {
+      const desiredPort = parseInt(HTTP_STREAM_PORT);
 
-      });
+      if (serverMode) {
+        // A shared daemon must own a stable URL — never silently drift to another
+        // port. Fail loudly if the configured port is already taken on our bind
+        // host (a listener on a different interface is not our conflict).
+        if (await isPortInUse(desiredPort, HTTP_STREAM_HOST)) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `--server: port ${desiredPort} (HTTP_STREAM_PORT) is already in use. ` +
+            `Stop the process using it, or set HTTP_STREAM_PORT to a free port.`
+          );
+        }
+        httpServer.listen(desiredPort, HTTP_STREAM_HOST, () => {
+          console.error(
+            `roam-research-mcp v${serverVersion} (--server) listening on ` +
+            `http://${HTTP_STREAM_HOST}:${desiredPort}/  (health: /health)`
+          );
+        });
+      } else {
+        const availableHttpPort = await findAvailablePort(desiredPort);
+        httpServer.listen(availableHttpPort, () => {
+
+        });
+      }
 
 
 

@@ -160,30 +160,57 @@ Protected graphs require the `write_key` parameter matching `ROAM_SYSTEM_WRITE_K
 
 *Optional:*
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
-- `HTTP_STREAM_PORT`: To enable HTTP Stream (defaults to 8088).
+- `HTTP_STREAM_PORT`: Port for the HTTP Stream transport (defaults to 8088).
+- `HTTP_STREAM_HOST`: Host to bind the HTTP transport to in `--server` mode (defaults to `127.0.0.1`, loopback-only). Set to `0.0.0.0` to expose on the LAN.
 
 ### Running the Server
 
-**1. Stdio Mode (Default)**
-Best for local integration (e.g., Claude Desktop, IDE extensions).
+**1. Default Mode (stdio + HTTP)**
+Best for local integration (e.g., Claude Desktop, IDE extensions). The MCP client launches the process per session over stdio; an HTTP Stream transport is also opened on an auto-discovered port near `HTTP_STREAM_PORT`.
 
 ```bash
 npx roam-research-mcp
 ```
 
-Note: Stdio mode does not use any network ports.
-
-**2. HTTP Stream Mode**
-Best for remote access or web clients.
+**2. Shared Server Mode (`--server`)**
+Best for a single long-lived, HTTP-only daemon that **multiple MCP clients share** — instead of each session spawning its own subprocess. This saves memory and gives clients a stable URL.
 
 ```bash
-HTTP_STREAM_PORT=8088 npx roam-research-mcp
+HTTP_STREAM_PORT=8088 npx roam-research-mcp --server
+```
+
+In `--server` mode the server:
+- runs **HTTP-only** (no stdio transport),
+- binds the **exact** `HTTP_STREAM_PORT` on `HTTP_STREAM_HOST` and **exits non-zero if the port is taken** (no silent drift — a shared daemon must keep a stable URL),
+- exposes `GET /health` → `{"status":"ok", ...}` for liveness checks.
+
+Point MCP clients at it with an HTTP transport config:
+
+```json
+{
+  "mcpServers": {
+    "roam-research-mcp": {
+      "type": "http",
+      "url": "http://127.0.0.1:8088/mcp"
+    }
+  }
+}
+```
+
+Env vars (tokens, graphs) live with the **server** process, not the client config.
+
+**Keeping it running (macOS LaunchAgent):**
+Create `~/Library/LaunchAgents/com.example.roam-mcp.plist` with `RunAtLoad` + `KeepAlive`, your env vars under `EnvironmentVariables`, and `--server` as the last `ProgramArguments` entry. Keep `StandardOutPath`/`StandardErrorPath` on a **local** path (e.g. `~/Library/Logs/`), then:
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.roam-mcp.plist
+curl -s http://127.0.0.1:8088/health   # verify
 ```
 
 **3. Docker**
 
 ```bash
-docker run -p 8088:8088 --env-file .env roam-research-mcp
+docker run -p 8088:8088 --env-file .env roam-research-mcp --server
 ```
 
 ### Configuring in LLMs

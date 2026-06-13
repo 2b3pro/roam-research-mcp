@@ -1,5 +1,14 @@
 # Changelog
 
+### v2.20.0 (2026-06-13)
+- **Feature:** `--server` flag runs a long-lived, HTTP-only MCP daemon meant to be kept running (e.g. by a LaunchAgent) and **shared by multiple clients** — instead of every session spawning its own stdio subprocess (each of which also opened a drifting HTTP port). Saves memory and gives clients a stable URL.
+  - HTTP-only: skips the stdio transport (no client reads it in a daemon)
+  - Binds the **exact** `HTTP_STREAM_PORT` on the new `HTTP_STREAM_HOST` (default `127.0.0.1`, loopback-only) and **exits non-zero if the port is in use** — a shared daemon must never silently drift off its URL
+  - Without the flag, behavior is unchanged (stdio + auto-discovered HTTP port) — fully backward compatible
+- **Feature:** `GET /health` endpoint → `{"status":"ok","version":...,"mode":...,"graphs":[...],"defaultGraph":...,"activeSessions":N}`. A cheap liveness probe (a bare GET on the MCP endpoint returns `406`); available in both modes.
+- **Config:** new `HTTP_STREAM_HOST` env var (bind host for `--server` mode).
+- Point clients at the daemon with an HTTP transport config: `{"type":"http","url":"http://127.0.0.1:8088/mcp"}`. See README → Running the Server → Shared Server Mode for the LaunchAgent recipe.
+
 ### v2.19.1 (2026-06-05)
 - **Fix:** `roam update <uid> --done` (and `--todo` / `--clear-status`) no longer erases block text when run from a subprocess
   - A non-interactive caller (stdin = `/dev/null`, e.g. `Bun.spawn(['roam','update',uid,'--done'])`) is non-TTY but has empty stdin. The old heuristic read that empty stdin and stored `''` as the new content, skipping the "fetch existing block text" path, so `applyStatus` prepended the marker to an empty string — replacing the block with a bare `{{[[DONE]]}} `
