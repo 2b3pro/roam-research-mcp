@@ -655,7 +655,10 @@ export class RoamServer {
         });
       } else {
         const availableHttpPort = await findAvailablePort(desiredPort);
-        httpServer.listen(availableHttpPort, () => {
+        // Bind the companion HTTP transport to HTTP_STREAM_HOST (loopback by
+        // default) — listening without a host binds every interface, exposing
+        // the graph token-free on the LAN.
+        httpServer.listen(availableHttpPort, HTTP_STREAM_HOST, () => {
 
         });
       }
