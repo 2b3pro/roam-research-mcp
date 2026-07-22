@@ -40,11 +40,15 @@ export function isPortInUse(port: number, host?: string): Promise<boolean> {
  * Finds an available port, starting from a given port and incrementing by a specified amount.
  * @param startPort The port to start checking from.
  * @param incrementBy The amount to increment the port by if it's in use. Defaults to 2.
+ * @param host Optional host to probe. Pass the host you intend to bind — probing
+ *   the wildcard while binding a specific host misses conflicts (an IPv6-wildcard
+ *   probe succeeds alongside an existing 127.0.0.1 listener), so concurrent
+ *   instances would all pick the same port and crash with EADDRINUSE.
  * @returns A promise that resolves to an available port number.
  */
-export async function findAvailablePort(startPort: number, incrementBy = 2): Promise<number> {
+export async function findAvailablePort(startPort: number, incrementBy = 2, host?: string): Promise<number> {
   let port = startPort;
-  while (await isPortInUse(port)) {
+  while (await isPortInUse(port, host)) {
     port += incrementBy;
   }
   return port;
