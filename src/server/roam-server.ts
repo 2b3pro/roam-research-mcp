@@ -604,6 +604,24 @@ export class RoamServer {
             return;
           }
 
+          // A request that carries a session ID we don't know (the daemon
+          // restarted, or the session was terminated) is a dead session. Per
+          // the MCP streamable-HTTP spec the server MUST respond 404 so the
+          // client starts a new session with a fresh InitializeRequest.
+          // Falling through to a new transport instead makes the SDK answer
+          // HTTP 400 "Server not initialized", which clients do not treat as
+          // a re-initialize signal — they keep retrying the dead session and
+          // every tool call times out with no useful error.
+          if (sessionId) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32001, message: 'Session not found' },
+              id: null,
+            }));
+            return;
+          }
+
           // Create new transport and server for new sessions
           const httpMcpServer = this.createMcpServer('-http');
           const httpStreamTransport = new StreamableHTTPServerTransport({
