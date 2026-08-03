@@ -1,5 +1,44 @@
 # Changelog
 
+### v2.23.0 (2026-08-03)
+
+- **Security fix:** Denying a write to a protected graph no longer discloses `ROAM_SYSTEM_WRITE_KEY`. The error read `Provide write_key: "<the actual key>" to proceed` — so the key that *is* the gate was handed to whoever had just been refused, who could immediately retry and succeed. It fired both when no key was supplied and when a **wrong** key was guessed, turning a failed guess into a working one. The same pattern existed in the CLI path, where it is worse: CLI output lands in scrollback, logs and session transcripts, so the key outlived the moment it was printed. Both now name the environment variable, never its value. **If you have run this server with a protected graph, treat your write key as exposed and rotate it.**
+
+- **Feature:** MCP tool annotations on all 25 tools. Per the MCP spec an *omitted* annotation defaults to destructive + open-world, so until now every read tool we shipped — `roam_search_by_text`, `roam_fetch_page_by_title`, `roam_recall` — advertised itself to clients as capable of irreversible damage. Clients gate tools on these hints.
+  - Four classifications: **read** (read-only, idempotent), **append** (adds content only; repeating adds again, so not idempotent), **edit** (overwrites or relocates, so destructive, but same args → same end state), and **destructive** (`roam_process_batch_actions`, whose action enum includes `delete-block`).
+  - `roam_update_page_markdown` is an *edit* rather than an append because its smart diff emits delete operations.
+  - `openWorldHint` is false throughout — every tool acts only on your own graph.
+  - A test pins the classification and enforces an invariant spanning two files: `readOnlyHint === false` must hold for **exactly** the tools in `WRITE_OPERATIONS`, since that list drives write-key enforcement while the annotations drive client-side gating. The same property, and they must not drift.
+
+- **Feature:** Roam's `#.rm-hide` / `#.rm-private` tags are now honoured. A block carrying either — and everything nested under it — is withheld from the content these tools return. This matches Roam's official MCP server, so a block tagged for one is hidden from both.
+  - All three reference forms match (`#.rm-hide`, `#[[.rm-hide]]`, `[[.rm-hide]]`), case-insensitively — over-hiding is the safe direction for a privacy filter. `#.rm-hidden` and `#.rm-highlight` are deliberately left alone.
+  - Page trees prune at the single point where a page's tree is assembled, so markdown/raw/structure all inherit it. Flat search results carry no ancestry, so they filter against a UID closure (tagged blocks plus descendants) built from Roam's materialised `:block/parents`, cached 30s per graph.
+  - **`roam_datomic_query` is deliberately NOT filtered.** Raw Datalog reads the database directly and stays raw — which is exactly why these tags are a convenience filter and **not a security guarantee**. Treat them as "keep it out of the AI's way," not "keep it secret."
+
+- **Feature:** `roam_get_guidelines` — per-graph agent conventions, read from a page **inside** the graph (`[[roam/agent guidelines]]` by default). These are your own rules: how you tag, how you namespace pages, what an agent should never do. Roam's official MCP server reads the same page title, so one page serves both.
+  - Complements `CUSTOM_INSTRUCTIONS_PATH` rather than replacing it. That file is server-wide, cached until restart, and covers Roam *syntax*; guidelines are **per-graph**, live-edited from inside Roam, and cover *conventions*.
+  - Configure with a `guidelinesPage` key in `ROAM_GRAPHS` or the `ROAM_GUIDELINES_PAGE` env var; `false` disables it. Same precedence as the existing `memoriesTag`.
+  - Fails open: no page returns `exists: false` and a lookup error returns a note, so a guidelines miss can never break the tool you actually wanted. Cached 30s, so editing the page takes effect without a restart.
+  - Read through the normal page path, so `#.rm-hide` / `#.rm-private` are honoured inside guidelines too.
+  - Every other tool's description now points at it, once per graph per session, **including reads** — conventions change how results should be interpreted and presented, not just how content is written. A starter template ships at `.roam/agent-guidelines.template.md`.
+
+- **Feature:** Structured error envelope. Tool failures returned a prose sentence an agent could read but rarely act on. Failures now carry a machine-readable `code` plus recovery context spread into the body:
+
+  ```json
+  { "error": { "code": "UNKNOWN_GRAPH",
+               "message": "Unknown graph: \"typoo\".",
+               "requested_graph": "typoo",
+               "available_graphs": ["personal", "work"] } }
+  ```
+
+  Returned with `isError` rather than thrown — MCP treats a throw as a *protocol* failure, while `isError` with content is a *tool* failure the model can read and act on. Codes accept values outside the known union and are never validated against it, since Roam and future transports emit codes this codebase has not heard of. Graph resolution is converted first; remaining sites keep working unchanged and migrate incrementally.
+
+- **Fix:** A rate-limited batch no longer leaves a half-written page. `executeStagedBatch` called the Roam API with no rate-limit handling, so the first `Too many requests` abandoned every level that had not yet run — and levels commit as they succeed, in a store with no undo. Hit for real creating a 119-block page: it died at level 3 with 111 of 119 blocks written. Three tools sit on this path — `roam_create_page`, `roam_update_page_markdown` and `roam_create_outline` — and the middle one is the worst to fail midway, since its smart diff emits deletes as well as creates. Retry logic already existed but was private to `BatchOperations`, which is why the second write path was built without it; it now lives in `src/shared/retry.ts` where a third path can find it.
+
+- **Fix:** The HTTP server returns `404` for an unrecognised `Mcp-Session-Id` instead of `400`. Per the MCP streamable-HTTP spec a server must answer 404 for a terminated or unknown session, and clients treat 404 — not 400 — as the signal to re-initialise. In practice: restart a long-lived daemon and every connected client wedged permanently on its dead session, each tool call failing with an opaque multi-minute timeout while the daemon looked perfectly healthy. Also closes a leak, since the old fall-through built a fresh transport and MCP server per stale request and never released them. Thanks to **@jurebordon** for the report and fix (#18).
+
+- **Docs:** The cheatsheet now says what to do when you need a literal `#N`. It warned against a bare `#1` in two places but never gave a correct alternative, so an agent that genuinely needed the literal form had no option but to emit one and silently create a numbered page. Quote it: `"#1"`.
+
 ### v2.22.1 (2026-07-07)
 - **Fix:** `convertToRoamMarkdown` no longer mangles intra-word underscores. The single-underscore-to-italic rule now respects CommonMark's word-boundary requirement, so `snake_case` filenames and URLs like `/wiki/Ning_Li_(physicist)` survive `roam_import_markdown` instead of becoming `__Li__`. Genuine `_italic_` at word boundaries still converts, and backtick-wrapped inline code stays literal.
 
