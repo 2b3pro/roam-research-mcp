@@ -50,9 +50,11 @@ export function resolveGraph(options: GraphOptions, isWriteOp: boolean = false):
             `Write to protected graph "${graphKey}" failed: ROAM_SYSTEM_WRITE_KEY not configured.`
           );
         }
+        // Never echo the key itself — CLI output lands in scrollback, logs and
+        // transcripts. Name the variable so the shell can expand it instead.
         throw new Error(
-          `Write to "${graphKey}" graph requires --write-key confirmation.\n` +
-          `Use: --write-key "${systemWriteKey}"`
+          `Write to protected graph "${graphKey}" requires --write-key confirmation.\n` +
+          `Use: --write-key "$ROAM_SYSTEM_WRITE_KEY"`
         );
       }
     }

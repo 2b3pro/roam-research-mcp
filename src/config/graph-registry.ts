@@ -221,11 +221,15 @@ export class GraphRegistry {
         );
       }
 
-      // Provide informative error with the required key
+      // Say what is required, never what the value is. Echoing the key here
+      // hands the caller the means to retry and get through, which makes the
+      // whole gate decorative — including for a caller that simply guessed
+      // wrong. A legitimate operator can read ROAM_SYSTEM_WRITE_KEY from their
+      // own environment; an agent that cannot is exactly who this stops.
       throw new McpError(
         ErrorCode.InvalidParams,
-        `Write to "${resolvedKey}" graph requires write_key confirmation.\n` +
-        `Provide write_key: "${systemWriteKey}" to proceed.`
+        `Write to protected graph "${resolvedKey}" requires write_key confirmation. ` +
+        `Pass the value of the ROAM_SYSTEM_WRITE_KEY environment variable as the write_key parameter.`
       );
     }
   }

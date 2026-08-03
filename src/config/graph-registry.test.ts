@@ -132,3 +132,77 @@ describe('getGuidelinesPage', () => {
     expect(r.getGuidelinesPage()).toBe('p/rules');
   });
 });
+
+describe('write-key denial does not disclose the key', () => {
+  /**
+   * The write key is the whole gate on protected graphs. An error that tells
+   * the caller what the key is hands the agent the means to retry and get
+   * through — the protection becomes decorative.
+   */
+  const SECRET = 'super-secret-write-key';
+  const original = process.env.ROAM_SYSTEM_WRITE_KEY;
+
+  beforeEach(() => {
+    process.env.ROAM_SYSTEM_WRITE_KEY = SECRET;
+  });
+
+  afterEach(() => {
+    if (original !== undefined) process.env.ROAM_SYSTEM_WRITE_KEY = original;
+    else delete process.env.ROAM_SYSTEM_WRITE_KEY;
+  });
+
+  // 'work' must be NON-default: writes to the default graph bypass protection
+  // by design, so a protected default graph never reaches the denial path.
+  const protectedRegistry = () =>
+    new GraphRegistry(
+      {
+        personal: { token: 't', graph: 'p' },
+        work: { token: 't', graph: 'g', protected: true },
+      } as any,
+      'personal'
+    );
+
+  it('never puts the key in the denial message', () => {
+    let message = '';
+    try {
+      protectedRegistry().validateWriteAccess('roam_create_page', 'work', undefined);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message, 'denial message must not be empty').not.toBe('');
+    expect(message).not.toContain(SECRET);
+  });
+
+  it('never discloses the key when a wrong one is supplied', () => {
+    let message = '';
+    try {
+      protectedRegistry().validateWriteAccess('roam_create_page', 'work', 'wrong-guess');
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).not.toContain(SECRET);
+  });
+
+  it('still explains what is required, so a legitimate caller can proceed', () => {
+    let message = '';
+    try {
+      protectedRegistry().validateWriteAccess('roam_create_page', 'work', undefined);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toMatch(/write_key/);
+    expect(message).toMatch(/work/);
+  });
+
+  it('lets a correct key through', () => {
+    expect(() =>
+      protectedRegistry().validateWriteAccess('roam_create_page', 'work', SECRET)
+    ).not.toThrow();
+  });
+
+  it('does not gate reads on protected graphs', () => {
+    expect(() =>
+      protectedRegistry().validateWriteAccess('roam_search_by_text', 'work', undefined)
+    ).not.toThrow();
+  });
+});
