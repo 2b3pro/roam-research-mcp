@@ -1,21 +1,36 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 /**
- * Integration test for unknown-session handling, run against the built server
- * (`npm run build` first). Spawned with fake Roam credentials — initialize and
- * tools/list never touch the Roam backend.
+ * Integration test for unknown-session handling, run against the built server.
+ * `npm test` compiles first via the `pretest` script; if you invoke vitest
+ * directly, run `tsc` yourself. Spawned with fake Roam credentials — initialize
+ * and tools/list never touch the Roam backend.
  */
 
 const PORT = 8478;
 const URL_MCP = `http://127.0.0.1:${PORT}/mcp`;
+const SERVER_ENTRY = 'build/index.js';
+
+// Inherit the parent env, minus the vars that would silently invalidate this
+// test's assumptions:
+//   HTTP_AUTH_TOKEN — a shared daemon is often run with bearer auth set, and
+//     inheriting it 401s every request here, failing both cases confusingly.
+//   ROAM_GRAPHS     — takes precedence over ROAM_API_TOKEN/ROAM_GRAPH_NAME, so
+//     inheriting it would quietly point the server at a real graph despite the
+//     fake credentials below.
+const { HTTP_AUTH_TOKEN: _auth, ROAM_GRAPHS: _graphs, ...parentEnv } = process.env;
 
 let child: ChildProcess;
 
 beforeAll(async () => {
-  child = spawn('node', ['build/index.js', '--server'], {
+  if (!existsSync(SERVER_ENTRY)) {
+    throw new Error(`${SERVER_ENTRY} not found — run \`npx tsc\` (or \`npm test\`) first.`);
+  }
+  child = spawn('node', [SERVER_ENTRY, '--server'], {
     env: {
-      ...process.env,
+      ...parentEnv,
       ROAM_API_TOKEN: 'fake-token-for-tests',
       ROAM_GRAPH_NAME: 'fake-graph',
       HTTP_STREAM_PORT: String(PORT),

@@ -40,6 +40,7 @@
     "release:minor": "standard-version --release-as minor",
     "release:major": "standard-version --release-as major",
     "release:first": "standard-version --first-release",
+    "pretest": "tsc",
     "test": "vitest run",
     "test:watch": "vitest"
   },
