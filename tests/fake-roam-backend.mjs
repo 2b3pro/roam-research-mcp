@@ -144,8 +144,19 @@ globalThis.fetch = async function fakeRoamFetch(input, init) {
   }
 
   if (request.url.endsWith('/write')) {
-    // Writes are not fixtured. Tests that reach here are asserting on the
-    // guardrails in front of a write, not on the write itself.
+    const body = await request.json().catch(() => ({}));
+
+    // Register created pages so a later title lookup finds them. Write paths
+    // that create a page and then read back its UID (getOrCreateTodayPage, for
+    // one) deadlock against a backend that forgets — and a daily-note title is
+    // today's date, so it cannot be fixtured up front.
+    if (body?.action === 'create-page' && body?.page?.title) {
+      PAGES[body.page.title] ??= `p${String(Object.keys(PAGES).length).padStart(8, '0')}`;
+      BLOCKS[PAGES[body.page.title]] ??= [];
+    }
+
+    // Block contents are not modelled: these tests assert on what a caller gets
+    // back from a write, not on what the graph then looks like.
     return json({ success: true });
   }
 

@@ -69,6 +69,55 @@ describe('tools/list contract', () => {
   });
 });
 
+describe('output schemas', () => {
+  it('declares one for exactly the write tools', async () => {
+    const tools = await harness.list();
+    const withSchema = tools
+      .filter((t) => (t as { outputSchema?: unknown }).outputSchema)
+      .map((t) => t.name)
+      .sort();
+
+    // Reads are deliberately schema-less: they already serialise their whole
+    // result into the text channel, so a schema doubles the payload, and their
+    // shapes still move.
+    expect(withSchema).toEqual([...WRITE_OPERATIONS].sort());
+  });
+
+  it('keeps every schema open to additive growth', async () => {
+    const tools = await harness.list();
+    for (const tool of tools) {
+      const schema = (tool as { outputSchema?: Record<string, any> }).outputSchema;
+      if (!schema) continue;
+
+      expect(schema.type, tool.name).toBe('object');
+      // A closed schema would reject any field added later — the opposite of
+      // the additive-only rule these are supposed to make safe.
+      expect(schema.additionalProperties, tool.name).toBe(true);
+      // `success` is the one field all ten genuinely return, so it is the only
+      // thing a client can rely on across the whole write surface.
+      expect(schema.required, tool.name).toContain('success');
+      expect(schema.properties.success, tool.name).toEqual({ type: 'boolean' });
+    }
+  });
+
+  it('returns structuredContent from a write tool, matching the text channel', async () => {
+    // The wire invariant, checked where it actually has to hold. Nothing in the
+    // SDK enforces it for us — we use the low-level Server.
+    const result = await harness.call('roam_add_todo', { todos: ['boundary test todo'] });
+
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toBeDefined();
+    expect(result.structuredContent).toEqual(JSON.parse(McpHarness.text(result)));
+    expect((result.structuredContent as { success: boolean }).success).toBe(true);
+  });
+
+  it('omits structuredContent from a tool that declares no schema', async () => {
+    const result = await harness.call('roam_get_guidelines');
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toBeUndefined();
+  });
+});
+
 describe('roam_fetch_page_by_title withholds hidden content', () => {
   it('omits a #.rm-hide block and its entire subtree', async () => {
     const text = McpHarness.text(

@@ -34,6 +34,33 @@ const packageJsonPath = join(__dirname, '../../package.json');
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 const serverVersion = packageJson.version;
 
+/**
+ * The single place a tool result is built, and the only place
+ * `structuredContent` may be attached.
+ *
+ * The wire invariant is **`structuredContent` is present iff the tool declares
+ * an `outputSchema`**. A schema-bearing tool that returns none, or a
+ * schema-less tool that returns some, is a protocol violation a strict client
+ * will reject. We use the low-level `Server` rather than `McpServer`, so the
+ * SDK does not enforce this for us — routing every result through here is what
+ * enforces it. Adding a schema in schemas.ts is therefore sufficient; no switch
+ * case needs touching.
+ *
+ * The text channel is unchanged either way, so clients that never look at
+ * structuredContent see exactly what they saw before.
+ */
+function toolResult(toolName: string, result: unknown) {
+  const declaresSchema = Boolean(
+    (toolSchemas as Record<string, { outputSchema?: unknown } | undefined>)[toolName]?.outputSchema
+  );
+  const canStructure = declaresSchema && result !== null && typeof result === 'object';
+
+  return {
+    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    ...(canStructure ? { structuredContent: result as Record<string, unknown> } : {}),
+  };
+}
+
 export class RoamServer {
   private registry: GraphRegistry;
   private toolHandlersCache: Map<string, ToolHandlers> = new Map();
@@ -182,9 +209,7 @@ export class RoamServer {
               parent_uid,
               include_memories_tag
             );
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_fetch_page_full_view': {
@@ -213,9 +238,7 @@ export class RoamServer {
 
           case 'roam_get_guidelines': {
             const result = await toolHandlers.getGuidelines();
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_fetch_page_by_title': {
@@ -235,9 +258,7 @@ export class RoamServer {
               content?: ContentItem[];
             };
             const result = await toolHandlers.createPage(title, content);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
 
@@ -265,17 +286,13 @@ export class RoamServer {
               parent_string,
               order
             );
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_add_todo': {
             const { todos } = cleanedArgs as { todos: string[] };
             const result = await toolHandlers.addTodos(todos);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_create_outline': {
@@ -291,9 +308,7 @@ export class RoamServer {
               block_text_uid,
               order
             );
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_search_for_tag': {
@@ -309,9 +324,7 @@ export class RoamServer {
               );
             }
             const result = await toolHandlers.searchForTag(primary_tag, page_title_uid, near_tag);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_search_by_status': {
@@ -322,9 +335,7 @@ export class RoamServer {
               exclude?: string;
             };
             const result = await toolHandlers.searchByStatus(status, page_title_uid, include, exclude);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_search_block_refs': {
@@ -334,9 +345,7 @@ export class RoamServer {
               page_title_uid?: string;
             };
             const result = await toolHandlers.searchBlockRefs(params);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_search_hierarchy': {
@@ -356,9 +365,7 @@ export class RoamServer {
             }
 
             const result = await toolHandlers.searchHierarchy(params);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_find_pages_modified_today': {
@@ -366,9 +373,7 @@ export class RoamServer {
               max_num_pages?: number;
             };
             const result = await toolHandlers.findPagesModifiedToday(max_num_pages || 50);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_search_by_text': {
@@ -378,9 +383,7 @@ export class RoamServer {
               scope?: 'blocks' | 'page_titles';
             };
             const result = await toolHandlers.searchByText(params);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_search_by_date': {
@@ -392,9 +395,7 @@ export class RoamServer {
               include_content: boolean;
             };
             const result = await toolHandlers.searchByDate(params);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
 
@@ -404,9 +405,7 @@ export class RoamServer {
               filter_tag?: string;
             };
             const result = await toolHandlers.recall(sort_by, filter_tag);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
 
@@ -416,9 +415,7 @@ export class RoamServer {
               inputs?: unknown[];
             };
             const result = await toolHandlers.executeDatomicQuery({ query, inputs });
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_process_batch_actions': {
@@ -426,9 +423,7 @@ export class RoamServer {
               actions: any[];
             };
             const result = await toolHandlers.processBatch(actions);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_fetch_block': {
@@ -438,9 +433,7 @@ export class RoamServer {
               include_ancestors?: boolean;
             };
             const result = await toolHandlers.fetchBlock(block_uid, depth, include_ancestors);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_create_table': {
@@ -456,9 +449,7 @@ export class RoamServer {
               headers,
               rows
             });
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_move_block': {
@@ -468,9 +459,7 @@ export class RoamServer {
               order?: number | 'first' | 'last';
             };
             const result = await toolHandlers.moveBlock(block_uid, parent_uid, order);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_update_page_markdown': {
@@ -480,9 +469,7 @@ export class RoamServer {
               dry_run?: boolean;
             };
             const result = await toolHandlers.updatePageMarkdown(title, markdown, dry_run);
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           case 'roam_rename_page': {
@@ -492,9 +479,7 @@ export class RoamServer {
               new_title: string;
             };
             const result = await toolHandlers.renamePage({ old_title, uid, new_title });
-            return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
+            return toolResult(request.params.name, result);
           }
 
           default:

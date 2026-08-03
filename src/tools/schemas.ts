@@ -81,6 +81,118 @@ const DESTRUCTIVE: ToolAnnotations = {
   openWorldHint: false,
 };
 
+/**
+ * Output schemas for the write tools.
+ *
+ * Declared on writes only. Reads already serialise their whole result into the
+ * text channel, so a schema there would double the payload for nothing, and
+ * read shapes still move.
+ *
+ * Two rules hold these together:
+ *
+ *   1. `structuredContent` is present IFF the tool declares an `outputSchema`.
+ *      We use the low-level Server rather than McpServer, so the SDK does not
+ *      police that for us — `writeResult` in roam-server.ts is the only place
+ *      that may attach it, and it consults these declarations.
+ *   2. Changes to a declared field are ADDITIVE ONLY. A client can validate a
+ *      live response against a cached `tools/list`, so renaming or removing a
+ *      field breaks the tool for as long as that cache lives. Add a new field
+ *      and deprecate the old one; drop it in a major.
+ *
+ * Required lists come from the compiler, not from guesswork: a field is
+ * required here only where the handler's return type declares it non-optional.
+ */
+
+/** Common to every write result — the one field all ten genuinely share. */
+const SUCCESS_FIELD = { success: { type: 'boolean' } } as const;
+
+/**
+ * A block in a created tree. `children` is declared as a bare array rather
+ * than a recursive `$ref`: the nesting is genuinely unbounded, and validators
+ * differ enough on self-reference that being vague one level down is safer
+ * than being precise and rejected.
+ */
+const NESTED_BLOCK = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    uid: { type: 'string' },
+    text: { type: 'string' },
+    level: { type: 'number' },
+    order: { type: 'number' },
+    children: { type: 'array', description: 'Nested NestedBlock objects, same shape as this one' }
+  }
+} as const;
+
+/** The in-band error shape that batch-style tools return instead of throwing. */
+const STRUCTURED_ERROR = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    code: { type: 'string' },
+    message: { type: 'string' },
+    details: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        action_index: { type: 'number' },
+        field: { type: 'string' },
+        expected: { type: 'string' },
+        received: { type: 'string' }
+      }
+    },
+    recovery: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        retry_after_ms: { type: 'number' },
+        suggestion: { type: 'string' }
+      }
+    }
+  }
+} as const;
+
+/** Counts from a page diff. */
+const DIFF_STATS = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    creates: { type: 'number' },
+    updates: { type: 'number' },
+    moves: { type: 'number' },
+    deletes: { type: 'number' },
+    preserved: { type: 'number' }
+  }
+} as const;
+
+/**
+ * Batch-style results. These tools report failure IN BAND rather than throwing,
+ * so `success: false` with an `error` is a normal return and only `success` can
+ * be required.
+ */
+const BATCH_RESULT_FIELDS = {
+  ...SUCCESS_FIELD,
+  uid_map: {
+    type: 'object',
+    additionalProperties: { type: 'string' },
+    description: 'Placeholder name → generated UID. Present only on success.'
+  },
+  validation_passed: { type: 'boolean' },
+  actions_attempted: { type: 'number' },
+  error: {
+    anyOf: [{ type: 'string' }, STRUCTURED_ERROR],
+    description: 'Present only when success is false.'
+  }
+} as const;
+
+/** Builds an output schema that stays open to additive growth. */
+function outputSchema(
+  properties: Record<string, unknown>,
+  required: string[]
+): Record<string, unknown> {
+  return { type: 'object', additionalProperties: true, properties, required };
+}
+
 export const toolSchemas = {
   roam_get_guidelines: {
     name: 'roam_get_guidelines',
@@ -94,6 +206,7 @@ export const toolSchemas = {
   roam_add_todo: {
     name: 'roam_add_todo',
     annotations: APPEND,
+    outputSchema: outputSchema({ ...SUCCESS_FIELD }, ['success']),
     description: 'Add a list of todo items as individual blocks to today\'s daily page in Roam. Each item becomes its own actionable block with todo status.\nNOTE on Roam-flavored markdown: For direct linking: use [[link]] syntax. For aliased linking, use [alias]([[link]]) syntax. Do not concatenate words in links/hashtags - correct: #[[multiple words]] #self-esteem (for typically hyphenated words).\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -136,6 +249,10 @@ export const toolSchemas = {
   roam_create_page: {
     name: 'roam_create_page',
     annotations: APPEND,
+    outputSchema: outputSchema(
+      { ...SUCCESS_FIELD, uid: { type: 'string', description: 'UID of the created page' } },
+      ['success', 'uid']
+    ),
     description: 'Create a new standalone page in Roam with optional content, including structured outlines and tables, using explicit nesting levels and headings (H1-H3). This is the preferred method for creating a new page with an outline in a single step. Best for:\n- Creating foundational concept pages that other pages will link to/from\n- Establishing new topic areas that need their own namespace\n- Setting up reference materials or documentation\n- Making permanent collections of information\n- Creating pages with mixed text and table content in one call.\n**Efficiency Tip:** This tool batches page and content creation efficiently. For adding content to existing pages, use `roam_process_batch_actions` instead.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -207,6 +324,19 @@ export const toolSchemas = {
   roam_create_outline: {
     name: 'roam_create_outline',
     annotations: APPEND,
+    outputSchema: outputSchema(
+      {
+        ...SUCCESS_FIELD,
+        page_uid: { type: 'string' },
+        parent_uid: { type: 'string', description: 'Block the outline was nested under' },
+        created_blocks: {
+          type: 'array',
+          items: NESTED_BLOCK,
+          description: 'The created block tree. Objects, not UID strings.'
+        }
+      },
+      ['success', 'page_uid', 'parent_uid', 'created_blocks']
+    ),
     description: 'Add a structured outline to an existing page or block (by title text or uid), with customizable nesting levels. To create a new page with an outline, use the `roam_create_page` tool instead. The `outline` parameter defines *new* blocks to be created. To nest content under an *existing* block, provide its UID or exact text in `block_text_uid`, and ensure the `outline` array contains only the child blocks with levels relative to that parent. Including the parent block\'s text in the `outline` array will create a duplicate block. Best for:\n- Adding supplementary structured content to existing pages\n- Creating temporary or working outlines (meeting notes, brainstorms)\n- Organizing thoughts or research under a specific topic\n- Breaking down subtopics or components of a larger concept\nBest for simpler, contiguous hierarchical content. For complex nesting (e.g., tables) or granular control over block placement, consider `roam_process_batch_actions` instead.\n**API Usage Note:** This tool performs verification queries after creation. For large outlines (10+ items) or when rate limits are a concern, consider using `roam_process_batch_actions` instead to minimize API calls.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -261,6 +391,19 @@ export const toolSchemas = {
   roam_import_markdown: {
     name: 'roam_import_markdown',
     annotations: APPEND,
+    outputSchema: outputSchema(
+      {
+        ...SUCCESS_FIELD,
+        page_uid: { type: 'string' },
+        parent_uid: { type: 'string' },
+        created_blocks: {
+          type: 'array',
+          items: NESTED_BLOCK,
+          description: 'The created block tree. Objects, not UID strings.'
+        }
+      },
+      ['success', 'page_uid', 'parent_uid', 'created_blocks']
+    ),
     description: 'Import nested markdown content into Roam under a specific block. Can locate the parent block by UID (preferred) or by exact string match within a specific page. If a `parent_string` is provided and the block does not exist, it will be created. Returns a nested structure of the created blocks.\n**API Usage Note:** This tool fetches the full nested structure after import for verification. For large imports or when rate limits are a concern, consider using `roam_process_batch_actions` with pre-structured actions instead.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -525,6 +668,14 @@ export const toolSchemas = {
   roam_remember: {
     name: 'roam_remember',
     annotations: APPEND,
+    outputSchema: outputSchema(
+      {
+        ...SUCCESS_FIELD,
+        block_uid: { type: 'string', description: 'UID of the stored memory block' },
+        parent_uid: { type: 'string' }
+      },
+      ['success']
+    ),
     description: 'Add a memory or piece of information to remember, stored on the daily page with ROAM_MEMORIES_TAG tag and optional categories (unless include_memories_tag is false). \nNOTE on Roam-flavored markdown: For direct linking: use [[link]] syntax. For aliased linking, use [alias]([[link]]) syntax. Do not concatenate words in links/hashtags - correct: #[[multiple words]] #self-esteem (for typically hyphenated words).\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -617,6 +768,7 @@ export const toolSchemas = {
   roam_process_batch_actions: {
     name: 'roam_process_batch_actions',
     annotations: DESTRUCTIVE,
+    outputSchema: outputSchema({ ...BATCH_RESULT_FIELDS }, ['success']),
     description: '**RATE LIMIT EFFICIENT:** This is the most API-efficient tool for multiple block operations. Combine all create/update/delete operations into a single call whenever possible. For intensive page updates or revisions, prefer this tool over multiple sequential calls.\n\nExecutes a sequence of low-level block actions (create, update, move, delete) in a single, non-transactional batch. Actions are executed in the provided order.\n\n**UID Placeholders for Nested Blocks:** Use `{{uid:name}}` syntax for parent-child references within the same batch. The server generates proper random UIDs and returns a `uid_map` showing placeholder→UID mappings. Example: `{ uid: "{{uid:parent1}}", string: "Parent" }` then `{ location: { "parent-uid": "{{uid:parent1}}" }, string: "Child" }`. Response includes `{ success: true, uid_map: { "parent1": "Xk7mN2pQ9" } }`.\n\nFor actions on existing blocks, a valid block UID is required. Note: Roam-flavored markdown, including block embedding with `((UID))` syntax, is supported within the `string` property for `create-block` and `update-block` actions. For actions on existing blocks or within a specific page context, it is often necessary to first obtain valid page or block UIDs. Tools like `roam_fetch_page_by_title` or other search tools can be used to retrieve these UIDs before executing batch actions. For simpler, sequential outlines, `roam_create_outline` is often more suitable.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -710,6 +862,10 @@ export const toolSchemas = {
   roam_create_table: {
     name: 'roam_create_table',
     annotations: APPEND,
+    outputSchema: outputSchema(
+      { ...BATCH_RESULT_FIELDS, table_uid: { type: 'string' } },
+      ['success']
+    ),
     description: 'Create a table in Roam with specified headers and rows. This tool abstracts the complex nested structure that Roam tables require, making it much easier to create properly formatted tables.\n\n**Why use this tool:**\n- Roam tables require precise nested block structures that are error-prone to create manually\n- Automatically handles the {{[[table]]}} container and nested column structure\n- Validates row/column consistency before execution\n- Converts empty cells to spaces (required by Roam)\n\n**Example:** A table with headers ["", "Column A", "Column B"] and rows [{label: "Row 1", cells: ["A1", "B1"]}] creates a 2x3 table.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -759,6 +915,15 @@ export const toolSchemas = {
   roam_move_block: {
     name: 'roam_move_block',
     annotations: EDIT,
+    outputSchema: outputSchema(
+      {
+        ...SUCCESS_FIELD,
+        block_uid: { type: 'string' },
+        new_parent_uid: { type: 'string' },
+        order: { anyOf: [{ type: 'number' }, { type: 'string' }] }
+      },
+      ['success', 'block_uid', 'new_parent_uid', 'order']
+    ),
     description: 'Move a block to a new location (different parent or position). This is a convenience wrapper around `roam_process_batch_actions` for single block moves.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
     inputSchema: {
       type: 'object',
@@ -783,6 +948,20 @@ export const toolSchemas = {
   roam_update_page_markdown: {
     name: 'roam_update_page_markdown',
     annotations: EDIT,
+    outputSchema: outputSchema(
+      {
+        ...SUCCESS_FIELD,
+        actions: { type: 'array', description: 'Roam batch actions applied (or planned, when dry_run)' },
+        stats: DIFF_STATS,
+        preserved_uids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Blocks whose UIDs survived the diff, so refs to them still resolve'
+        },
+        summary: { type: 'string' }
+      },
+      ['success', 'actions', 'stats', 'preserved_uids', 'summary']
+    ),
     description: 'Update an existing page with new markdown content using smart diff. Preserves block UIDs where possible and generates minimal changes. This is ideal for:\n- Syncing external markdown files to Roam\n- AI-assisted content updates that preserve references\n- Batch content modifications without losing block references\n\n**How it works:**\n1. Fetches existing page blocks\n2. Matches new content to existing blocks by text similarity\n3. Generates minimal create/update/move/delete operations\n4. Preserves UIDs for matched blocks (keeping references intact)\n\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
@@ -859,6 +1038,7 @@ export const toolSchemas = {
   roam_rename_page: {
     name: 'roam_rename_page',
     annotations: EDIT,
+    outputSchema: outputSchema({ ...SUCCESS_FIELD, message: { type: 'string' } }, ['success', 'message']),
     description: 'Rename a page by changing its title. Identifies the page by current title or UID.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
     inputSchema: {
       type: 'object',
