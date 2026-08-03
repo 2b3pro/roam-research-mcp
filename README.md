@@ -155,14 +155,28 @@ ROAM_SYSTEM_WRITE_KEY=your-secret-key
 | `protected` | No | If `true`, writes require `ROAM_SYSTEM_WRITE_KEY` confirmation |
 | `memoriesTag` | No | Tag for `roam_remember`/`roam_recall` (overrides global default) |
 
-**Write Protection:**
-Protected graphs require the `write_key` parameter matching `ROAM_SYSTEM_WRITE_KEY` for any write operation. This prevents accidental writes to sensitive graphs.
+**Two kinds of access control (and how they differ)**
+
+The server has two independent locks. They're easy to mix up because both are "keys" — here's the plain version (both are **optional and off by default**):
+
+| | **Bearer token** — `HTTP_AUTH_TOKEN` | **Write key** — `ROAM_SYSTEM_WRITE_KEY` |
+|---|---|---|
+| In a phrase | The key to the **front door** | The latch on a **safe inside** |
+| Controls | *Who can reach the server at all* | *Whether a write to a `protected` graph is allowed* |
+| Covers | Everything — reads **and** writes, all graphs | Only **writes**, and only to graphs marked `protected` |
+| Protects reading? | **Yes** | **No** |
+| When you need it | Only if the server is reachable beyond your own machine (e.g. `-H 0.0.0.0`) | Whenever you want a guard against accidental edits to important graphs |
+| How it's sent | HTTP header: `Authorization: Bearer <token>` | A `write_key` argument on write tools / CLI commands |
+
+Think of a house: the **bearer token locks the front door** (keeps strangers out entirely), and the **write key locks a safe inside** (even someone already in the house needs it to change what's in the safe). On your own machine bound to `127.0.0.1`, the front door faces a wall — you don't need the bearer token there. The write key is still handy locally as an "are you sure?" guard, because **Roam has no undo**.
+
+So: to mark a graph as needing the write key, set `protected: true` on it and configure `ROAM_SYSTEM_WRITE_KEY`; callers then pass a matching `write_key` for any write to that graph.
 
 *Optional:*
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
 - `HTTP_STREAM_PORT`: Port for the HTTP Stream transport (defaults to 8088).
 - `HTTP_STREAM_HOST`: Host to bind the HTTP transport to in `--server` mode (defaults to `127.0.0.1`, loopback-only). Set to `0.0.0.0` to expose on the LAN.
-- `HTTP_AUTH_TOKEN`: Optional bearer token for the HTTP MCP endpoint (**authentication**). Unset = open (fine for loopback). When set, every HTTP MCP request must send `Authorization: Bearer <token>` (`GET /health` stays open). Use it whenever you bind beyond `127.0.0.1`. This is separate from `ROAM_SYSTEM_WRITE_KEY` (per-graph write authorization).
+- `HTTP_AUTH_TOKEN`: Optional bearer token that locks the **whole** HTTP endpoint. Unset = open (fine for loopback). When set, every MCP request must send `Authorization: Bearer <token>` (`GET /health` stays open). Use it whenever you bind beyond `127.0.0.1`. Different from `ROAM_SYSTEM_WRITE_KEY` — see [Two kinds of access control](#two-kinds-of-access-control-and-how-they-differ).
 
 ### Running the Server
 
@@ -233,11 +247,9 @@ Clients then send the token as a header:
 }
 ```
 
-These are two **distinct** layers — keep both:
-- **`HTTP_AUTH_TOKEN`** = *authentication* (who may connect). Gates **all** requests — reads and writes, every graph.
-- **`ROAM_SYSTEM_WRITE_KEY`** = *authorization* (what a connected caller may do). Gates only **writes** to `protected` graphs; it does **not** protect reads.
+Keep **both** — they do different jobs (see [Two kinds of access control](#two-kinds-of-access-control-and-how-they-differ) above): the bearer token controls **who can connect**, the write key only guards **writes to protected graphs**.
 
-> ⚠️ `write_key` is **not** transport auth. On an exposed server without `HTTP_AUTH_TOKEN`, anyone on the network can still **read every graph** and write non-protected graphs. For anything beyond loopback, set `HTTP_AUTH_TOKEN`.
+> ⚠️ The write key is **not** a substitute for the bearer token. On an exposed server without `HTTP_AUTH_TOKEN`, anyone on the network can still **read every graph** (and write non-protected ones). For anything beyond loopback, set `HTTP_AUTH_TOKEN`.
 
 **Keeping it running (macOS LaunchAgent):**
 Create `~/Library/LaunchAgents/com.example.roam-mcp.plist` with `RunAtLoad` + `KeepAlive`, your env vars under `EnvironmentVariables`, and `--server` as the last `ProgramArguments` entry. Keep `StandardOutPath`/`StandardErrorPath` on a **local** path (e.g. `~/Library/Logs/`), then:

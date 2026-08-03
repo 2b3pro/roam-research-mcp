@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseMarkdown, convertToRoamActions, convertToRoamActionsWithBlocks, nestUnderHeadings, type MarkdownNode } from './markdown-utils.js';
+import { parseMarkdown, convertToRoamActions, convertToRoamActionsWithBlocks, nestUnderHeadings, convertToRoamMarkdown, type MarkdownNode } from './markdown-utils.js';
 
 describe('markdown-utils', () => {
   describe('parseMarkdown - numbered lists', () => {
@@ -190,6 +190,32 @@ And this--too`;
       expect(blocks[0].children).toHaveLength(2);          // Alpha.1, Alpha.2
       expect(blocks[0].children[0].children).toHaveLength(2); // Alpha.1.a, Alpha.1.b
       expect(blocks[1].children[0].children).toHaveLength(1); // Beta.1.a
+    });
+  });
+
+  describe('convertToRoamMarkdown - italic vs literal underscores', () => {
+    it('still converts genuine word-boundary italics to Roam __italic__', () => {
+      expect(convertToRoamMarkdown('this is _italic_ text')).toBe('this is __italic__ text');
+      expect(convertToRoamMarkdown('_leading_ and *starred*')).toBe('__leading__ and __starred__');
+    });
+
+    it('leaves intra-word (snake_case) underscores literal', () => {
+      const line = 'Source transcript on disk :: american_alchemy_dave_rossi.txt';
+      expect(convertToRoamMarkdown(line)).toBe(line);
+    });
+
+    it('leaves underscores inside URLs literal', () => {
+      const line = 'Ning Li: https://en.wikipedia.org/wiki/Ning_Li_(physicist)';
+      expect(convertToRoamMarkdown(line)).toBe(line);
+    });
+
+    it('does not treat word_bounded_ trailing underscores as emphasis', () => {
+      expect(convertToRoamMarkdown('foo_bar_baz')).toBe('foo_bar_baz');
+    });
+
+    it('keeps underscores literal when wrapped in inline code (backtick escape hatch)', () => {
+      const line = 'literal `_not_italic_` here';
+      expect(convertToRoamMarkdown(line)).toBe(line);
     });
   });
 

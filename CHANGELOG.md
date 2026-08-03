@@ -1,5 +1,8 @@
 # Changelog
 
+### v2.22.1 (2026-07-07)
+- **Fix:** `convertToRoamMarkdown` no longer mangles intra-word underscores. The single-underscore-to-italic rule now respects CommonMark's word-boundary requirement, so `snake_case` filenames and URLs like `/wiki/Ning_Li_(physicist)` survive `roam_import_markdown` instead of becoming `__Li__`. Genuine `_italic_` at word boundaries still converts, and backtick-wrapped inline code stays literal.
+
 ### v2.22.0 (2026-06-13)
 - **Feature:** Optional transport-level bearer token (`HTTP_AUTH_TOKEN`) for the HTTP MCP endpoint — the perimeter lock for when the server is bound beyond loopback (e.g. `-H 0.0.0.0`).
   - **Unset = open (default, unchanged)** — loopback deployments need nothing.

@@ -130,7 +130,10 @@ function convertToRoamMarkdown(text: string): string {
 
   // Handle single asterisks/underscores (italic)
   text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '__$1__');  // Single asterisk to double underscore
-  text = text.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '__$1__');        // Single underscore to double underscore
+  // Single underscore to italic, but only at word boundaries. Underscores flanked by
+  // word chars (\w includes _) are literal per CommonMark, so snake_case filenames and
+  // URLs like /wiki/Ning_Li_(physicist) are left intact instead of becoming __Li__.
+  text = text.replace(/(?<!\w)_(?!_)(.+?)_(?!\w)/g, '__$1__');
 
   // Handle highlights
   text = text.replace(/==(.+?)==/g, '^^$1^^');
