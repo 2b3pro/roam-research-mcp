@@ -4,6 +4,7 @@ import { ANCESTOR_RULE } from '../../search/ancestor-rule.js';
 import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
 import { resolveRefs, resolveBlockRefs } from '../helpers/refs.js';
 import { executeBatch, executeBatchSafe } from '../helpers/batch-utils.js';
+import { pruneHiddenBlocks } from '../helpers/hidden.js';
 import type { RoamBlock } from '../types/index.js';
 import {
   parseMarkdown,
@@ -516,7 +517,10 @@ export class PageOperations {
     };
     sortBlocks(rootBlocks);
 
-    return { title, blocks: rootBlocks };
+    // Withhold subtrees the user tagged #.rm-hide / #.rm-private. Done here, at
+    // the single point where a page's tree is assembled, so every caller that
+    // renders a page (markdown, raw, structure) inherits it.
+    return { title, blocks: pruneHiddenBlocks(rootBlocks) };
   }
 
   async fetchPageByTitle(

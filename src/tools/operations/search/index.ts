@@ -16,9 +16,41 @@ import {
   DatomicSearchHandlerImpl
 } from './handlers.js';
 import type { DatomicSearchParams } from './types.js';
+import { collectHiddenUids, filterHiddenMatches } from '../../helpers/hidden.js';
 
 export class SearchOperations {
   constructor(private graph: Graph) {}
+
+  /**
+   * Withhold blocks the user tagged #.rm-hide / #.rm-private, and blocks nested
+   * under them.
+   *
+   * Search results are flat, so unlike a page tree they carry no ancestry —
+   * hence the UID closure from `collectHiddenUids`. Applied to every
+   * content-search path below, and deliberately NOT to `executeDatomicQuery`:
+   * raw Datalog reads the database directly and stays raw, matching the
+   * official Roam toolset. That is also why these tags are a convenience
+   * filter, not a security boundary.
+   */
+  private async withoutHidden(result: SearchHandlerResult): Promise<SearchHandlerResult> {
+    if (!result?.matches?.length) return result;
+    const hidden = await collectHiddenUids(this.graph);
+    const matches = filterHiddenMatches(result.matches, hidden);
+    const removed = result.matches.length - matches.length;
+    if (removed === 0) return result;
+
+    // Some handlers attach a total_count that isn't on SearchHandlerResult;
+    // keep it consistent with the matches we actually return rather than
+    // reporting a total that includes withheld blocks.
+    const withCount = result as SearchHandlerResult & { total_count?: number };
+    return {
+      ...result,
+      matches,
+      ...(typeof withCount.total_count === 'number'
+        ? { total_count: Math.max(0, withCount.total_count - removed) }
+        : {}),
+    };
+  }
 
   async searchByStatus(
     status: 'TODO' | 'DONE',
@@ -30,7 +62,7 @@ export class SearchOperations {
       status,
       page_title_uid,
     });
-    const result = await handler.execute();
+    const result = await this.withoutHidden(await handler.execute());
 
     // Post-process results with include/exclude filters
     let matches = result.matches;
@@ -78,25 +110,28 @@ export class SearchOperations {
       page_title_uid,
       near_tag,
     });
-    return handler.execute();
+    return this.withoutHidden(await handler.execute());
   }
 
   async searchBlockRefs(params: BlockRefSearchParams): Promise<SearchHandlerResult> {
     const handler = new BlockRefSearchHandlerImpl(this.graph, params);
-    return handler.execute();
+    return this.withoutHidden(await handler.execute());
   }
 
   async searchHierarchy(params: HierarchySearchParams): Promise<SearchHandlerResult> {
     const handler = new HierarchySearchHandlerImpl(this.graph, params);
-    return handler.execute();
+    return this.withoutHidden(await handler.execute());
   }
 
   async searchByText(params: TextSearchParams): Promise<SearchHandlerResult> {
     const handler = new TextSearchHandlerImpl(this.graph, params);
-    return handler.execute();
+    return this.withoutHidden(await handler.execute());
   }
 
   async executeDatomicQuery(params: DatomicSearchParams): Promise<SearchHandlerResult> {
+    // Intentionally NOT filtered — raw Datalog reads the database directly and
+    // stays raw. See the note on withoutHidden(): the hide tags are a
+    // convenience filter for the content tools, not a security boundary.
     const handler = new DatomicSearchHandlerImpl(this.graph, params);
     return handler.execute();
   }
@@ -127,7 +162,9 @@ export class SearchOperations {
       text: '', // Empty text to match all blocks
     });
 
-    const result = await handler.execute();
+    // Filtered before the map below, which renames block_uid -> uid; after it
+    // the hidden-UID closure would have nothing to match on.
+    const result = await this.withoutHidden(await handler.execute());
 
     // Filter results by date
     const matches = result.matches

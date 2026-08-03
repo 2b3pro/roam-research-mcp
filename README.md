@@ -119,6 +119,20 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 
 ---
 
+## Hiding content from the AI
+
+Blocks tagged `#.rm-hide` or `#.rm-private` — and everything nested under them — are omitted from the content these tools return. Both the hashtag (`#.rm-hide`, `#[[.rm-hide]]`) and link (`[[.rm-hide]]`) forms work. `.rm-private` is Roam's existing "hidden from other users" tag; `.rm-hide` hides from the AI specifically.
+
+This follows the same convention as Roam's official MCP server, so a block tagged for one is hidden from the other.
+
+Applied to: `roam_fetch_page_by_title`, `roam_fetch_block`, `roam_fetch_page_full_view`, `roam_get_subpages`, `roam_search_by_text`, `roam_search_for_tag`, `roam_search_by_status`, `roam_search_block_refs`, `roam_search_hierarchy`, `roam_search_by_date`.
+
+**This is a convenience filter, not a security guarantee.** `roam_datomic_query` reads the database directly and deliberately does **not** apply it, so a capable agent can still surface hidden blocks through raw Datalog. Treat these tags as "keep it out of the AI's way," not "keep it secret."
+
+Tag matching is case-insensitive, and only exact tags match — `#.rm-hidden` and `#.rm-highlight` are left alone. The set of hidden UIDs is cached for 30 seconds, so a block tagged just now may remain visible for up to that long.
+
+---
+
 ## Configuration
 
 ### Environment Variables
