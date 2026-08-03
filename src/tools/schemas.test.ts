@@ -117,6 +117,56 @@ describe('tool annotations', () => {
   });
 });
 
+describe('guidelines nudge', () => {
+  /**
+   * A tool nobody is told to call is inert. Roam's own server appends a note to
+   * every tool description for exactly this reason, and found empirically that
+   * it has to say "reads too" or agents rationalise reads as exempt.
+   */
+  const described = allTools as unknown as { name: string; description: string }[];
+  const others = described.filter((t) => t.name !== 'roam_get_guidelines');
+
+  it('every tool except the guidelines tool itself points at it', () => {
+    const silent = others.filter((t) => !t.description.includes('roam_get_guidelines'));
+    expect(silent.map((t) => t.name), 'tools with no guidelines nudge').toEqual([]);
+  });
+
+  it('the guidelines tool does not tell the agent to call itself', () => {
+    const self = described.find((t) => t.name === 'roam_get_guidelines')!;
+    expect(self.description).not.toMatch(/call roam_get_guidelines for this graph/);
+  });
+
+  it('says the rule applies to reads, which is the clause agents talk themselves out of', () => {
+    const reads = others.filter((t) => {
+      const tool = allTools.find((x) => x.name === t.name);
+      return tool?.annotations?.readOnlyHint === true;
+    });
+    for (const t of reads) {
+      expect(t.description, t.name).toMatch(/reads included/);
+    }
+  });
+
+  it('content-authoring tools ask for the cheatsheet in the same breath, not a second stacked note', () => {
+    const authoring = others.filter((t) => t.description.includes('Roam Markdown Cheatsheet'));
+    // The 6 appends, the destructive batch, and the smart-diff edit.
+    expect(authoring).toHaveLength(8);
+    for (const t of authoring) {
+      expect(t.description, t.name).toMatch(
+        /call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet/
+      );
+      // The old standalone cheatsheet note must be gone — two competing
+      // "read this first" blocks is how an agent ends up following neither.
+      expect(t.description, t.name).not.toMatch(/ensure that you have loaded into context/);
+    }
+  });
+
+  it('carries the once-per-session limiter so agents do not re-orient every call', () => {
+    for (const t of others) {
+      expect(t.description, t.name).toMatch(/once per session/);
+    }
+  });
+});
+
 describe('annotations agree with the write-protection list', () => {
   /**
    * WRITE_OPERATIONS drives write-key enforcement on protected graphs; the
