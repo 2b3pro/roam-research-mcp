@@ -65,7 +65,8 @@ export class RoamServer {
     }
 
     const memoriesTag = this.registry.getMemoriesTag(graphKey);
-    const handlers = new ToolHandlers(graph, memoriesTag);
+    const guidelinesPage = this.registry.getGuidelinesPage(graphKey);
+    const handlers = new ToolHandlers(graph, memoriesTag, guidelinesPage);
     this.toolHandlersCache.set(graphKey, handlers);
     return handlers;
   }
@@ -206,6 +207,13 @@ export class RoamServer {
             const content = await toolHandlers.getSubPages(prefix, filter_tag, include_content);
             return {
               content: [{ type: 'text', text: content }],
+            };
+          }
+
+          case 'roam_get_guidelines': {
+            const result = await toolHandlers.getGuidelines();
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
             };
           }
 

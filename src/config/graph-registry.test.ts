@@ -96,3 +96,39 @@ describe('GraphRegistry', () => {
     });
   });
 });
+
+describe('getGuidelinesPage', () => {
+  const make = (configs: Record<string, any>, def = 'personal') =>
+    new GraphRegistry(configs as any, def);
+
+  it('defaults to the shared roam/agent guidelines convention', () => {
+    delete process.env.ROAM_GUIDELINES_PAGE;
+    const r = make({ personal: { token: 't', graph: 'g' } });
+    expect(r.getGuidelinesPage('personal')).toBe('roam/agent guidelines');
+  });
+
+  it('prefers per-graph config over the env var', () => {
+    process.env.ROAM_GUIDELINES_PAGE = 'env/page';
+    const r = make({ work: { token: 't', graph: 'g', guidelinesPage: 'work/rules' } }, 'work');
+    expect(r.getGuidelinesPage('work')).toBe('work/rules');
+    delete process.env.ROAM_GUIDELINES_PAGE;
+  });
+
+  it('falls back to the env var when a graph sets nothing', () => {
+    process.env.ROAM_GUIDELINES_PAGE = 'env/page';
+    const r = make({ personal: { token: 't', graph: 'g' } });
+    expect(r.getGuidelinesPage('personal')).toBe('env/page');
+    delete process.env.ROAM_GUIDELINES_PAGE;
+  });
+
+  it('returns null when a graph disables guidelines', () => {
+    const r = make({ personal: { token: 't', graph: 'g', guidelinesPage: false } });
+    expect(r.getGuidelinesPage('personal')).toBeNull();
+  });
+
+  it('resolves the default graph when no key is given', () => {
+    delete process.env.ROAM_GUIDELINES_PAGE;
+    const r = make({ personal: { token: 't', graph: 'g', guidelinesPage: 'p/rules' } });
+    expect(r.getGuidelinesPage()).toBe('p/rules');
+  });
+});

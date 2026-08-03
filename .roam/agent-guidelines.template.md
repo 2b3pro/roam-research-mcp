@@ -4,10 +4,8 @@ A starting point for the page that tells AI agents how *your* graph works.
 
 ## Status
 
-> **This server does not read this page yet.** Guidelines-page support is not
-> built — today the only instruction channel here is `CUSTOM_INSTRUCTIONS_PATH`.
-> Roam's own MCP server *does* read `[[roam/agent guidelines]]`, so a page you
-> write now already works there, and will work here when support lands.
+> Read by the `roam_get_guidelines` tool. Roam's own MCP server reads the same
+> page title, so one page serves both.
 
 ## Why a page instead of a file
 

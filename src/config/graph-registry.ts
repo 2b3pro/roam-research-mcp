@@ -21,6 +21,8 @@ export interface GraphConfig {
   protected?: boolean;
   /** Tag used for roam_remember/roam_recall. Defaults to ROAM_MEMORIES_TAG env var or "Memories". Set to false to disable. */
   memoriesTag?: string | false;
+  /** Page holding this graph's agent conventions. Defaults to ROAM_GUIDELINES_PAGE env var or "roam/agent guidelines". Set to false to disable. */
+  guidelinesPage?: string | false;
 }
 
 /**
@@ -107,6 +109,21 @@ export class GraphRegistry {
 
     // Priority: per-graph config > env var > default
     return config?.memoriesTag ?? process.env.ROAM_MEMORIES_TAG ?? 'Memories';
+  }
+
+  /**
+   * Page holding a graph's agent conventions, or null when disabled.
+   * Same precedence as memoriesTag: per-graph config > env var > default.
+   */
+  getGuidelinesPage(key?: string): string | null {
+    const resolvedKey = key ?? this.defaultKey;
+    const config = this.configs.get(resolvedKey);
+
+    if (config?.guidelinesPage === false) {
+      return null;
+    }
+
+    return config?.guidelinesPage ?? process.env.ROAM_GUIDELINES_PAGE ?? 'roam/agent guidelines';
   }
 
   /**

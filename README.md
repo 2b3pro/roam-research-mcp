@@ -116,6 +116,33 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 | `roam_remember` / `roam_recall` | specialized tools for AI memory management within Roam. |
 | `roam_datomic_query` | Execute raw Datalog queries for advanced filtering. |
 | `roam_markdown_cheatsheet` | Retrieve the Roam-flavored markdown reference. |
+| `roam_get_guidelines` | Retrieve this graph's user-defined agent conventions. |
+
+---
+
+## Agent guidelines (per-graph)
+
+`roam_get_guidelines` reads a page **inside the graph** — `[[roam/agent guidelines]]` by default — holding your own conventions: how you tag, how you namespace pages, what an agent should never do. Roam's official MCP server reads the same page title, so one page serves both.
+
+This is distinct from `CUSTOM_INSTRUCTIONS_PATH`, and the two compose:
+
+| | `CUSTOM_INSTRUCTIONS_PATH` | `[[roam/agent guidelines]]` |
+|---|---|---|
+| Lives in | a file on disk | a page in the graph |
+| Scope | server-wide, all graphs | **per-graph** |
+| To change it | edit the file, restart the server | edit the page |
+| Answers | how to write Roam markdown | how *this user* wants *this graph* handled |
+
+Configure per graph, or disable with `false`:
+
+```bash
+ROAM_GRAPHS='{"personal": {"token": "...", "graph": "...", "guidelinesPage": "roam/agent guidelines"}, "work": {"token": "...", "graph": "...", "guidelinesPage": false}}'
+ROAM_GUIDELINES_PAGE='roam/agent guidelines'   # fallback when a graph sets none
+```
+
+If no such page exists the tool returns `exists: false` rather than failing, so it is safe to call unconditionally. Results are cached for 30 seconds — an edit to the page takes effect without a restart. A starter template lives at [`.roam/agent-guidelines.template.md`](.roam/agent-guidelines.template.md).
+
+Note that guidelines are read through the normal page path, so blocks tagged `#.rm-hide` / `#.rm-private` are withheld from them too — see below.
 
 ---
 

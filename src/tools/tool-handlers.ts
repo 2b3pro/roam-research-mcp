@@ -10,6 +10,7 @@ import { MemoryOperations } from './operations/memory.js';
 import { TodoOperations } from './operations/todos.js';
 import { OutlineOperations } from './operations/outline.js';
 import { BatchOperations } from './operations/batch.js';
+import { GuidelinesOperations, DEFAULT_GUIDELINES_PAGE } from './operations/guidelines.js';
 import { TableOperations, type TableInput } from './operations/table.js';
 import { DatomicSearchHandlerImpl } from './operations/search/handlers.js';
 import { FullPageViewOperations } from './operations/full-page-view.js';
@@ -25,9 +26,14 @@ export class ToolHandlers {
   private batchOps: BatchOperations;
   private tableOps: TableOperations;
   private fullPageViewOps: FullPageViewOperations;
+  private guidelinesOps: GuidelinesOperations;
   private cachedCheatsheet: string | null = null;
 
-  constructor(private graph: Graph, memoriesTag: string | null = 'Memories') {
+  constructor(
+    private graph: Graph,
+    memoriesTag: string | null = 'Memories',
+    guidelinesPage: string | null = DEFAULT_GUIDELINES_PAGE
+  ) {
     this.pageOps = new PageOperations(graph);
     this.blockOps = new BlockOperations(graph);
     this.blockRetrievalOps = new BlockRetrievalOperations(graph);
@@ -38,6 +44,12 @@ export class ToolHandlers {
     this.batchOps = new BatchOperations(graph);
     this.tableOps = new TableOperations(graph);
     this.fullPageViewOps = new FullPageViewOperations(graph, this.pageOps);
+    this.guidelinesOps = new GuidelinesOperations(graph, guidelinesPage);
+  }
+
+  // Per-graph agent conventions, read from a page in the graph.
+  async getGuidelines() {
+    return this.guidelinesOps.getGuidelines();
   }
 
   // Page Operations

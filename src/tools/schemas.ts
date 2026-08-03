@@ -82,6 +82,15 @@ const DESTRUCTIVE: ToolAnnotations = {
 };
 
 export const toolSchemas = {
+  roam_get_guidelines: {
+    name: 'roam_get_guidelines',
+    annotations: READ,
+    description: 'Retrieve this graph\'s user-defined agent conventions, read from the `[[roam/agent guidelines]]` page inside the graph (configurable per graph). These are the user\'s own rules — how they tag, how they name and namespace pages, what to never do, how they want your voice attributed.\n\nCall this ONCE per graph per session, before other tools, INCLUDING for reads: conventions change how results should be interpreted and presented, not just how content is written. Returns today\'s daily note title as orientation.\n\nDistinct from `roam_markdown_cheatsheet`, which covers Roam syntax and this server\'s mechanics. Guidelines answer "how does this user want their graph handled". Returns exists:false rather than failing when no page has been created.',
+    inputSchema: {
+      type: 'object',
+      properties: withMultiGraphParams({}),
+    },
+  },
   roam_add_todo: {
     name: 'roam_add_todo',
     annotations: APPEND,
