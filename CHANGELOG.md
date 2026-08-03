@@ -1,5 +1,22 @@
 # Changelog
 
+### v2.24.0 (2026-08-03)
+
+- **⚠️ Breaking:** `guidelinesPage` is now **opt-in**. In 2.23.0 an unset `guidelinesPage` fell back to the literal title `roam/agent guidelines`, so any graph that happened to contain a similarly-titled page would start feeding it to agents without anyone asking. Resolution is now **per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → disabled**.
+  - **If you set up a guidelines page for 2.23.0, it goes quiet until you name it.** Set `"guidelinesPage": "roam/agent guidelines"` on the graph in `ROAM_GRAPHS`, or `ROAM_GUIDELINES_PAGE` as a fallback for graphs that name none.
+  - `guidelinesPage: false` still disables one graph even when the env fallback is set. Each graph may point at a different page.
+  - When disabled the tool reports it and never touches the graph.
+
+- **Fix:** `#.rm-hide` / `#.rm-private` now actually apply on the page and block read paths. 2.23.0 wired the filter into `fetchPageByUid` — a function the tools do not call. `roam_fetch_page_by_title` builds its own tree inline rather than reusing it, so the primary page read shipped unfiltered, and `roam_fetch_block` was never wired at all. **If you relied on 2.23.0 to withhold tagged blocks, it did not.**
+  - `fetchPageByTitle` prunes before any of its three formats render. Blocks are collected from the pruned tree rather than by filtering the original list — pruning copies any node with children, so the originals are no longer the objects rendered, and the markdown branch mutates them in place while resolving references.
+  - `roam_fetch_block` withholds a tagged block outright and prunes its subtree.
+  - `roam_fetch_page_full_view` filtered its own page content already but not its **backlinks**, which come from other pages. Referring blocks are now filtered against the hidden-UID closure — a text check alone misses a block nested under a tagged parent elsewhere — and their children pruned. Filtered before the `max_references` cap, so truncation counts what the caller can actually see.
+  - `roam_recall` has two halves; the tag half already went through filtered search, the page scan did not. Its query now selects the block UID so it can filter by closure rather than by text alone.
+  - `roam_get_subpages` needed no change — it renders through the already-filtered path.
+  - Verified through live tool calls against a running daemon rather than through the underlying functions, which is how the 2.23.0 gap went unnoticed.
+
+- **Docs:** The README now explains [how this project differs from Roam's official MCP server](README.md#how-this-differs-from-roams-official-mcp-server) — they talk to different Roam APIs, and everything else follows from that. Says plainly when to reach for theirs, and documents that the two interoperate: both read `[[roam/agent guidelines]]` and both honour `#.rm-hide` / `#.rm-private`.
+
 ### v2.23.0 (2026-08-03)
 
 - **Security fix:** Denying a write to a protected graph no longer discloses `ROAM_SYSTEM_WRITE_KEY`. The error read `Provide write_key: "<the actual key>" to proceed` — so the key that *is* the gate was handed to whoever had just been refused, who could immediately retry and succeed. It fired both when no key was supplied and when a **wrong** key was guessed, turning a failed guess into a working one. The same pattern existed in the CLI path, where it is worse: CLI output lands in scrollback, logs and session transcripts, so the key outlived the moment it was printed. Both now name the environment variable, never its value. **If you have run this server with a protected graph, treat your write key as exposed and rotate it.**
