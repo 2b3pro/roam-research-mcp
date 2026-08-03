@@ -100,6 +100,21 @@ describe('output schemas', () => {
     }
   });
 
+  it('names the created-page UID consistently across the tools that return one', async () => {
+    // roam_create_page used to return a bare `uid` while its two siblings
+    // returned `page_uid` for the same thing. Once declared in a schema that
+    // disagreement is a published contract, so it is pinned here.
+    const tools = await harness.list();
+    const byName = new Map(tools.map((t) => [t.name, t as { outputSchema?: any }]));
+
+    for (const name of ['roam_create_page', 'roam_create_outline', 'roam_import_markdown']) {
+      const schema = byName.get(name)!.outputSchema;
+      expect(schema.properties.page_uid, name).toBeDefined();
+      expect(schema.required, name).toContain('page_uid');
+      expect(schema.properties.uid, `${name} must not reintroduce a bare uid`).toBeUndefined();
+    }
+  });
+
   it('returns structuredContent from a write tool, matching the text channel', async () => {
     // The wire invariant, checked where it actually has to hold. Nothing in the
     // SDK enforces it for us — we use the low-level Server.

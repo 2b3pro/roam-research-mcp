@@ -128,7 +128,16 @@ export class PageOperations {
   async createPage(
     title: string,
     content?: ContentItem[]
-  ): Promise<{ success: boolean; uid: string }> {
+  ): Promise<{
+    success: boolean;
+    /**
+     * `page_uid`, not `uid`, to match `createOutline` and `importMarkdown`.
+     * A bare `uid` does not say what it identifies, and this tool returned it
+     * for the same concept its siblings called `page_uid`. Renamed before an
+     * outputSchema froze the disagreement into a published contract.
+     */
+    page_uid: string;
+  }> {
     // Ensure title is properly formatted
     const pageTitle = String(title).trim();
 
@@ -219,7 +228,7 @@ export class PageOperations {
         if (existingBlockCount && existingBlockCount > 0) {
           // Page already has content - this might be a duplicate call
           // Return success without adding duplicate content
-          return { success: true, uid: pageUid };
+          return { success: true, page_uid: pageUid };
         }
 
         // Process content items in order, tracking position for correct placement
@@ -412,7 +421,7 @@ export class PageOperations {
       block: { string: `Processed: [[${formattedTodayTitle}]]` }
     }], 'add Processed block');
 
-    return { success: true, uid: pageUid };
+    return { success: true, page_uid: pageUid };
   }
 
   /**

@@ -300,10 +300,10 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
             const pageOps = new PageOperations(graph);
             for (const title of unresolved) {
               const result = await pageOps.createPage(title);
-              if (result.success && result.uid) {
-                context.pageUids.set(title, result.uid);
+              if (result.success && result.page_uid) {
+                context.pageUids.set(title, result.page_uid);
                 if (options.debug) {
-                  printDebug(`Auto-created "${title}"`, result.uid);
+                  printDebug(`Auto-created "${title}"`, result.page_uid);
                 }
               } else {
                 exitWithError(`Failed to create page "${title}"`);
@@ -381,14 +381,14 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
               outputPartialResults(pageResults, pc.params.title);
             }
 
-            pageResults.push({ title: pc.params.title, uid: result.uid });
+            pageResults.push({ title: pc.params.title, uid: result.page_uid });
 
             if (pc.params.as) {
-              context.placeholders.set(pc.params.as, result.uid);
+              context.placeholders.set(pc.params.as, result.page_uid);
             }
 
             if (options.debug) {
-              printDebug(`Created "${pc.params.title}"`, result.uid);
+              printDebug(`Created "${pc.params.title}"`, result.page_uid);
             }
           }
         }

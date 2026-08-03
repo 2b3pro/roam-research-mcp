@@ -250,8 +250,11 @@ export const toolSchemas = {
     name: 'roam_create_page',
     annotations: APPEND,
     outputSchema: outputSchema(
-      { ...SUCCESS_FIELD, uid: { type: 'string', description: 'UID of the created page' } },
-      ['success', 'uid']
+      {
+        ...SUCCESS_FIELD,
+        page_uid: { type: 'string', description: 'UID of the created page' }
+      },
+      ['success', 'page_uid']
     ),
     description: 'Create a new standalone page in Roam with optional content, including structured outlines and tables, using explicit nesting levels and headings (H1-H3). This is the preferred method for creating a new page with an outline in a single step. Best for:\n- Creating foundational concept pages that other pages will link to/from\n- Establishing new topic areas that need their own namespace\n- Setting up reference materials or documentation\n- Making permanent collections of information\n- Creating pages with mixed text and table content in one call.\n**Efficiency Tip:** This tool batches page and content creation efficiently. For adding content to existing pages, use `roam_process_batch_actions` instead.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {

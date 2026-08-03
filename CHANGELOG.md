@@ -2,16 +2,18 @@
 
 ### v3.0.0 (2026-08-03)
 
-**In one line:** write tools now return machine-readable `structuredContent` alongside their text, and two output fields were renamed to stop the schemas freezing bad names into a permanent contract.
+**In one line:** write tools now return machine-readable `structuredContent` alongside their text, and three output fields were renamed to stop the schemas freezing bad names into a permanent contract.
 
-- **⚠️ Breaking: two write-result field names changed.** They are renamed, not removed, and nothing else about the results moved.
+- **⚠️ Breaking: three write-result field names changed.** They are renamed, not removed, and nothing else about the results moved.
 
   | Tool | Was | Now |
   |---|---|---|
+  | `roam_create_page` | `uid` | `page_uid` |
   | `roam_create_outline`, `roam_import_markdown` | `created_uids` | `created_blocks` |
   | `roam_update_page_markdown` | `preservedUids` | `preserved_uids` |
 
-  - **Do you need to do anything?** Only if you have code reading those field names — a script, a wrapper, a CLI pipeline. If you use this server through an AI assistant, no: the model reads whatever field is there. The CLI was updated in the same commit.
+  - **Do you need to do anything?** Only if you have code reading those field names — a script, a wrapper, a CLI pipeline. If you use this server through an AI assistant, no: the model reads whatever field is there. The CLI was updated in the same commits, and its own output shape is unchanged.
+  - **`roam_create_page` returned a bare `uid`** while `roam_create_outline` and `roam_import_markdown` returned `page_uid` for the same thing. A bare `uid` also does not say what it identifies. All three now agree.
   - **`created_uids` never contained UIDs.** It holds `NestedBlock` objects — `{uid, text, level, order, children}`. Anything trusting the name and iterating it as strings was already getting objects. `created_blocks` says what it has always been.
   - **`preservedUids` was the only camelCase field crossing the tool boundary.** It inherited the casing from the internal `DiffResult.preservedUids`, which stays camelCase along with the rest of `src/diff/`. Only the field that leaves the process was renamed.
   - **Why now, in one go.** Both fields were free to change right up until they were declared in an `outputSchema` below. After that, a rename is a change to a published promise that clients may validate against a cached tool list. This was the last version in which they cost nothing to fix.
@@ -25,6 +27,8 @@
 
 - **Fix: `roam_process_batch_actions` and the staged-batch writers now share one rate-limit retry.** `BatchOperations` had kept a private copy, which is exactly why `executeStagedBatch` was written with none — the logic was unreachable, so the next write path went without it and a multi-level page could die half-written with no undo to reverse it. The duplicate is gone.
   - The backoff hint in a `RATE_LIMIT` error now comes from the caller's own config rather than from a field stapled to an error object. Same value in every shipped configuration; more honest source.
+
+- **Docs: how to pin the version.** `npx -y roam-research-mcp` fetches the latest release every time your client starts the server, so this major arrives on the next restart whether or not you were ready for it. The README now shows how to pin — `roam-research-mcp@3` keeps you on 3.x and makes the next breaking change something you opt into.
 
 - **Docs: `protected: true` does nothing on your default graph.** Writes to whichever graph `ROAM_DEFAULT_GRAPH` names are always allowed, before `protected` is consulted. The README promised otherwise. The behaviour is deliberate — the flag guards graphs you have to ask for by name — so this documents it rather than changing it. **If you want a graph write-guarded, it must not be your default.**
 

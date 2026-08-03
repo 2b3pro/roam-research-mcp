@@ -519,7 +519,7 @@ JSON format (--json):
             const result = await pageOps.createPage(pageTitle, contentBlocks);
 
             if (result.success) {
-              console.log(`Created page '${pageTitle}' (uid: ${result.uid})`);
+              console.log(`Created page '${pageTitle}' (uid: ${result.page_uid})`);
             } else {
               exitWithError(`Failed to create page '${pageTitle}'`);
             }

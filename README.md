@@ -148,7 +148,7 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 
 ### Structured results from write tools (v3.0.0+)
 
-The ten write tools declare an `outputSchema` and return `structuredContent` — a validated object — alongside the usual text. A client can read `uid`, `uid_map` or `success` directly instead of hunting for JSON inside a string, which makes chaining calls more reliable:
+The ten write tools declare an `outputSchema` and return `structuredContent` — a validated object — alongside the usual text. A client can read `page_uid`, `uid_map` or `success` directly instead of hunting for JSON inside a string, which makes chaining calls more reliable:
 
 ```jsonc
 // roam_process_batch_actions
@@ -162,7 +162,7 @@ Three things worth knowing:
 - **Read tools deliberately have neither.** They already serialise their whole result into the text channel, so a schema would just double the payload.
 - **These fields are additive-only.** Some clients validate live responses against a cached tool list, so a field will be added or deprecated — never renamed or removed outside a major version.
 
-> **Upgrading from 2.x:** two write-result fields were renamed — `created_uids` → `created_blocks` (`roam_create_outline`, `roam_import_markdown`) and `preservedUids` → `preserved_uids` (`roam_update_page_markdown`). This only affects code that reads those names; if you use the server through an AI assistant, nothing changes. See the [changelog](CHANGELOG.md) for why.
+> **Upgrading from 2.x:** three write-result fields were renamed — `uid` → `page_uid` (`roam_create_page`), `created_uids` → `created_blocks` (`roam_create_outline`, `roam_import_markdown`) and `preservedUids` → `preserved_uids` (`roam_update_page_markdown`). This only affects code that reads those names; if you use the server through an AI assistant, nothing changes. See the [changelog](CHANGELOG.md) for why.
 
 ---
 
@@ -369,6 +369,16 @@ docker run -p 8088:8088 --env-file .env roam-research-mcp --server
 **Claude Desktop / Cline:**
 
 Add to your MCP settings file (e.g., `~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+> **Pinning the version.** `npx -y roam-research-mcp` fetches the **latest** release every time your client starts the server, so a new major version arrives without warning. Pin the major to decide for yourself when to move:
+>
+> | `args` | You get |
+> | :--- | :--- |
+> | `["-y", "roam-research-mcp"]` | Latest, always — including the next major |
+> | `["-y", "roam-research-mcp@3"]` | 3.x only; majors need an edit here |
+> | `["-y", "roam-research-mcp@3.0.0"]` | Exactly this build |
+>
+> Pinning the major is the sensible default: you still get fixes and new tools, but a breaking change becomes something you opt into. The examples below stay unpinned to match what most people paste in first.
 
 *Single Graph:*
 ```json
