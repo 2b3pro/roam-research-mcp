@@ -146,6 +146,24 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 | `roam_markdown_cheatsheet` | Retrieve the Roam-flavored markdown reference. |
 | `roam_get_guidelines` | Retrieve this graph's user-defined agent conventions. |
 
+### Structured results from write tools (v3.0.0+)
+
+The ten write tools declare an `outputSchema` and return `structuredContent` — a validated object — alongside the usual text. A client can read `uid`, `uid_map` or `success` directly instead of hunting for JSON inside a string, which makes chaining calls more reliable:
+
+```jsonc
+// roam_process_batch_actions
+{ "success": true, "uid_map": { "parent1": "Xk7mN2pQ9" },
+  "validation_passed": true, "actions_attempted": 4 }
+```
+
+Three things worth knowing:
+
+- **Nothing was taken away.** The text channel is unchanged, so a client that ignores `structuredContent` behaves exactly as before.
+- **Read tools deliberately have neither.** They already serialise their whole result into the text channel, so a schema would just double the payload.
+- **These fields are additive-only.** Some clients validate live responses against a cached tool list, so a field will be added or deprecated — never renamed or removed outside a major version.
+
+> **Upgrading from 2.x:** two write-result fields were renamed — `created_uids` → `created_blocks` (`roam_create_outline`, `roam_import_markdown`) and `preservedUids` → `preserved_uids` (`roam_update_page_markdown`). This only affects code that reads those names; if you use the server through an AI assistant, nothing changes. See the [changelog](CHANGELOG.md) for why.
+
 ---
 
 ## Agent guidelines (per-graph)

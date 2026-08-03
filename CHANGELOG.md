@@ -1,5 +1,35 @@
 # Changelog
 
+### v3.0.0 (2026-08-03)
+
+**In one line:** write tools now return machine-readable `structuredContent` alongside their text, and two output fields were renamed to stop the schemas freezing bad names into a permanent contract.
+
+- **⚠️ Breaking: two write-result field names changed.** They are renamed, not removed, and nothing else about the results moved.
+
+  | Tool | Was | Now |
+  |---|---|---|
+  | `roam_create_outline`, `roam_import_markdown` | `created_uids` | `created_blocks` |
+  | `roam_update_page_markdown` | `preservedUids` | `preserved_uids` |
+
+  - **Do you need to do anything?** Only if you have code reading those field names — a script, a wrapper, a CLI pipeline. If you use this server through an AI assistant, no: the model reads whatever field is there. The CLI was updated in the same commit.
+  - **`created_uids` never contained UIDs.** It holds `NestedBlock` objects — `{uid, text, level, order, children}`. Anything trusting the name and iterating it as strings was already getting objects. `created_blocks` says what it has always been.
+  - **`preservedUids` was the only camelCase field crossing the tool boundary.** It inherited the casing from the internal `DiffResult.preservedUids`, which stays camelCase along with the rest of `src/diff/`. Only the field that leaves the process was renamed.
+  - **Why now, in one go.** Both fields were free to change right up until they were declared in an `outputSchema` below. After that, a rename is a change to a published promise that clients may validate against a cached tool list. This was the last version in which they cost nothing to fix.
+
+- **Write tools now declare `outputSchema` and return `structuredContent`.** All ten of them; no read tool does.
+  - **What it buys you.** Write results arrive as a validated object rather than JSON that a client has to find and parse inside a text blob. Chaining gets more reliable — `roam_process_batch_actions` returning `uid_map`, `roam_create_page` returning `uid` — because the shape is declared up front rather than inferred from a string.
+  - **Nothing is taken away.** The text channel is unchanged, so any client that ignores `structuredContent` sees exactly what it saw in 2.25.0.
+  - **Reads deliberately have neither.** They already serialise their whole result into the text channel, so a schema would double the payload, and read shapes are still moving.
+  - Every schema is `additionalProperties: true`, and `required` lists come from the compiler — a field is required only where the handler's return type declares it non-optional. Batch-style tools report failure in band rather than throwing, so only `success` is required there.
+  - Going forward these fields are **additive-only**: a client can validate a live response against a cached tool list, so renaming or removing one breaks the tool for as long as that cache lives.
+
+- **Fix: `roam_process_batch_actions` and the staged-batch writers now share one rate-limit retry.** `BatchOperations` had kept a private copy, which is exactly why `executeStagedBatch` was written with none — the logic was unreachable, so the next write path went without it and a multi-level page could die half-written with no undo to reverse it. The duplicate is gone.
+  - The backoff hint in a `RATE_LIMIT` error now comes from the caller's own config rather than from a field stapled to an error object. Same value in every shipped configuration; more honest source.
+
+- **Docs: `protected: true` does nothing on your default graph.** Writes to whichever graph `ROAM_DEFAULT_GRAPH` names are always allowed, before `protected` is consulted. The README promised otherwise. The behaviour is deliberate — the flag guards graphs you have to ask for by name — so this documents it rather than changing it. **If you want a graph write-guarded, it must not be your default.**
+
+- **Internal: tools are now tested through the MCP boundary, not just as units.** Two features shipped broken on the same day in 2.23.0 with green suites behind them — a hide filter no tool called, and annotations nothing proved the server declared. Both are structurally invisible to a unit test. The new suite spawns the real server, fixtures only the Roam wire, and asserts on what a client actually receives. Every assertion was verified against a deliberately broken build rather than trusted because it passed.
+
 ### v2.25.0 (2026-08-03)
 
 - **Reverts the 2.24.0 opt-in change.** `roam_get_guidelines` reads `[[roam/agent guidelines]]` again with **no configuration required** — just create the page. Precedence is per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → `roam/agent guidelines`, and **only an explicit `guidelinesPage: false` disables it**.
