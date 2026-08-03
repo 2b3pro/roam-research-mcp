@@ -114,7 +114,14 @@ export class GraphRegistry {
 
   /**
    * Page holding a graph's agent conventions, or null when disabled.
-   * Same precedence as memoriesTag: per-graph config > env var > default.
+   *
+   * Precedence: per-graph config > ROAM_GUIDELINES_PAGE env var > **disabled**.
+   *
+   * Unlike memoriesTag this is opt-in: a graph with no `guidelinesPage` and no
+   * env fallback returns null rather than silently reading a conventional page
+   * title. Reading a page nobody asked us to read is a surprise, and a graph
+   * that happens to contain a similarly-named page should not start feeding it
+   * to agents.
    */
   getGuidelinesPage(key?: string): string | null {
     const resolvedKey = key ?? this.defaultKey;
@@ -124,7 +131,7 @@ export class GraphRegistry {
       return null;
     }
 
-    return config?.guidelinesPage ?? process.env.ROAM_GUIDELINES_PAGE ?? 'roam/agent guidelines';
+    return config?.guidelinesPage ?? process.env.ROAM_GUIDELINES_PAGE ?? null;
   }
 
   /**

@@ -1,6 +1,7 @@
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { generateBlockUid } from '../../markdown-utils.js';
+import { collectHiddenUids, isHiddenBlockString } from '../helpers/hidden.js';
 import { ANCESTOR_RULE } from '../../search/ancestor-rule.js';
 import { sanitizeTagName } from '../../utils/helpers.js';
 import { resolveRefs } from '../helpers/refs.js';
@@ -113,19 +114,29 @@ export class MemoryOperations {
 
     try {
       // Query to find all blocks on the page
-      const pageQuery = `[:find ?string ?time
+      // ?uid is selected so hidden blocks can be filtered by the UID closure
+      // below — a text check alone would miss blocks nested under a tagged
+      // parent, which carry no tag of their own.
+      const pageQuery = `[:find ?string ?time ?uid
                          :in $ % ?title
                          :where
                          [?page :node/title ?title]
                          [?block :block/string ?string]
+                         [?block :block/uid ?uid]
                          [?block :create/time ?time]
                          (ancestor ?block ?page)]`;
 
       // Execute query
-      const pageResults = await q(this.graph, pageQuery, [ANCESTOR_RULE, tagText]) as [string, number][];
+      const pageResults = await q(this.graph, pageQuery, [ANCESTOR_RULE, tagText]) as [string, number, string][];
+
+      // Withhold anything the user tagged #.rm-hide / #.rm-private. The tagged
+      // half of recall (searchForTag below) is already filtered by
+      // SearchOperations; this is the page half.
+      const hiddenUids = await collectHiddenUids(this.graph);
 
       // Process page blocks with sorting
       let pageMemories = pageResults
+        .filter(([content, , uid]) => !hiddenUids.has(uid) && !isHiddenBlockString(content))
         .sort(([_, aTime], [__, bTime]) => 
           sort_by === 'newest' ? bTime - aTime : aTime - bTime
         )

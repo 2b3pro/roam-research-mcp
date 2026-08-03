@@ -1,21 +1,26 @@
 /**
  * Per-graph agent guidelines.
  *
- * A page in the graph — `[[roam/agent guidelines]]` by default — holding the
- * user's own conventions: how they tag, how they name pages, what to never do.
+ * A page in the graph — conventionally `[[roam/agent guidelines]]` — holding
+ * the user's own conventions: how they tag, how they name pages, what to never do.
  * This is the same page Roam's official MCP server reads, so a user writes their
  * conventions once and both servers honour them.
  *
  * Distinct from the markdown cheatsheet, which is Roam *syntax* plus this
  * server's mechanics and lives in a file. Guidelines are per-graph, live-edited
  * from inside Roam, and answer "how does this user want their graph handled".
+ *
+ * Opt-in: a graph must name its page via `guidelinesPage` or ROAM_GUIDELINES_PAGE.
+ * With neither set the tool reports disabled and never touches the graph.
  */
 
 import type { Graph } from '@roam-research/roam-api-sdk';
 import { PageOperations } from './pages.js';
 import { formatRoamDate } from '../../utils/helpers.js';
 
-/** Default page title, matching Roam's own convention. */
+/** The conventional page title, matching Roam's own server. Not applied
+ * automatically — a graph must opt in via `guidelinesPage` or
+ * ROAM_GUIDELINES_PAGE. */
 export const DEFAULT_GUIDELINES_PAGE = 'roam/agent guidelines';
 
 export interface GuidelinesResult {
@@ -49,7 +54,7 @@ export class GuidelinesOperations {
    */
   constructor(
     private graph: Graph,
-    private guidelinesPage: string | null = DEFAULT_GUIDELINES_PAGE
+    private guidelinesPage: string | null = null
   ) {
     this.pageOps = new PageOperations(graph);
   }

@@ -161,14 +161,22 @@ This is distinct from `CUSTOM_INSTRUCTIONS_PATH`, and the two compose:
 | To change it | edit the file, restart the server | edit the page |
 | Answers | how to write Roam markdown | how *this user* wants *this graph* handled |
 
-Configure per graph, or disable with `false`:
+**Opt-in.** A graph with no `guidelinesPage` and no `ROAM_GUIDELINES_PAGE` fallback has guidelines **disabled** — the tool reports that and never touches the graph. Nothing is read until you name a page, so a graph that happens to contain a similarly-titled page won't start feeding it to agents.
+
+Each graph can point at a different page:
 
 ```bash
-ROAM_GRAPHS='{"personal": {"token": "...", "graph": "...", "guidelinesPage": "roam/agent guidelines"}, "work": {"token": "...", "graph": "...", "guidelinesPage": false}}'
-ROAM_GUIDELINES_PAGE='roam/agent guidelines'   # fallback when a graph sets none
+ROAM_GRAPHS='{
+  "personal": {"token": "...", "graph": "...", "guidelinesPage": "roam/agent guidelines"},
+  "work":     {"token": "...", "graph": "...", "guidelinesPage": "work/agent rules"},
+  "archive":  {"token": "...", "graph": "..."}
+}'
+ROAM_GUIDELINES_PAGE='roam/agent guidelines'   # fallback for graphs that name none
 ```
 
-If no such page exists the tool returns `exists: false` rather than failing, so it is safe to call unconditionally. Results are cached for 30 seconds — an edit to the page takes effect without a restart. A starter template lives at [`.roam/agent-guidelines.template.md`](.roam/agent-guidelines.template.md).
+Resolution order is **per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → disabled**. Setting `guidelinesPage: false` disables it for one graph even when the env fallback is set. In the example above, `archive` uses the fallback; without that env var it would be disabled.
+
+If the named page doesn't exist the tool returns `exists: false` rather than failing, so it is safe to call unconditionally. Results are cached for 30 seconds — an edit to the page takes effect without a restart. A starter template lives at [`.roam/agent-guidelines.template.md`](.roam/agent-guidelines.template.md).
 
 Note that guidelines are read through the normal page path, so blocks tagged `#.rm-hide` / `#.rm-private` are withheld from them too — see below.
 

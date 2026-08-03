@@ -101,10 +101,10 @@ describe('getGuidelinesPage', () => {
   const make = (configs: Record<string, any>, def = 'personal') =>
     new GraphRegistry(configs as any, def);
 
-  it('defaults to the shared roam/agent guidelines convention', () => {
+  it('is disabled when a graph configures nothing — opt-in, not opt-out', () => {
     delete process.env.ROAM_GUIDELINES_PAGE;
     const r = make({ personal: { token: 't', graph: 'g' } });
-    expect(r.getGuidelinesPage('personal')).toBe('roam/agent guidelines');
+    expect(r.getGuidelinesPage('personal')).toBeNull();
   });
 
   it('prefers per-graph config over the env var', () => {

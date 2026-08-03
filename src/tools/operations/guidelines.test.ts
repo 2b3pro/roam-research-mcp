@@ -22,7 +22,7 @@ describe('GuidelinesOperations', () => {
     getPageUid.mockResolvedValue('abc123456');
     fetchPageByTitle.mockResolvedValue('- H2: Tagging Philosophy');
 
-    const res = await new GuidelinesOperations(newGraph()).getGuidelines();
+    const res = await new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
 
     expect(res.exists).toBe(true);
     expect(res.page).toBe(DEFAULT_GUIDELINES_PAGE);
@@ -33,7 +33,7 @@ describe('GuidelinesOperations', () => {
   it('reports absence rather than failing when no page has been created', async () => {
     getPageUid.mockResolvedValue(null);
 
-    const res = await new GuidelinesOperations(newGraph()).getGuidelines();
+    const res = await new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
 
     expect(res.exists).toBe(false);
     expect(res.guidelines).toBeNull();
@@ -63,7 +63,7 @@ describe('GuidelinesOperations', () => {
   it('fails open — a lookup error never breaks the tool the agent wanted', async () => {
     getPageUid.mockRejectedValue(new Error('network down'));
 
-    const res = await new GuidelinesOperations(newGraph()).getGuidelines();
+    const res = await new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
 
     expect(res.exists).toBe(false);
     expect(res.guidelines).toBeNull();
@@ -72,14 +72,14 @@ describe('GuidelinesOperations', () => {
 
   it('always reports today in Roam ordinal date format', async () => {
     getPageUid.mockResolvedValue(null);
-    const res = await new GuidelinesOperations(newGraph()).getGuidelines();
+    const res = await new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
     expect(res.todaysDailyNote).toMatch(/^[A-Z][a-z]+ \d{1,2}(st|nd|rd|th), \d{4}$/);
   });
 
   it('tells the agent not to re-orient, so it does not refetch every call', async () => {
     getPageUid.mockResolvedValue('abc123456');
     fetchPageByTitle.mockResolvedValue('rules');
-    const res = await new GuidelinesOperations(newGraph()).getGuidelines();
+    const res = await new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
     expect(res.nextSteps).toMatch(/do not call this tool again/i);
     expect(res.nextSteps).toMatch(/reads as well as writes/i);
   });
@@ -88,7 +88,7 @@ describe('GuidelinesOperations', () => {
     getPageUid.mockResolvedValue('abc123456');
     fetchPageByTitle.mockResolvedValue('rules');
 
-    const ops = new GuidelinesOperations(newGraph());
+    const ops = new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE);
     await ops.getGuidelines();
     await ops.getGuidelines();
     await ops.getGuidelines();
@@ -100,7 +100,7 @@ describe('GuidelinesOperations', () => {
     getPageUid.mockResolvedValue('abc123456');
     fetchPageByTitle.mockResolvedValue('rules');
 
-    const ops = new GuidelinesOperations(newGraph());
+    const ops = new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE);
     await ops.getGuidelines();
     ops.clearCache();
     await ops.getGuidelines();
@@ -112,8 +112,8 @@ describe('GuidelinesOperations', () => {
     getPageUid.mockResolvedValue('abc123456');
     fetchPageByTitle.mockResolvedValue('rules');
 
-    await new GuidelinesOperations(newGraph()).getGuidelines();
-    await new GuidelinesOperations(newGraph()).getGuidelines();
+    await new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
+    await new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
 
     expect(getPageUid).toHaveBeenCalledTimes(2);
   });

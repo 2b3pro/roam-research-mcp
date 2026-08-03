@@ -10,7 +10,7 @@ import { MemoryOperations } from './operations/memory.js';
 import { TodoOperations } from './operations/todos.js';
 import { OutlineOperations } from './operations/outline.js';
 import { BatchOperations } from './operations/batch.js';
-import { GuidelinesOperations, DEFAULT_GUIDELINES_PAGE } from './operations/guidelines.js';
+import { GuidelinesOperations } from './operations/guidelines.js';
 import { TableOperations, type TableInput } from './operations/table.js';
 import { DatomicSearchHandlerImpl } from './operations/search/handlers.js';
 import { FullPageViewOperations } from './operations/full-page-view.js';
@@ -32,7 +32,7 @@ export class ToolHandlers {
   constructor(
     private graph: Graph,
     memoriesTag: string | null = 'Memories',
-    guidelinesPage: string | null = DEFAULT_GUIDELINES_PAGE
+    guidelinesPage: string | null = null
   ) {
     this.pageOps = new PageOperations(graph);
     this.blockOps = new BlockOperations(graph);

@@ -3,6 +3,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
+import { collectHiddenUids, pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
 import type { RoamBlock } from '../types/index.js';
 import type { PageOperations } from './pages.js';
 
@@ -41,11 +42,22 @@ export class FullPageViewOperations {
 
     // Deduplicate by block_uid, then cap at max_references
     const seenUids = new Set<string>();
-    const allUniqueRefs = refResults.filter(r => {
+    const dedupedRefs = refResults.filter(r => {
       if (seenUids.has(r.block_uid)) return false;
       seenUids.add(r.block_uid);
       return true;
     });
+
+    // Backlinks come from other pages, so the page's own prune (pageBlocks
+    // above, already filtered by fetchPageByUid) does not cover them. A
+    // referring block may itself be tagged, or sit under a tagged parent
+    // elsewhere — hence the UID closure rather than a text check alone.
+    // Filtered BEFORE the max_references cap so truncation counts what the
+    // caller can actually see.
+    const hiddenUids = await collectHiddenUids(this.graph);
+    const allUniqueRefs = dedupedRefs.filter(
+      r => !hiddenUids.has(r.block_uid) && !isHiddenBlockString(r.block_str)
+    );
     const truncated = allUniqueRefs.length > max_references;
     const uniqueRefs = truncated ? allUniqueRefs.slice(0, max_references) : allUniqueRefs;
 
@@ -115,7 +127,8 @@ export class FullPageViewOperations {
         uid: ref.block_uid,
         string: resolvedRefStrings.get(ref.block_uid) || ref.block_str,
         order: 0,
-        children: childrenMap[ref.block_uid] || []
+        // Children of a visible backlink can still contain tagged subtrees.
+        children: pruneHiddenBlocks(childrenMap[ref.block_uid] || [])
       };
       groupMap.get(key)!.references.push({
         breadcrumbs: breadcrumbsMap[ref.block_uid] || [],
