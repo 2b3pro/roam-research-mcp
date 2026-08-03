@@ -12,6 +12,7 @@ import {
   type StructuredError
 } from '../../shared/errors.js';
 import { ensurePagesExist } from '../../shared/page-validator.js';
+import { withRateLimitRetry, type RateLimitRetryConfig } from '../../shared/retry.js';
 
 // Regex to match UID placeholders like {{uid:parent1}}, {{uid:section-a}}, etc.
 const UID_PLACEHOLDER_REGEX = /\{\{uid:([^}]+)\}\}/g;
@@ -24,12 +25,11 @@ export interface BatchResult {
   actions_attempted?: number;
 }
 
-export interface RateLimitConfig {
-  maxRetries: number;
-  initialDelayMs: number;
-  maxDelayMs: number;
-  backoffMultiplier: number;
-}
+/**
+ * Kept as a local alias so existing importers are unaffected; the shape now
+ * lives with the retry helper that consumes it.
+ */
+export type RateLimitConfig = RateLimitRetryConfig;
 
 const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   maxRetries: 3,
@@ -108,42 +108,31 @@ export class BatchOperations {
   }
 
   /**
-   * Executes the batch operation with retry logic for rate limiting.
+   * Executes the batch operation, retrying while Roam throttles us.
+   *
+   * This used to be a hand-rolled loop identical to the one in
+   * `withRateLimitRetry`, which is precisely how `executeStagedBatch` came to
+   * be written with no retry at all — the logic was private here, so the next
+   * write path could not reuse it and simply went without. A half-written page
+   * and no undo was the cost.
+   *
+   * On exhaustion the shared helper rethrows Roam's original error rather than
+   * a synthesised one carrying `retryAfterMs`. `processBatch` never used that
+   * field's value for anything the caller saw except the backoff hint, which
+   * now comes from this instance's own config — a more honest source than
+   * whatever happened to be stapled to an error object.
    */
   private async executeWithRetry(
     batchActions: RoamBatchAction[]
   ): Promise<void> {
-    let lastError: Error | undefined;
-    let delay = this.rateLimitConfig.initialDelayMs;
-
-    for (let attempt = 0; attempt <= this.rateLimitConfig.maxRetries; attempt++) {
-      try {
-        await roamBatchActions(this.graph, { actions: batchActions });
-        return;
-      } catch (error) {
-        if (!isRateLimitError(error)) {
-          throw error;
-        }
-
-        lastError = error as Error;
-        if (attempt < this.rateLimitConfig.maxRetries) {
-          const waitTime = Math.min(delay, this.rateLimitConfig.maxDelayMs);
-          console.log(`[batch] Rate limited, retrying in ${waitTime}ms (attempt ${attempt + 1}/${this.rateLimitConfig.maxRetries})`);
-          await sleep(waitTime);
-          delay *= this.rateLimitConfig.backoffMultiplier;
-        }
-      }
-    }
-
-    // Throw with rate limit context after all retries exhausted
-    const rateLimitError = new Error(
-      `Rate limit exceeded after ${this.rateLimitConfig.maxRetries} retries. ` +
-      `Last error: ${lastError?.message || 'Unknown error'}. ` +
-      `Retry after ${this.rateLimitConfig.maxDelayMs}ms.`
+    await withRateLimitRetry(
+      () => roamBatchActions(this.graph, { actions: batchActions }),
+      this.rateLimitConfig,
+      (attempt, waitMs) =>
+        console.log(
+          `[batch] Rate limited, retrying in ${waitMs}ms (attempt ${attempt}/${this.rateLimitConfig.maxRetries})`
+        )
     );
-    (rateLimitError as any).isRateLimit = true;
-    (rateLimitError as any).retryAfterMs = this.rateLimitConfig.maxDelayMs;
-    throw rateLimitError;
   }
 
   async processBatch(actions: any[]): Promise<BatchResult> {
@@ -297,10 +286,10 @@ export class BatchOperations {
       }
 
       // Check if it's a rate limit error
-      if (isRateLimitError(error) || (error as any).isRateLimit) {
+      if (isRateLimitError(error)) {
         return {
           success: false,
-          error: createRateLimitError((error as any).retryAfterMs),
+          error: createRateLimitError(this.rateLimitConfig.maxDelayMs),
           validation_passed: true,
           actions_attempted: batchActions.length
           // No uid_map - nothing was committed
