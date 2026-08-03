@@ -18,6 +18,34 @@ What started as an backend for AI agents evolved into a full-featured **Standalo
 
 Whether you want to give Claude superpowers over your knowledge base or just want a robust CLI for your own scripts, this project has you covered.
 
+![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
+
+## How this differs from Roam's official MCP server
+
+Roam Research ships its own MCP server and CLI ([`@roam-research/roam-mcp`](https://github.com/Roam-Research/roam-tools)). It is a good tool, and this project is not trying to replace it. **They talk to two different Roam APIs, which is the difference everything else follows from.**
+
+|                    | **This project**                                                       | **Official `@roam-research/roam-mcp`**                          |
+| ------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Talks to           | Roam's **backend REST API** (graph token + graph name)                 | Roam **Desktop's local HTTP API**                                |
+| Needs Roam running | No — works headless                                                    | Yes, the desktop app must be open (it deep-links to launch it)   |
+| Where it can run   | Anywhere: laptop, server, container, CI                                | The machine running Roam Desktop                                 |
+| Shared daemon      | Yes — `roam server` runs one HTTP daemon for every client              | Per-client stdio                                                 |
+| Multi-graph        | `ROAM_GRAPHS` env var, with `write_key` protection for chosen graphs   | `~/.roam-tools.json`, one token per graph                        |
+| Web-only graphs    | Works                                                                  | Desktop only                                                     |
+
+**Reach for the official server when** you want Roam's own supported path, or you need things only the running app can do: controlling the Desktop UI (open a page, read the current selection, drive the sidebar), semantic/embeddings search, link suggestions, file upload, comments, or invoking tools that Roam extensions register.
+
+**Reach for this one when** Roam isn't running or isn't installed — a server, a container, a cron job, a CI step. Or when you want the extras this project has grown: a full standalone CLI with stdin piping, a shared HTTP daemon with optional bearer auth, smart page diffing that preserves block UIDs (and therefore your block references), batch operations with UID placeholders for building nested structures in one call, and agent memory tools.
+
+One deliberate omission: **there is no page-delete tool here.** Roam has no undo that can reverse a bulk API deletion. The official server does offer `delete_page`; this project takes the more conservative line.
+
+### They interoperate
+
+The two servers share conventions on purpose, so running both costs you nothing:
+
+- **`[[roam/agent guidelines]]`** — both read the same page for your conventions. Write them once; both honour them. See [Agent guidelines](#agent-guidelines-per-graph).
+- **`#.rm-hide` / `#.rm-private`** — both withhold tagged blocks from AI-facing content. Tag once, hidden from both. See [Hiding content from the AI](#hiding-content-from-the-ai).
+
 ## Standalone CLI: `roam`
 
 The `roam` CLI lets you interact with your graph directly from the terminal. It supports **standard input (stdin) piping** for all content creation and retrieval commands, making it perfect for automation workflows.
