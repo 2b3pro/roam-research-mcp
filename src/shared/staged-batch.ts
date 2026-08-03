@@ -9,6 +9,7 @@
 
 import { Graph, batchActions } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { withRateLimitRetry, type RateLimitRetryConfig } from './retry.js';
 
 /**
  * Generic batch action type that works with various action formats
@@ -35,6 +36,12 @@ export interface StagedBatchOptions {
   delayBetweenLevels?: number;
   /** Context string for error messages */
   context?: string;
+  /**
+   * Rate-limit retry policy for each level. Defaults to DEFAULT_RATE_LIMIT_RETRY.
+   * Levels are committed as they succeed, so without retry a throttled level
+   * leaves the earlier ones written and the rest missing.
+   */
+  rateLimit?: Partial<RateLimitRetryConfig>;
 }
 
 /**
@@ -157,7 +164,7 @@ export async function executeStagedBatch(
   actions: StagedBatchAction[],
   options: StagedBatchOptions = {}
 ): Promise<{ success: boolean; levelsExecuted: number; totalActions: number }> {
-  const { delayBetweenLevels = 100, context = 'batch operation' } = options;
+  const { delayBetweenLevels = 100, context = 'batch operation', rateLimit } = options;
 
   if (actions.length === 0) {
     return { success: true, levelsExecuted: 0, totalActions: 0 };
@@ -170,10 +177,18 @@ export async function executeStagedBatch(
     if (levelActions.length === 0) continue;
 
     try {
-      const result = await batchActions(graph, {
-        action: 'batch-actions',
-        actions: levelActions
-      });
+      const result = await withRateLimitRetry(
+        () => batchActions(graph, {
+          action: 'batch-actions',
+          actions: levelActions
+        }),
+        rateLimit,
+        (attempt, waitMs) => {
+          console.error(
+            `[staged-batch] ${context}: level ${level} rate limited, retrying in ${waitMs}ms (attempt ${attempt})`
+          );
+        }
+      );
 
       if (!result) {
         throw new McpError(
