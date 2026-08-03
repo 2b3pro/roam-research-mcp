@@ -14,6 +14,7 @@ import {
 import { type Graph } from '@roam-research/roam-api-sdk';
 import { HTTP_STREAM_PORT, HTTP_STREAM_HOST, HTTP_AUTH_TOKEN, validateEnvironment } from '../config/environment.js';
 import { isBearerAuthorized } from '../utils/auth.js';
+import { RoamError, toErrorResult } from '../shared/errors.js';
 import { createRegistryFromEnv, GraphRegistry, isWriteOperation } from '../config/graph-registry.js';
 import { toolSchemas } from '../tools/schemas.js';
 import { ToolHandlers } from '../tools/tool-handlers.js';
@@ -503,6 +504,13 @@ export class RoamServer {
             );
         }
       } catch (error: unknown) {
+        // A RoamError is a TOOL failure, not a protocol failure: return it as
+        // content with isError so the model can read the code and the recovery
+        // context (available_graphs, and so on) and act on it. Throwing would
+        // collapse all of that into a JSON-RPC error string.
+        if (error instanceof RoamError) {
+          return toErrorResult(error);
+        }
         if (error instanceof McpError) {
           throw error;
         }

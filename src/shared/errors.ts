@@ -11,7 +11,79 @@ export type ErrorCode =
   | 'RATE_LIMIT'
   | 'API_ERROR'
   | 'TRANSACTION_FAILED'
-  | 'NETWORK_ERROR';
+  | 'NETWORK_ERROR'
+  | 'UNKNOWN_GRAPH'
+  | 'WRITE_KEY_REQUIRED'
+  | 'WRITE_KEY_NOT_CONFIGURED';
+
+/**
+ * A code the wire may carry. Deliberately widened beyond the union above:
+ * adding a member here is safe, but nothing may VALIDATE an incoming code
+ * against it — the Roam API and future transports emit codes this list has
+ * never heard of, and rejecting them would lose information the agent needs.
+ */
+export type AnyErrorCode = ErrorCode | (string & {});
+
+/**
+ * An error carrying a machine-readable code and arbitrary recovery context.
+ *
+ * The context matters more than it looks: keys are spread into the error body
+ * the agent receives, so a failure can ship the facts needed to fix it —
+ * `available_graphs` on an unknown graph, a page title on a miss — instead of a
+ * prose sentence the agent has to parse and usually can't act on.
+ */
+export class RoamError extends Error {
+  constructor(
+    message: string,
+    public readonly code: AnyErrorCode = 'API_ERROR',
+    public readonly context?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'RoamError';
+    // Extending a builtin breaks instanceof under some transpile targets.
+    Object.setPrototypeOf(this, RoamError.prototype);
+  }
+}
+
+/**
+ * The MCP tool-result shape for a failure. The index signature is what makes
+ * this assignable to the SDK's ServerResult without importing the SDK here —
+ * this module stays dependency-free so any transport can use it.
+ */
+export interface ErrorResult {
+  [key: string]: unknown;
+  content: { type: 'text'; text: string }[];
+  isError: true;
+}
+
+/**
+ * Render an error as an MCP tool result.
+ *
+ * Returned rather than thrown: MCP treats a thrown error as a protocol failure,
+ * while `isError: true` with content is a *tool* failure the model can read and
+ * act on. Context keys are spread alongside code and message.
+ */
+export function toErrorResult(error: unknown): ErrorResult {
+  const isRoam = error instanceof RoamError;
+  const body = {
+    error: {
+      code: isRoam ? error.code : inferCode(error),
+      message: error instanceof Error ? error.message : String(error),
+      ...(isRoam ? error.context ?? {} : {}),
+    },
+  };
+  return {
+    content: [{ type: 'text', text: JSON.stringify(body, null, 2) }],
+    isError: true,
+  };
+}
+
+/** Best-effort code for errors that were not raised as a RoamError. */
+function inferCode(error: unknown): AnyErrorCode {
+  if (isRateLimitError(error)) return 'RATE_LIMIT';
+  if (isNetworkError(error)) return 'NETWORK_ERROR';
+  return 'API_ERROR';
+}
 
 export interface ErrorDetails {
   action_index?: number;

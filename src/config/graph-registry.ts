@@ -10,6 +10,7 @@
 
 import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { RoamError } from '../shared/errors.js';
 
 /**
  * Configuration for a single Roam graph
@@ -142,9 +143,10 @@ export class GraphRegistry {
     // Get config
     const config = this.configs.get(resolvedKey);
     if (!config) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `Unknown graph: "${resolvedKey}". Available graphs: ${this.getAvailableGraphs().join(', ')}`
+      throw new RoamError(
+        `Unknown graph: "${resolvedKey}".`,
+        'UNKNOWN_GRAPH',
+        { requested_graph: resolvedKey, available_graphs: this.getAvailableGraphs() }
       );
     }
 
@@ -207,17 +209,19 @@ export class GraphRegistry {
     if (!this.isWriteAllowed(resolvedKey, providedWriteKey)) {
       const config = this.configs.get(resolvedKey);
       if (!config) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          `Unknown graph: "${resolvedKey}". Available graphs: ${this.getAvailableGraphs().join(', ')}`
+        throw new RoamError(
+          `Unknown graph: "${resolvedKey}".`,
+          'UNKNOWN_GRAPH',
+          { requested_graph: resolvedKey, available_graphs: this.getAvailableGraphs() }
         );
       }
 
       const systemWriteKey = process.env.ROAM_SYSTEM_WRITE_KEY;
       if (!systemWriteKey) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          `Write to protected graph "${resolvedKey}" failed: ROAM_SYSTEM_WRITE_KEY not configured.`
+        throw new RoamError(
+          `Write to protected graph "${resolvedKey}" failed: ROAM_SYSTEM_WRITE_KEY is not configured on the server.`,
+          'WRITE_KEY_NOT_CONFIGURED',
+          { graph: resolvedKey }
         );
       }
 
@@ -226,10 +230,11 @@ export class GraphRegistry {
       // whole gate decorative — including for a caller that simply guessed
       // wrong. A legitimate operator can read ROAM_SYSTEM_WRITE_KEY from their
       // own environment; an agent that cannot is exactly who this stops.
-      throw new McpError(
-        ErrorCode.InvalidParams,
+      throw new RoamError(
         `Write to protected graph "${resolvedKey}" requires write_key confirmation. ` +
-        `Pass the value of the ROAM_SYSTEM_WRITE_KEY environment variable as the write_key parameter.`
+        `Pass the value of the ROAM_SYSTEM_WRITE_KEY environment variable as the write_key parameter.`,
+        'WRITE_KEY_REQUIRED',
+        { graph: resolvedKey, required_parameter: 'write_key' }
       );
     }
   }
