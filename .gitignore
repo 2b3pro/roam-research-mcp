@@ -11,6 +11,9 @@ src/.DS_Store
 tests/test_read.sh
 .roam/2b3-custom-instructions.md
 .roam/ias-custom-instructions.md
+# Personal guidelines drafts — same content as the above, staged for a
+# [[roam/agent guidelines]] page. The generic starter is agent-guidelines.template.md.
+.roam/agent-guidelines.draft.md
 .cline*
 CLAUDE.md
 AGENT.md
