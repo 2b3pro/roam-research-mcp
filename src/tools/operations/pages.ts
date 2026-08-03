@@ -623,10 +623,27 @@ export class PageOperations {
     };
     sortBlocks(rootBlocks);
 
+    // Withhold #.rm-hide / #.rm-private subtrees before ANY format renders
+    // them. This function builds its own tree rather than reusing
+    // fetchPageByUid, so it needs its own prune — that duplication is exactly
+    // how this path shipped unfiltered the first time.
+    const visibleRoots = pruneHiddenBlocks(rootBlocks);
+    // Collect from the PRUNED tree, not by filtering allBlocks: pruning copies
+    // any node that has children, so the originals are no longer the objects
+    // rendered below, and the markdown branch mutates these in place.
+    const visibleBlocks: RoamBlock[] = [];
+    const collectVisible = (bs: RoamBlock[]) => {
+      for (const b of bs) {
+        visibleBlocks.push(b);
+        if (b.children.length > 0) collectVisible(b.children);
+      }
+    };
+    collectVisible(visibleRoots);
+
     if (format === 'raw') {
       // Resolve structured references for raw JSON output
-      await resolveBlockRefs(this.graph, allBlocks, 2);
-      return JSON.stringify(rootBlocks);
+      await resolveBlockRefs(this.graph, visibleBlocks, 2);
+      return JSON.stringify(visibleRoots);
     }
 
     if (format === 'structure') {
@@ -675,7 +692,7 @@ export class PageOperations {
         return result;
       };
 
-      const structureBlocks = flattenBlocks(rootBlocks, 0, uid);
+      const structureBlocks = flattenBlocks(visibleRoots, 0, uid);
 
       return JSON.stringify({
         page_uid: uid,
@@ -686,7 +703,7 @@ export class PageOperations {
     }
 
     // For markdown, resolve references inline
-    await Promise.all(allBlocks.map(async b => {
+    await Promise.all(visibleBlocks.map(async b => {
       b.string = await resolveRefs(this.graph, b.string);
     }));
 
@@ -715,7 +732,7 @@ export class PageOperations {
         .join('\n');
     };
 
-    return `# ${title}\n\n${toMarkdown(rootBlocks)}`;
+    return `# ${title}\n\n${toMarkdown(visibleRoots)}`;
   }
 
   /**

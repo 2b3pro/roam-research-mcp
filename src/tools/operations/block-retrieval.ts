@@ -3,6 +3,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { RoamBlock, RoamAncestor, RoamBlockWithAncestors } from '../../types/roam.js';
 import { resolveBlockRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
+import { pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
 
 export class BlockRetrievalOperations {
   constructor(private graph: Graph) { }
@@ -30,12 +31,18 @@ export class BlockRetrievalOperations {
       const [rootString, rootOrder, rootHeading] = rootBlockResults[0];
       const childrenMap = await fetchChildrenByDepth(this.graph, [block_uid], depth);
 
+      // A block the user tagged #.rm-hide / #.rm-private is withheld outright,
+      // as is anything nested under it — same rule as the page read paths.
+      if (isHiddenBlockString(rootString)) {
+        return null;
+      }
+
       const rootBlock: RoamBlockWithAncestors = {
         uid: block_uid,
         string: rootString,
         order: rootOrder,
         heading: rootHeading || undefined,
-        children: childrenMap[block_uid] || [],
+        children: pruneHiddenBlocks(childrenMap[block_uid] || []),
       };
 
       // Fetch ancestors if requested
