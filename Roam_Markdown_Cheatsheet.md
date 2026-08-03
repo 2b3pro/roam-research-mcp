@@ -23,6 +23,7 @@
 
 ⚠️ Never concatenate: `#knowledgemanagement` ≠ `#[[knowledge management]]`
 ⚠️ `#` always creates tags — write `Step 1` not `#1`
+⚠️ Because `#` creates tags, a bare `#N` silently creates a numbered page. When you must show the literal form, put it in quotes: `"#1"`, `"#2"` — otherwise rephrase (`Step 1`, `No. 1`, `item 1`)
 
 ### Dates
 Always ordinal format: `[[January 1st, 2025]]`, `[[December 23rd, 2024]]`
@@ -161,7 +162,7 @@ Theme via CSS: `:root { --mermaidjs-theme: dark; }` (in `roam/css`)
 | ❌ Wrong | ✅ Correct |
 |----------|-----------|
 | `#multiplewords` | `#[[multiple words]]` |
-| `#1`, `#2` | `Step 1`, `No. 1` |
+| `#1`, `#2` | `Step 1`, `No. 1`, or quoted: `"#1"` |
 | `[[january 1, 2025]]` | `[[January 1st, 2025]]` |
 | `[text](((uid)))` | `[text](<((uid))>)` |
 | `{{embed: ((uid))}}` | `{{[[embed]]: ((uid))}}` |
