@@ -231,7 +231,7 @@ ROAM_SYSTEM_WRITE_KEY=your-secret-key
 |----------|----------|-------------|
 | `token` | Yes | Roam API token for this graph |
 | `graph` | Yes | Graph name/database identifier |
-| `protected` | No | If `true`, writes require `ROAM_SYSTEM_WRITE_KEY` confirmation |
+| `protected` | No | If `true`, writes require `ROAM_SYSTEM_WRITE_KEY` confirmation — **except on the default graph**, see below |
 | `memoriesTag` | No | Tag for `roam_remember`/`roam_recall` (overrides global default) |
 
 **Two kinds of access control (and how they differ)**
@@ -250,6 +250,8 @@ The server has two independent locks. They're easy to mix up because both are "k
 Think of a house: the **bearer token locks the front door** (keeps strangers out entirely), and the **write key locks a safe inside** (even someone already in the house needs it to change what's in the safe). On your own machine bound to `127.0.0.1`, the front door faces a wall — you don't need the bearer token there. The write key is still handy locally as an "are you sure?" guard, because **Roam has no undo**.
 
 So: to mark a graph as needing the write key, set `protected: true` on it and configure `ROAM_SYSTEM_WRITE_KEY`; callers then pass a matching `write_key` for any write to that graph.
+
+> ⚠️ **`protected` does nothing on your default graph.** Writes to whichever graph `ROAM_DEFAULT_GRAPH` names are always allowed, before `protected` is ever consulted — the flag guards the graphs you have to *ask* for by name, on the reasoning that reaching for a non-default graph is the deliberate act worth confirming. If you want a graph write-guarded, it must not be your default.
 
 *Optional:*
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
