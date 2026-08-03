@@ -11,6 +11,7 @@
 import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { RoamError } from '../shared/errors.js';
+import { DEFAULT_GUIDELINES_PAGE } from '../tools/operations/guidelines.js';
 
 /**
  * Configuration for a single Roam graph
@@ -113,15 +114,21 @@ export class GraphRegistry {
   }
 
   /**
-   * Page holding a graph's agent conventions, or null when disabled.
+   * Page holding a graph's agent conventions, or null when explicitly disabled.
    *
-   * Precedence: per-graph config > ROAM_GUIDELINES_PAGE env var > **disabled**.
+   * Precedence: per-graph config > ROAM_GUIDELINES_PAGE env var >
+   * "roam/agent guidelines" (the shared convention).
    *
-   * Unlike memoriesTag this is opt-in: a graph with no `guidelinesPage` and no
-   * env fallback returns null rather than silently reading a conventional page
-   * title. Reading a page nobody asked us to read is a surprise, and a graph
-   * that happens to contain a similarly-named page should not start feeding it
-   * to agents.
+   * Reading the conventional title by default is deliberate. It is the same
+   * page Roam's own MCP server reads unconditionally, so writing it once makes
+   * both servers honour it — which is the entire point of a convention, and it
+   * stops working the moment it needs private configuration. Creating a page
+   * with that exact namespaced title IS the opt-in; nobody makes one by
+   * accident. And nothing here reads the graph unprompted: the lookup only
+   * happens when an agent explicitly calls roam_get_guidelines, so the tool
+   * call is already the consent.
+   *
+   * Set `guidelinesPage: false` to turn it off for a graph.
    */
   getGuidelinesPage(key?: string): string | null {
     const resolvedKey = key ?? this.defaultKey;
@@ -131,7 +138,7 @@ export class GraphRegistry {
       return null;
     }
 
-    return config?.guidelinesPage ?? process.env.ROAM_GUIDELINES_PAGE ?? null;
+    return config?.guidelinesPage ?? process.env.ROAM_GUIDELINES_PAGE ?? DEFAULT_GUIDELINES_PAGE;
   }
 
   /**

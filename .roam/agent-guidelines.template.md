@@ -4,13 +4,12 @@ A starting point for the page that tells AI agents how *your* graph works.
 
 ## Status
 
-> Read by the `roam_get_guidelines` tool — **once you point a graph at it**.
-> Guidelines are opt-in: set `guidelinesPage` on the graph in `ROAM_GRAPHS`, or
-> `ROAM_GUIDELINES_PAGE` as a fallback. With neither set, the tool reports
-> disabled and never reads the graph.
+> Read by the `roam_get_guidelines` tool with no configuration needed — just
+> create the page. Roam's own MCP server reads the same title, so one page
+> serves both.
 >
-> Roam's own MCP server reads `[[roam/agent guidelines]]` unconditionally, so
-> using that title means one page serves both.
+> To point a graph at a different page set `guidelinesPage` on it in
+> `ROAM_GRAPHS`; to turn it off for a graph set `guidelinesPage: false`.
 
 ## Why a page instead of a file
 

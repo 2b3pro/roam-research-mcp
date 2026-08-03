@@ -101,10 +101,28 @@ describe('getGuidelinesPage', () => {
   const make = (configs: Record<string, any>, def = 'personal') =>
     new GraphRegistry(configs as any, def);
 
-  it('is disabled when a graph configures nothing — opt-in, not opt-out', () => {
+  it('reads the shared convention when a graph configures nothing', () => {
+    // Creating a page with that exact namespaced title IS the opt-in, and it is
+    // the same title Roam's own server reads — so one page serves both.
     delete process.env.ROAM_GUIDELINES_PAGE;
     const r = make({ personal: { token: 't', graph: 'g' } });
-    expect(r.getGuidelinesPage('personal')).toBeNull();
+    expect(r.getGuidelinesPage('personal')).toBe('roam/agent guidelines');
+  });
+
+  it('requires an explicit false to turn off — nothing else disables it', () => {
+    delete process.env.ROAM_GUIDELINES_PAGE;
+    const off = make({ personal: { token: 't', graph: 'g', guidelinesPage: false } });
+    expect(off.getGuidelinesPage('personal')).toBeNull();
+  });
+
+  it('false on one graph beats the env fallback', () => {
+    process.env.ROAM_GUIDELINES_PAGE = 'env/page';
+    const r = make(
+      { personal: { token: 't', graph: 'p' }, work: { token: 't', graph: 'g', guidelinesPage: false } }
+    );
+    expect(r.getGuidelinesPage('work')).toBeNull();
+    expect(r.getGuidelinesPage('personal')).toBe('env/page');
+    delete process.env.ROAM_GUIDELINES_PAGE;
   });
 
   it('prefers per-graph config over the env var', () => {

@@ -161,22 +161,24 @@ This is distinct from `CUSTOM_INSTRUCTIONS_PATH`, and the two compose:
 | To change it | edit the file, restart the server | edit the page |
 | Answers | how to write Roam markdown | how *this user* wants *this graph* handled |
 
-**Opt-in.** A graph with no `guidelinesPage` and no `ROAM_GUIDELINES_PAGE` fallback has guidelines **disabled** — the tool reports that and never touches the graph. Nothing is read until you name a page, so a graph that happens to contain a similarly-titled page won't start feeding it to agents.
+**Just create the page.** With no configuration at all, `roam_get_guidelines` reads `[[roam/agent guidelines]]` — the same title Roam's own server reads, so writing it once makes both honour it. Creating a page with that exact namespaced title is the opt-in; nothing is read from the graph unless an agent explicitly calls the tool.
 
-Each graph can point at a different page:
+If the page doesn't exist, the tool returns `exists: false` rather than failing, so it is always safe to call.
+
+Each graph can point at a different page, or turn it off:
 
 ```bash
 ROAM_GRAPHS='{
-  "personal": {"token": "...", "graph": "...", "guidelinesPage": "roam/agent guidelines"},
+  "personal": {"token": "...", "graph": "..."},
   "work":     {"token": "...", "graph": "...", "guidelinesPage": "work/agent rules"},
-  "archive":  {"token": "...", "graph": "..."}
+  "private":  {"token": "...", "graph": "...", "guidelinesPage": false}
 }'
-ROAM_GUIDELINES_PAGE='roam/agent guidelines'   # fallback for graphs that name none
+ROAM_GUIDELINES_PAGE='team/agent guidelines'   # change the default for every graph
 ```
 
-Resolution order is **per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → disabled**. Setting `guidelinesPage: false` disables it for one graph even when the env fallback is set. In the example above, `archive` uses the fallback; without that env var it would be disabled.
+Resolution order is **per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → `roam/agent guidelines`**. Above: `personal` uses the env override, `work` uses its own page, and `private` has guidelines off entirely. **Only an explicit `false` disables it** — an unset value never does.
 
-If the named page doesn't exist the tool returns `exists: false` rather than failing, so it is safe to call unconditionally. Results are cached for 30 seconds — an edit to the page takes effect without a restart. A starter template lives at [`.roam/agent-guidelines.template.md`](.roam/agent-guidelines.template.md).
+Results are cached for 30 seconds — an edit to the page takes effect without a restart. A starter template lives at [`.roam/agent-guidelines.template.md`](.roam/agent-guidelines.template.md).
 
 Note that guidelines are read through the normal page path, so blocks tagged `#.rm-hide` / `#.rm-private` are withheld from them too — see below.
 

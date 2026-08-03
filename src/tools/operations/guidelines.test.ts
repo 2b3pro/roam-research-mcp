@@ -51,6 +51,16 @@ describe('GuidelinesOperations', () => {
     expect(getPageUid).toHaveBeenCalledWith('work/agent rules');
   });
 
+  it('defaults to the shared convention with no page configured', async () => {
+    getPageUid.mockResolvedValue('abc123456');
+    fetchPageByTitle.mockResolvedValue('rules');
+
+    const res = await new GuidelinesOperations(newGraph()).getGuidelines();
+
+    expect(res.page).toBe(DEFAULT_GUIDELINES_PAGE);
+    expect(getPageUid).toHaveBeenCalledWith(DEFAULT_GUIDELINES_PAGE);
+  });
+
   it('reports guidelines as disabled without touching the graph', async () => {
     const res = await new GuidelinesOperations(newGraph(), null).getGuidelines();
 

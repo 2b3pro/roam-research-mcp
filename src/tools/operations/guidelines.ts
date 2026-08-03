@@ -10,17 +10,14 @@
  * server's mechanics and lives in a file. Guidelines are per-graph, live-edited
  * from inside Roam, and answer "how does this user want their graph handled".
  *
- * Opt-in: a graph must name its page via `guidelinesPage` or ROAM_GUIDELINES_PAGE.
- * With neither set the tool reports disabled and never touches the graph.
+ * Read by default; set `guidelinesPage: false` on a graph to disable it there.
  */
 
 import type { Graph } from '@roam-research/roam-api-sdk';
 import { PageOperations } from './pages.js';
 import { formatRoamDate } from '../../utils/helpers.js';
 
-/** The conventional page title, matching Roam's own server. Not applied
- * automatically — a graph must opt in via `guidelinesPage` or
- * ROAM_GUIDELINES_PAGE. */
+/** The shared convention, read by default and by Roam's own MCP server. */
 export const DEFAULT_GUIDELINES_PAGE = 'roam/agent guidelines';
 
 export interface GuidelinesResult {
@@ -54,7 +51,7 @@ export class GuidelinesOperations {
    */
   constructor(
     private graph: Graph,
-    private guidelinesPage: string | null = null
+    private guidelinesPage: string | null = DEFAULT_GUIDELINES_PAGE
   ) {
     this.pageOps = new PageOperations(graph);
   }
