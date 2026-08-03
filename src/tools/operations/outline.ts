@@ -214,7 +214,13 @@ export class OutlineOperations {
     page_title_uid?: string,
     block_text_uid?: string,
     order?: 'first' | 'last' | number
-  ): Promise<{ success: boolean; page_uid: string; parent_uid: string; created_uids: NestedBlock[] }> {
+  ):
+    /**
+     * `created_blocks`, not `created_uids`: these are full NestedBlock objects
+     * (uid, text, level, order, children), never bare UID strings. Renamed
+     * before an outputSchema froze the misleading name into a promise.
+     */
+    Promise<{ success: boolean; page_uid: string; parent_uid: string; created_blocks: NestedBlock[] }> {
     // Validate input
     if (!Array.isArray(outline) || outline.length === 0) {
       throw new McpError(
@@ -400,7 +406,7 @@ export class OutlineOperations {
       success: true,
       page_uid: targetPageUid,
       parent_uid: targetParentUid,
-      created_uids: createdBlocks
+      created_blocks: createdBlocks
     };
   }
 
@@ -411,7 +417,13 @@ export class OutlineOperations {
     parent_uid?: string,
     parent_string?: string,
     order: 'first' | 'last' = 'last'
-  ): Promise<{ success: boolean; page_uid: string; parent_uid: string; created_uids: NestedBlock[] }> {
+  ):
+    /**
+     * `created_blocks`, not `created_uids`: these are full NestedBlock objects
+     * (uid, text, level, order, children), never bare UID strings. Renamed
+     * before an outputSchema froze the misleading name into a promise.
+     */
+    Promise<{ success: boolean; page_uid: string; parent_uid: string; created_blocks: NestedBlock[] }> {
     // First get the page UID
     let targetPageUid = page_uid;
 
@@ -489,7 +501,7 @@ export class OutlineOperations {
       // Roam's write API does not echo back transacted UIDs, so we report the
       // UIDs we generated client-side rather than issuing a fragile post-write
       // re-query (which was also skipped entirely past VERIFICATION_THRESHOLD,
-      // leaving created_uids empty for larger imports).
+      // leaving created_blocks empty for larger imports).
       const { actions, blocks } = convertToRoamActionsWithBlocks(nodes, targetParentUid, order);
 
       // Execute batch actions to add content
@@ -499,7 +511,7 @@ export class OutlineOperations {
         success: true,
         page_uid: targetPageUid,
         parent_uid: targetParentUid,
-        created_uids: blockInfoToNestedBlocks(blocks)
+        created_blocks: blockInfoToNestedBlocks(blocks)
       };
     } else {
       // Create a simple block for non-nested content
@@ -513,11 +525,11 @@ export class OutlineOperations {
       }], 'create content block');
 
       // For single-line content, we still need to fetch the UID and construct a NestedBlock
-      const createdUids: NestedBlock[] = [];
+      const createdBlocks: NestedBlock[] = [];
       try {
         const foundUid = await this.findBlockWithRetry(targetParentUid, content);
         if (foundUid) {
-          createdUids.push({
+          createdBlocks.push({
             uid: foundUid,
             text: content,
             level: 0,
@@ -534,7 +546,7 @@ export class OutlineOperations {
         success: true,
         page_uid: targetPageUid,
         parent_uid: targetParentUid,
-        created_uids: createdUids
+        created_blocks: createdBlocks
       };
     }
   }

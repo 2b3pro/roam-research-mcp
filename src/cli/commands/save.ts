@@ -509,8 +509,8 @@ JSON format (--json):
             if (result.success) {
               console.log(`Updated page '${pageTitle}'`);
               console.log(`  ${result.summary}`);
-              if (result.preservedUids.length > 0) {
-                console.log(`  Preserved ${result.preservedUids.length} block UID(s)`);
+              if (result.preserved_uids.length > 0) {
+                console.log(`  Preserved ${result.preserved_uids.length} block UID(s)`);
               }
             } else {
               exitWithError(`Failed to update page '${pageTitle}'`);

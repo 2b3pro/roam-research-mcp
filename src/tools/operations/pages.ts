@@ -752,7 +752,12 @@ export class PageOperations {
     success: boolean;
     actions: any[];
     stats: DiffStats;
-    preservedUids: string[];
+    /**
+     * snake_case because this crosses the tool boundary, unlike the camelCase
+     * `DiffResult.preservedUids` it is built from. Renamed before it was frozen
+     * into an outputSchema, where the inconsistency would have become a promise.
+     */
+    preserved_uids: string[];
     summary: string;
   }> {
     if (!title) {
@@ -825,7 +830,7 @@ export class PageOperations {
       success: true,
       actions,
       stats,
-      preservedUids: [...diff.preservedUids],
+      preserved_uids: [...diff.preservedUids],
       summary: dryRun ? `[DRY RUN] ${summary}` : summary
     };
   }
