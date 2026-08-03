@@ -1,5 +1,12 @@
 # Changelog
 
+### v2.25.0 (2026-08-03)
+
+- **Reverts the 2.24.0 opt-in change.** `roam_get_guidelines` reads `[[roam/agent guidelines]]` again with **no configuration required** — just create the page. Precedence is per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → `roam/agent guidelines`, and **only an explicit `guidelinesPage: false` disables it**.
+  - If you added `ROAM_GUIDELINES_PAGE` or a `guidelinesPage` key to satisfy 2.24.0, you can leave it — it still works, it is simply no longer necessary.
+  - 2.24.0 made the page opt-in on the reasoning that a graph might contain a similarly-titled page and start feeding it to agents unasked. That was wrong on four counts: `roam/agent guidelines` is a specific namespaced title nobody creates by accident, so creating it *is* the opt-in; nothing reads the graph unprompted, because the lookup only runs when an agent explicitly calls the tool, which is already consent; `guidelinesPage: false` already covered the per-graph opt-out; and it broke the reason the feature exists, since Roam's own server reads the page unconditionally and a shared convention that needs private configuration is not a shared convention.
+  - The failure modes were not symmetric. Reading by default, the worst case is reading a page someone created with that exact title for exactly this purpose. Opt-in's worst case is a feature that silently does nothing and looks broken — which is what happened on this project's own daemon, where an approved page sat unread until the config was checked.
+
 ### v2.24.0 (2026-08-03)
 
 - **⚠️ Breaking:** `guidelinesPage` is now **opt-in**. In 2.23.0 an unset `guidelinesPage` fell back to the literal title `roam/agent guidelines`, so any graph that happened to contain a similarly-titled page would start feeding it to agents without anyone asking. Resolution is now **per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → disabled**.
