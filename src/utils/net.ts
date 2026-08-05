@@ -4,10 +4,9 @@ import { createServer } from 'node:net';
  * Checks if a given port is currently in use.
  * @param port The port to check.
  * @param host Optional host to probe. When omitted, probes the wildcard address
- *   (any interface) — matching `findAvailablePort`'s "globally free" semantics.
- *   Pass a specific host (e.g. `127.0.0.1`) to check only that interface, so a
- *   listener bound to a different interface (e.g. wildcard) doesn't register as
- *   a conflict for a host-specific bind.
+ *   (any interface). Pass the host you intend to bind — a wildcard probe and a
+ *   host-specific bind disagree in both directions, so the two must match or
+ *   the answer is about a port nobody is going to open.
  * @returns A promise that resolves to true if the port is in use, and false otherwise.
  */
 export function isPortInUse(port: number, host?: string): Promise<boolean> {
@@ -36,16 +35,8 @@ export function isPortInUse(port: number, host?: string): Promise<boolean> {
   });
 }
 
-/**
- * Finds an available port, starting from a given port and incrementing by a specified amount.
- * @param startPort The port to start checking from.
- * @param incrementBy The amount to increment the port by if it's in use. Defaults to 2.
- * @returns A promise that resolves to an available port number.
- */
-export async function findAvailablePort(startPort: number, incrementBy = 2): Promise<number> {
-  let port = startPort;
-  while (await isPortInUse(port)) {
-    port += incrementBy;
-  }
-  return port;
-}
+// `findAvailablePort` lived here until 3.1.0. It existed so stdio mode could
+// drift to a free port when 8088 was taken, and it has no caller now that stdio
+// opens no socket: `--server` binds the exact configured port and fails loudly
+// rather than drifting, because a shared daemon must keep a stable URL.
+// Anything reaching for it again probably wants that failure instead.

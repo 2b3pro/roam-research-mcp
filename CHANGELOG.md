@@ -1,5 +1,26 @@
 # Changelog
 
+### v3.1.0 (2026-08-05)
+
+**In one line:** stdio mode was also opening an HTTP listener, on every network interface, with no authentication — it now opens no socket at all, and the two transport modes are mutually exclusive.
+
+- **⚠️ Security: every stdio-spawned instance was reachable from the network.** Stdio mode — the default when Claude Desktop or a CLI client spawns the server — also opened an HTTP Stream transport. That listener was created with no host argument, which binds all interfaces. `HTTP_AUTH_TOKEN` is normally unset in stdio mode precisely because loopback *was* the perimeter, so anyone on the same network could list your graphs, read them, and write the unprotected ones **without a Roam API token**. With several graphs configured you got one wildcard listener per instance; the reporter observed nine, on ports 8088–8106.
+  - **Were you affected?** If you ran this server through an MCP client on a machine sharing a network with anyone you don't fully trust — a café, an office, a coworking space, a flatshare — then yes, until you upgrade. On a machine that never left a trusted LAN the exposure existed but the audience was small.
+  - **`--server` mode was never affected.** It has bound `HTTP_STREAM_HOST` (loopback by default) since 2.22.0.
+
+- **⚠️ Breaking: stdio mode no longer opens any HTTP listener.** Binding loopback instead of the wildcard was the minimum fix, and it isn't the right one: nothing about MCP over stdio needs a socket, and a listener nobody configured is a security surface nobody audits. Each mode now opens exactly one transport — **stdio speaks stdin/stdout and binds nothing; `--server` speaks HTTP and reads no stdin.**
+  - **Do you need to do anything?** Almost certainly not. If your MCP client spawns the server, that is stdio, and it keeps working exactly as before.
+  - **If you were pointing anything at a stdio instance's port** — a second client, a health check, a script — that endpoint is gone, and there is no flag to bring it back. **Run a `--server` daemon instead**; a shared daemon on a stable URL is what that mode is for, and it is a better fit for every use the old listener was serving. `HTTP_STREAM_PORT` and `HTTP_STREAM_HOST` are now `--server`-only.
+  - **`/health` no longer reports `mode: "stdio+http"`.** The field remains and now always reads `server`, since only `--server` serves HTTP. A response still saying `stdio+http` means you are talking to a pre-3.1.0 build — useful for auditing whether an exposed instance is still out there.
+
+- **Fix: the `--server` port probe checks the host it is about to bind.** It probed the wildcard address while binding `HTTP_STREAM_HOST`. A wildcard probe and a host-specific bind disagree in both directions, so the check could call a taken port free, or a free port taken. Probe host and bind host are now the same value. `findAvailablePort` is gone with the auto-port drift it served — `--server` binds the exact configured port and fails loudly, because a shared daemon must keep a stable URL.
+
+- **Why a minor, when §4 of `docs/architecture.md` says this costs a major.** 3.0.0 told everyone to pin `roam-research-mcp@3`. A 4.0.0 would route this fix around every user who took that advice two days earlier, leaving precisely the exposed population exposed for as long as the pin lives. A security fix that the freshly-documented pin blocks is worse than an understated version number. It also helps that the removed behaviour was never documented: the README described this bind as loopback-only while the code bound everything.
+
+- **Internal: the transport boundary is now asserted against a spawned server and real sockets.** `src/server/stdio-transport.test.ts` starts the server in stdio mode, completes a handshake over stdin/stdout to prove it is alive and serving tools, then asserts nothing is listening — on loopback, on a LAN interface, and via `lsof` on the process itself. No unit test could have caught this; the defect was in what the server passed to `listen()`. Verified against both prior states: three of its assertions fail against 3.0.0, and two still fail against a build with only the loopback fix.
+
+- **Credit:** reported and fixed by [@drenaud0214](https://github.com/drenaud0214) in [#17](https://github.com/2b3pro/roam-research-mcp/pull/17), whose commits are preserved in this history. The stdio listener had been the default since v0.26.0 in June 2025, through every release since.
+
 ### v3.0.0 (2026-08-03)
 
 **In one line:** write tools now return machine-readable `structuredContent` alongside their text, and three output fields were renamed to stop the schemas freezing bad names into a permanent contract.

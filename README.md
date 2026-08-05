@@ -273,14 +273,16 @@ So: to mark a graph as needing the write key, set `protected: true` on it and co
 
 *Optional:*
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
-- `HTTP_STREAM_PORT`: Port for the HTTP Stream transport (defaults to 8088).
-- `HTTP_STREAM_HOST`: Host to bind the HTTP transport to in `--server` mode (defaults to `127.0.0.1`, loopback-only). Set to `0.0.0.0` to expose on the LAN.
+- `HTTP_STREAM_PORT`: Port for the HTTP Stream transport (defaults to 8088). **`--server` mode only** — stdio mode opens no socket, so this is ignored there.
+- `HTTP_STREAM_HOST`: Host to bind the HTTP transport to (defaults to `127.0.0.1`, loopback-only). **`--server` mode only.** Set to `0.0.0.0` to expose on the LAN, and set `HTTP_AUTH_TOKEN` when you do.
 - `HTTP_AUTH_TOKEN`: Optional bearer token that locks the **whole** HTTP endpoint. Unset = open (fine for loopback). When set, every MCP request must send `Authorization: Bearer <token>` (`GET /health` stays open). Use it whenever you bind beyond `127.0.0.1`. Different from `ROAM_SYSTEM_WRITE_KEY` — see [Two kinds of access control](#two-kinds-of-access-control-and-how-they-differ).
 
 ### Running the Server
 
-**1. Default Mode (stdio + HTTP)**
-Best for local integration (e.g., Claude Desktop, IDE extensions). The MCP client launches the process per session over stdio; an HTTP Stream transport is also opened on an auto-discovered port near `HTTP_STREAM_PORT`.
+**1. Default Mode (stdio)**
+Best for local integration (e.g., Claude Desktop, IDE extensions). The MCP client launches the process per session and talks to it over stdin/stdout. **No port is opened** — nothing about MCP over stdio needs one.
+
+> Before 3.1.0 this mode *also* opened an HTTP listener, and bound it to every interface. If you were using that endpoint, run a `--server` daemon instead; see below.
 
 ```bash
 npx roam-research-mcp
@@ -305,7 +307,7 @@ roam server stop             # stop a CLI-started daemon
 
 `roam server status` works no matter how the daemon was launched (it probes `/health`), so it also reports a daemon started by a LaunchAgent/systemd unit. State (pidfile + log) lives in `~/.roam/` (override with `ROAM_HOME`).
 
-In `--server` mode the server:
+The two modes are mutually exclusive, and each opens exactly one transport: stdio mode speaks stdio and binds nothing, `--server` speaks HTTP and reads no stdin. In `--server` mode the server:
 - runs **HTTP-only** (no stdio transport),
 - binds the **exact** `HTTP_STREAM_PORT` on `HTTP_STREAM_HOST` and **exits non-zero if the port is taken** (no silent drift — a shared daemon must keep a stable URL),
 - exposes `GET /health` → `{"status":"ok", ...}` for liveness checks.
