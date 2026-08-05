@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { findAvailablePort, isPortInUse } from '../utils/net.js';
+import { isPortInUse } from '../utils/net.js';
 import { CORS_ORIGINS } from '../config/environment.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -513,12 +513,18 @@ export class RoamServer {
 
     try {
 
-      // In --server (daemon) mode we run HTTP-only: no client reads the stdio
-      // transport, so we skip it. Otherwise behavior is unchanged (stdio + HTTP).
+      // The two transports are mutually exclusive, and each mode opens exactly
+      // one. Stdio mode talks to the client that spawned it over stdin/stdout
+      // and returns here — it opens no socket at all. Nothing about MCP over
+      // stdio needs one, and a listener nobody asked for is pure attack
+      // surface: until 3.1.0 stdio mode also bound an HTTP port, which shipped
+      // a token-free MCP endpoint per spawned instance. Run `--server` when
+      // you want HTTP; that is what it is for.
       if (!serverMode) {
         const stdioMcpServer = this.createMcpServer();
         const stdioTransport = new StdioServerTransport();
         await stdioMcpServer.connect(stdioTransport);
+        return;
       }
 
 
@@ -554,7 +560,11 @@ export class RoamServer {
             status: 'ok',
             name: 'roam-research-mcp',
             version: serverVersion,
-            mode: serverMode ? 'server' : 'stdio+http',
+            // Always 'server' since 3.1.0: this handler is only reachable in
+            // --server mode. Kept as a field because clients read it, and the
+            // retired 'stdio+http' value is how they can tell they are talking
+            // to an older build that still had the stdio-mode listener.
+            mode: 'server',
             auth: HTTP_AUTH_TOKEN ? 'required' : 'none',
             graphs: this.registry.getAvailableGraphs(),
             defaultGraph: this.registry.defaultKey,
@@ -655,32 +665,22 @@ export class RoamServer {
 
       const desiredPort = parseInt(HTTP_STREAM_PORT);
 
-      if (serverMode) {
-        // A shared daemon must own a stable URL — never silently drift to another
-        // port. Fail loudly if the configured port is already taken on our bind
-        // host (a listener on a different interface is not our conflict).
-        if (await isPortInUse(desiredPort, HTTP_STREAM_HOST)) {
-          throw new McpError(
-            ErrorCode.InternalError,
-            `--server: port ${desiredPort} (HTTP_STREAM_PORT) is already in use. ` +
-            `Stop the process using it, or set HTTP_STREAM_PORT to a free port.`
-          );
-        }
-        httpServer.listen(desiredPort, HTTP_STREAM_HOST, () => {
-          console.error(
-            `roam-research-mcp v${serverVersion} (--server) listening on ` +
-            `http://${HTTP_STREAM_HOST}:${desiredPort}/  (health: /health)`
-          );
-        });
-      } else {
-        const availableHttpPort = await findAvailablePort(desiredPort, 2, HTTP_STREAM_HOST);
-        // Bind the companion HTTP transport to HTTP_STREAM_HOST (loopback by
-        // default) — listening without a host binds every interface, exposing
-        // the graph token-free on the LAN.
-        httpServer.listen(availableHttpPort, HTTP_STREAM_HOST, () => {
-
-        });
+      // A shared daemon must own a stable URL — never silently drift to another
+      // port. Fail loudly if the configured port is already taken on our bind
+      // host (a listener on a different interface is not our conflict).
+      if (await isPortInUse(desiredPort, HTTP_STREAM_HOST)) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          `--server: port ${desiredPort} (HTTP_STREAM_PORT) is already in use. ` +
+          `Stop the process using it, or set HTTP_STREAM_PORT to a free port.`
+        );
       }
+      httpServer.listen(desiredPort, HTTP_STREAM_HOST, () => {
+        console.error(
+          `roam-research-mcp v${serverVersion} (--server) listening on ` +
+          `http://${HTTP_STREAM_HOST}:${desiredPort}/  (health: /health)`
+        );
+      });
 
 
 
