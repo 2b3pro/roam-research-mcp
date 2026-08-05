@@ -2,6 +2,8 @@
 
 # Roam Research MCP + CLI
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2F2b3pro%2Froam-research-mcp.svg)](https://mcptoplist.com/server/glama%2F2b3pro%2Froam-research-mcp)
+
 [![npm version](https://badge.fury.io/js/roam-research-mcp.svg)](https://badge.fury.io/js/roam-research-mcp)
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
