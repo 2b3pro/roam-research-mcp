@@ -1,5 +1,22 @@
 # Changelog
 
+### v3.1.0 (2026-08-05)
+
+**In one line:** in stdio mode the companion HTTP transport was binding every interface, publishing an unauthenticated MCP endpoint for your graphs on the LAN — it now binds `HTTP_STREAM_HOST` (loopback) like `--server` always did.
+
+- **⚠️ Security: every stdio-spawned instance was reachable from the network.** Stdio mode — the default when Claude Desktop or a CLI client spawns the server — also opens an HTTP Stream transport. That listener was created with no host argument, which binds all interfaces. `HTTP_AUTH_TOKEN` is normally unset in stdio mode precisely because loopback *is* the perimeter, so anyone on the same network could list your graphs, read them, and write the unprotected ones **without a Roam API token**. With several graphs configured you got one wildcard listener per instance; the reporter observed nine, on ports 8088–8106.
+  - **Are you affected?** If you run this server through an MCP client on a machine that shares a network with anyone you don't fully trust — a café, an office, a coworking space, a flatshare — then yes, until you upgrade. On a machine that never left a trusted LAN, the exposure existed but the audience was small.
+  - **`--server` mode was never affected.** It has bound `HTTP_STREAM_HOST` since 2.22.0. If you run the shared daemon, that endpoint was already loopback-only.
+  - **After upgrading, no configuration is needed.** The listener binds `127.0.0.1` by default, which is what the README always said `HTTP_STREAM_HOST` meant.
+  - **If you were deliberately reaching a stdio instance across the LAN, it stops working.** Set `HTTP_STREAM_HOST=0.0.0.0` to restore it — and set `HTTP_AUTH_TOKEN` at the same time, because that configuration has no other gate. Consider `--server` instead; it exists for exactly this.
+  - **Why a minor and not a major**, given §4 of `docs/architecture.md` says changing a default usually costs a major: 3.0.0 told everyone to pin `roam-research-mcp@3`, and a 4.0.0 would route this fix around every user who took that advice — leaving the exposed population exposed indefinitely. A security fix that the freshly-documented pin blocks is worse than an understated version number. The behaviour being removed is also not one the docs ever promised; the README described this bind as loopback while the code did otherwise.
+
+- **Fix: the port probe now checks the host it is about to bind.** `findAvailablePort` probed the wildcard address while the fixed listener binds `127.0.0.1`. A wildcard probe can succeed alongside an existing loopback listener, so concurrent instances would agree a taken port was free and race each other into `EADDRINUSE`. Probe host and bind host are now the same value.
+
+- **Internal: the bind host is now asserted against a spawned server and a real socket.** `src/server/stdio-loopback-bind.test.ts` starts the server in stdio mode and TCP-connects to a non-internal interface. A unit test on `findAvailablePort` could not have caught this — the defect was in the argument passed to `listen()`, which no unit test observes. Verified by running it against a deliberately unpatched build, where the socket connects.
+
+- **Credit:** reported and fixed by [@drenaud0214](https://github.com/drenaud0214) in [#17](https://github.com/2b3pro/roam-research-mcp/pull/17), whose commits are preserved here.
+
 ### v3.0.0 (2026-08-03)
 
 **In one line:** write tools now return machine-readable `structuredContent` alongside their text, and three output fields were renamed to stop the schemas freezing bad names into a permanent contract.

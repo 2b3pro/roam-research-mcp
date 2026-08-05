@@ -274,7 +274,7 @@ So: to mark a graph as needing the write key, set `protected: true` on it and co
 *Optional:*
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
 - `HTTP_STREAM_PORT`: Port for the HTTP Stream transport (defaults to 8088).
-- `HTTP_STREAM_HOST`: Host to bind the HTTP transport to in `--server` mode (defaults to `127.0.0.1`, loopback-only). Set to `0.0.0.0` to expose on the LAN.
+- `HTTP_STREAM_HOST`: Host to bind the HTTP transport to (defaults to `127.0.0.1`, loopback-only). Applies to **both** modes — `--server`, and the companion HTTP transport that stdio mode opens alongside stdio. Set to `0.0.0.0` to expose on the LAN, and set `HTTP_AUTH_TOKEN` when you do.
 - `HTTP_AUTH_TOKEN`: Optional bearer token that locks the **whole** HTTP endpoint. Unset = open (fine for loopback). When set, every MCP request must send `Authorization: Bearer <token>` (`GET /health` stays open). Use it whenever you bind beyond `127.0.0.1`. Different from `ROAM_SYSTEM_WRITE_KEY` — see [Two kinds of access control](#two-kinds-of-access-control-and-how-they-differ).
 
 ### Running the Server
