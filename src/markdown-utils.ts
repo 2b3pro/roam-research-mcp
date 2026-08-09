@@ -153,6 +153,20 @@ function convertToRoamMarkdown(text: string): string {
   return text;
 }
 
+/**
+ * Does this line carry BOTH an opening and a closing code fence?
+ *
+ * Such a line is self-contained content — an escaped multi-line block making
+ * its round trip — not the start of a fenced region. The fence state machine
+ * exists to gather HAND-WRITTEN fences that span real newlines; pointing it at
+ * a complete fence makes it scan forward for a close that never comes, and it
+ * consumes the rest of the document.
+ */
+function fenceClosesOnSameLine(trimmedLine: string): boolean {
+  const open = trimmedLine.indexOf('```');
+  return open !== -1 && trimmedLine.indexOf('```', open + 3) !== -1;
+}
+
 function parseMarkdown(markdown: string): MarkdownNode[] {
   markdown = convertToRoamMarkdown(markdown);
 
@@ -164,7 +178,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     const trimmedLine = line.trimEnd();
     const codeStartIndex = trimmedLine.indexOf('```');
 
-    if (codeStartIndex > 0) {
+    if (codeStartIndex > 0 && !fenceClosesOnSameLine(trimmedLine)) {
       const indentationWhitespace = line.match(/^\s*/)?.[0] ?? '';
       processedLines.push(indentationWhitespace + trimmedLine.substring(0, codeStartIndex));
       processedLines.push(indentationWhitespace + trimmedLine.substring(codeStartIndex));
@@ -180,7 +194,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
   let inCodeBlockFirstPass = false;
   for (const line of processedLines) {
     const trimmedLine = line.trimEnd();
-    if (trimmedLine.match(/^(\s*)```/)) {
+    if (trimmedLine.match(/^(\s*)```/) && !fenceClosesOnSameLine(trimmedLine)) {
       inCodeBlockFirstPass = !inCodeBlockFirstPass;
       if (!inCodeBlockFirstPass) continue; // Skip closing ```
       const indent = line.match(/^\s*/)?.[0].length ?? 0;
@@ -236,7 +250,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     const line = processedLines[i];
     const trimmedLine = line.trimEnd();
 
-    if (trimmedLine.match(/^(\s*)```/)) {
+    if (trimmedLine.match(/^(\s*)```/) && !fenceClosesOnSameLine(trimmedLine)) {
       if (!inCodeBlock) {
         inCodeBlock = true;
         codeBlockContent = trimmedLine.trimStart() + '\n';

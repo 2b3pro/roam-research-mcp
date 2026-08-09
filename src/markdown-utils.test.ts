@@ -317,4 +317,38 @@ And this--too`;
       expect(nested[2].children.map(c => c.content)).toEqual(['continue all']);
     });
   });
+
+  describe('self-contained code fences', () => {
+    it('does not swallow the blocks after a one-line fenced block', () => {
+      // A fence that opens AND closes on one line is content, not a region.
+      // Treating it as a region opens a fence that never closes, and every
+      // following line is consumed as code.
+      const md = [
+        '- ```javascript\\nconst x = 1;\\n```',
+        '- A block AFTER the code block',
+        '- And another',
+      ].join('\n');
+
+      const nodes = parseMarkdown(md);
+
+      expect(nodes).toHaveLength(3);
+      expect(nodes[2].content).toBe('And another');
+    });
+
+    it('stops emitting an empty block for the bullet before a fence', () => {
+      const nodes = parseMarkdown('- ```js\\ncode\\n```');
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].content).not.toBe('-');
+    });
+
+    it('still gathers a genuine multi-line fence into one node', () => {
+      // The hand-written case the fence machinery exists for. Unchanged.
+      const md = ['```javascript', 'const x = 1;', '```', '- after'].join('\n');
+      const nodes = parseMarkdown(md);
+
+      expect(nodes).toHaveLength(2);
+      expect(nodes[0].content).toContain('const x = 1;');
+      expect(nodes[1].content).toBe('after');
+    });
+  });
 });
