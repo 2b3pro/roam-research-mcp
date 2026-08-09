@@ -84,6 +84,24 @@ const BLOCKS = {
 };
 
 /**
+ * Referring blocks (backlinks) to a page, as
+ * [block_uid, block_str, source_page_title, source_page_uid] -- the exact
+ * tuple shape `FullPageViewOperations.fetchReferringBlocks` (see
+ * src/tools/operations/full-page-view.ts) queries for via `:block/refs`.
+ *
+ * Hardcoded rather than derived from `[[...]]` syntax in BLOCKS: this fixture
+ * does not parse Roam reference syntax into `:block/refs`, so a query that
+ * relies on that link has nothing to answer from BLOCKS alone. One block, with
+ * a real embedded newline, is enough to prove the linked-reference render path
+ * escapes it like every other block string in that file.
+ */
+const REFERRING_BLOCKS = {
+  'Nested Page': [
+    ['linkref01', 'See [[Nested Page]] for the plan\nand a second line', 'Test Page', 'page00001'],
+  ],
+};
+
+/**
  * Blocks actually written during a test run, as [uid, string, order, parentUid].
  * Populated by the `/write` handler below as `create-block` actions land.
  *
@@ -214,6 +232,18 @@ function answer(query, args) {
     const uid = args?.[0];
     const match = CREATED_BLOCKS.find(([blockUid]) => blockUid === uid);
     return match ? [[match[1]]] : [];
+  }
+
+  // fetchReferringBlocks: backlinks to a page, via `:block/refs`. Distinctive
+  // find-vars combo (`?block-uid ?block-str ?page-title ?page-uid`) so this is
+  // checked BEFORE the generic `:node/title` branch below -- the query also
+  // contains `:node/title` twice (target page and source page lookups inside
+  // the `:where` clause), and without this branch ahead of it, the query fell
+  // into that branch instead and every linked-reference block rendered as
+  // `undefined`.
+  if (query.includes(':find ?block-uid ?block-str ?page-title ?page-uid')) {
+    const targetTitle = args?.[0];
+    return REFERRING_BLOCKS[targetTitle] ?? [];
   }
 
   // Page lookup by title. `:find ?uid .` is a scalar find — return the bare uid.

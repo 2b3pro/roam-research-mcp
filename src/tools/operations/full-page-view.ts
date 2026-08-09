@@ -330,12 +330,18 @@ export class FullPageViewOperations {
           // This mirrors Roam's ancestor context display
           for (let i = 0; i < ref.breadcrumbs.length; i++) {
             const prefix = '> '.repeat(i + 1);
-            lines.push(`${prefix}${ref.breadcrumbs[i].string}`);
+            // Same reasoning as `renderBlocks` below: a breadcrumb string can
+            // itself carry a soft line break, and an unescaped one spills onto
+            // a bare physical line with no `> ` prefix at all.
+            lines.push(`${prefix}${escapeBlockString(ref.breadcrumbs[i].string)}`);
           }
 
-          // The referring block itself, indented to sit visually under its breadcrumbs
+          // The referring block itself, indented to sit visually under its
+          // breadcrumbs. Escaped for the same reason `renderBlocks` escapes
+          // every other block string in this file: an unescaped newline spills
+          // the rest of the block onto a bare physical line with no bullet.
           const refIndent = '  '.repeat(ref.breadcrumbs.length);
-          lines.push(`${refIndent}- ${ref.block.string}`);
+          lines.push(`${refIndent}- ${escapeBlockString(ref.block.string)}`);
 
           // Children of the referring block
           if (ref.block.children.length > 0) {

@@ -21,6 +21,7 @@ import {
   parseExistingBlocks,
   pruneHiddenExistingBlocks,
   countHiddenExistingBlocks,
+  flattenExistingBlocks,
   markdownToBlocks,
   diffBlockTrees,
   generateBatchActions,
@@ -963,6 +964,36 @@ export class PageOperations {
     // newline and then split on newlines, which is exactly the flattening
     // bug this whole effort exists to fix.
     const newBlocks = markdownToBlocks(effectiveMarkdown, pageUid);
+
+    // Submitting empty/whitespace markdown is the documented way to clear a
+    // page, and stays untouched below. This guards the DIFFERENT case: markdown
+    // that is NOT empty but still parsed to zero blocks. That only happens when
+    // the parser swallowed the payload -- the known cause is a first block
+    // whose string is a bare fence opener (e.g. a line reading "- ```js" with
+    // nothing to close it), which is exactly the shape our own renderer emits
+    // for a Roam block whose string starts with a fence, and the shape a
+    // pasted code snippet produces. `markdownToBlocks` then returns an empty
+    // array, and diffing 0 new blocks against N existing ones deletes all N --
+    // silently, against an API with no undo. The asymmetry is deliberate: an
+    // empty parse of EMPTY input is the documented clear-the-page instruction;
+    // an empty parse of NON-EMPTY input is the parser losing the payload, never
+    // an instruction to delete anything.
+    if (effectiveMarkdown.trim().length > 0 && newBlocks.length === 0) {
+      const existingCount = flattenExistingBlocks(existingBlocks).length;
+      if (existingCount > 0) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `markdown parsed to zero blocks even though it is not empty. This usually ` +
+          `means an unterminated \`\`\` fence swallowed the whole payload (a first ` +
+          `block that opens a code fence and never closes it consumes every line ` +
+          `after it). Refusing to write: this would have deleted all ${existingCount} ` +
+          `existing block${existingCount === 1 ? '' : 's'} on "${title}". Check the ` +
+          `markdown for an unbalanced fence, or call again with dry_run: true to ` +
+          `inspect the planned actions before writing.`
+        );
+      }
+    }
+
     if (isEscaped) {
       for (const block of newBlocks) {
         block.text = unescapeBlockString(block.text);

@@ -60,6 +60,12 @@ rely on.
 all treat a line break as a block break. Use `roam_process_batch_actions`, which
 writes block strings literally — put a real newline in the `string`.
 
+The one exception: inside a payload carrying the `<!-- roam:escaped-newlines -->`
+marker (below), a `⏎` decodes to a real soft line break on write. So keeping —
+or adding — a `⏎` in a marker-carrying payload handed to
+`roam_update_page_markdown` *is* the one markdown-tools path that writes one.
+Without the marker, `⏎` is just the character; it does not decode.
+
 ⚠️ Reads render a soft line break as `⏎` so the block stays on one line, and a
 payload containing any is marked with a leading `<!-- roam:escaped-newlines -->`
 comment. If you edit that markdown and pass it back to

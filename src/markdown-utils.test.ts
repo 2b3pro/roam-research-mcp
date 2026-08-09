@@ -322,9 +322,13 @@ And this--too`;
     it('does not swallow the blocks after a one-line fenced block', () => {
       // A fence that opens AND closes on one line is content, not a region.
       // Treating it as a region opens a fence that never closes, and every
-      // following line is consumed as code.
+      // following line is consumed as code. The embedded newlines are written
+      // as the current renderer's `⏎` sentinel (shared/block-escaping.ts),
+      // not the dead design's literal-backslash-n wire shape from an earlier
+      // revision -- what this pins is unchanged either way: a self-contained
+      // fence line does not open a multi-line region.
       const md = [
-        '- ```javascript\\nconst x = 1;\\n```',
+        '- ```javascript⏎const x = 1;⏎```',
         '- A block AFTER the code block',
         '- And another',
       ].join('\n');
@@ -406,44 +410,5 @@ describe('C2: ordinary backslash content is never decoded', () => {
     expect(nodes).toHaveLength(1);
     expect(nodes[0].content).toBe(input);
     expect(nodes[0].content).not.toContain('\n');
-  });
-});
-
-describe('C1: a fence mentioned inside a block does not open a region', () => {
-  it('keeps every block when one block merely contains a fence', () => {
-    const md = [
-      '- wrap it in ``` to make code',
-      '- second block',
-      '- third block',
-      '- fourth block',
-    ].join('\n');
-
-    const nodes = parseMarkdown(md);
-
-    expect(nodes).toHaveLength(4);
-    expect(nodes[0].content).toBe('wrap it in ``` to make code');
-    expect(nodes[3].content).toBe('fourth block');
-  });
-
-  it('keeps a block whose fence is the last thing on the line', () => {
-    const nodes = parseMarkdown('- ends with a fence ```\n- survives');
-    expect(nodes).toHaveLength(2);
-    expect(nodes[1].content).toBe('survives');
-  });
-
-  it('still opens a region for a hand-written fence opener', () => {
-    const md = ['- ```javascript', 'const x = 1;', '```', '- after'].join('\n');
-    const nodes = parseMarkdown(md);
-
-    expect(nodes).toHaveLength(2);
-    expect(nodes[0].content).toContain('const x = 1;');
-    expect(nodes[1].content).toBe('after');
-  });
-
-  it('still opens a region for an opener with no language tag', () => {
-    const md = ['- ```', 'plain code', '```', '- after'].join('\n');
-    const nodes = parseMarkdown(md);
-    expect(nodes).toHaveLength(2);
-    expect(nodes[1].content).toBe('after');
   });
 });

@@ -253,6 +253,23 @@ describe('markdown render escapes newlines for the round trip', () => {
   });
 });
 
+describe('full page view escapes linked-reference block strings', () => {
+  it('shows the referring block text with ⏎, not spilled onto a second line, not undefined', async () => {
+    // Fixture: `linkref01` on "Test Page" references "Nested Page" and
+    // carries a real embedded newline (tests/fake-roam-backend.mjs). Before
+    // this fixture had a properly-dispatched branch, the referring-blocks
+    // query misrouted into the page-title-lookup branch and every linked
+    // reference rendered as the literal string "undefined".
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_full_view', { title: 'Nested Page' })
+    );
+
+    expect(text).not.toContain('undefined');
+    expect(text).toContain('See [[Nested Page]] for the plan⏎and a second line');
+    expect(text).not.toMatch(/^and a second line/m);
+  });
+});
+
 describe('escaping is conditional and self-identifying', () => {
   it('marks and escapes a page that has a multi-line block', async () => {
     const text = McpHarness.text(
@@ -278,6 +295,12 @@ describe('escaping is conditional and self-identifying', () => {
     );
 
     expect(text).not.toContain('<!-- roam:escaped-newlines -->');
-    expect(text).not.toContain('\\\\');
+    // Was `expect(text).not.toContain('\\\\')` -- an assertion that can no
+    // longer fail once backslash-doubling was deleted (nothing in this
+    // renderer ever doubles a backslash any more, escaping or not). Assert on
+    // something that CAN fail instead: the fixture's literal single backslash
+    // (`gblock002` in tests/fake-roam-backend.mjs: "Paths like C:\newdir
+    // stays as typed") must reach the caller unchanged, byte-for-byte.
+    expect(text).toContain('Paths like C:\\newdir stays as typed');
   });
 });

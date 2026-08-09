@@ -313,3 +313,31 @@ describe('Revision 3 acceptance criteria', () => {
     ).not.toContain('nst000001');
   });
 });
+
+describe('a zero-block parse of non-empty markdown refuses to write, rather than deleting the page', () => {
+  // `- \`\`\`js` opens a code fence and never closes it (see
+  // isBulletFenceOpener / fenceHasTrailingContent in src/markdown-utils.ts) --
+  // exactly the shape our own renderer emits for a block whose string starts
+  // with a fence, and the shape a pasted code snippet produces. Every line
+  // after it, including "- after", is swallowed as code, so `markdownToBlocks`
+  // returns ZERO nodes for markdown that is not empty. Diffing 0 new blocks
+  // against Nested Page's many existing blocks would delete all of them --
+  // silently, against an API with no undo -- without the guard in
+  // `updatePageMarkdown` (src/tools/operations/pages.ts).
+  it('errors instead of producing delete-block actions for every existing block', async () => {
+    const result = await harness.call('roam_update_page_markdown', {
+      title: 'Nested Page',
+      markdown: '- ```js\n- after',
+      dry_run: true,
+    });
+
+    expect(result.isError, `expected an error, got: ${McpHarness.text(result)}`).toBe(true);
+    const text = McpHarness.text(result);
+    expect(text).toMatch(/zero blocks/i);
+
+    // The failure mode this guards against: no error, and a plan full of
+    // delete-block actions. A successful call would have parsed as JSON with
+    // an `actions` array; this asserts the response never gets that far.
+    expect(() => JSON.parse(text)).toThrow();
+  });
+});
