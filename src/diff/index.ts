@@ -49,6 +49,8 @@ export { getDiffStats, isDiffEmpty } from './types.js';
 export {
   parseExistingBlock,
   parseExistingBlocks,
+  pruneHiddenExistingBlocks,
+  countHiddenExistingBlocks,
   flattenExistingBlocks,
   markdownToBlocks,
   getBlockDepth,

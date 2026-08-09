@@ -18,6 +18,8 @@ import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
 import {
   parseExistingBlocks,
+  pruneHiddenExistingBlocks,
+  countHiddenExistingBlocks,
   markdownToBlocks,
   diffBlockTrees,
   generateBatchActions,
@@ -656,8 +658,25 @@ export class PageOperations {
     }
 
     if (format === 'structure') {
-      // Flatten the tree into a list optimized for surgical updates
-      // Each entry has: uid, order, text (preview), depth, parent_uid
+      // Flatten the tree into a list optimized for surgical updates: this
+      // format exists to hand an agent the UIDs and shape of a page cheaply, so
+      // `text` is a PREVIEW, cut at PREVIEW_CHARS.
+      //
+      // That cut is the format's one sharp edge. The tool description sells the
+      // output as "optimized for surgical updates", and the obvious next move —
+      // feed these entries to roam_process_batch_actions as update-block
+      // strings — silently replaces every long block with its own first 80
+      // characters. The `...` suffix was the only signal, and an agent
+      // reassembling content does not reliably read punctuation as a warning.
+      //
+      // So a cut entry now says so in a field: `truncated: true`, plus
+      // `full_length` so the agent can see how much is missing. The payload
+      // also carries a one-line instruction, but ONLY when something was
+      // actually cut — a warning present on every response is a warning that
+      // gets skimmed. Widening the cut, or removing it, would change what an
+      // unchanged call returns; marking it does not.
+      const PREVIEW_CHARS = 80;
+
       interface StructureBlock {
         uid: string;
         order: number;
@@ -665,6 +684,10 @@ export class PageOperations {
         depth: number;
         parent_uid: string;
         heading?: number;
+        /** Present only when `text` is a fragment. Never write it back. */
+        truncated?: true;
+        /** Character length of the real block string, when truncated. */
+        full_length?: number;
       }
 
       const flattenBlocks = (
@@ -674,9 +697,9 @@ export class PageOperations {
       ): StructureBlock[] => {
         const result: StructureBlock[] = [];
         for (const block of blocks) {
-          // Truncate text for preview (keep first 80 chars)
-          const preview = block.string.length > 80
-            ? block.string.substring(0, 80) + '...'
+          const isTruncated = block.string.length > PREVIEW_CHARS;
+          const preview = isTruncated
+            ? block.string.substring(0, PREVIEW_CHARS) + '...'
             : block.string;
 
           const entry: StructureBlock = {
@@ -686,6 +709,11 @@ export class PageOperations {
             depth,
             parent_uid: parentUid
           };
+
+          if (isTruncated) {
+            entry.truncated = true;
+            entry.full_length = block.string.length;
+          }
 
           if (block.heading) {
             entry.heading = block.heading;
@@ -702,11 +730,21 @@ export class PageOperations {
       };
 
       const structureBlocks = flattenBlocks(visibleRoots, 0, uid);
+      const truncatedCount = structureBlocks.filter((b) => b.truncated).length;
 
       return JSON.stringify({
         page_uid: uid,
         title: title,
         block_count: structureBlocks.length,
+        ...(truncatedCount > 0 && {
+          truncated_count: truncatedCount,
+          warning:
+            `${truncatedCount} block${truncatedCount === 1 ? '' : 's'} shown here ` +
+            `${truncatedCount === 1 ? 'is' : 'are'} cut off at ${PREVIEW_CHARS} characters ` +
+            `(marked \`truncated: true\`). Their \`text\` is a preview for orientation, not content. ` +
+            `Writing it back would replace the block with its opening fragment — ` +
+            `fetch the block with roam_fetch_block to get its full string before editing it.`
+        }),
         blocks: structureBlocks
       });
     }
@@ -806,7 +844,18 @@ export class PageOperations {
     }
 
     // 3. Parse existing blocks into our format
-    const existingBlocks = parseExistingBlocks(pageData);
+    const allExistingBlocks = parseExistingBlocks(pageData);
+
+    // 3a. Withhold #.rm-hide / #.rm-private subtrees from the BASELINE, not
+    // just from reads. The query above deliberately pulls the whole page —
+    // block UIDs and ordering have to be complete for the diff to preserve
+    // references — but diffing against blocks the caller was never shown is
+    // how the hide filter became a deletion mechanism: unseen content cannot
+    // appear in replacement markdown, and this diff deletes whatever the
+    // markdown does not account for. The baseline must match what could be
+    // read. See `pruneHiddenExistingBlocks`.
+    const hiddenCount = countHiddenExistingBlocks(allExistingBlocks);
+    const existingBlocks = pruneHiddenExistingBlocks(allExistingBlocks);
 
     // 4. Convert new markdown to block structure
     const newBlocks = markdownToBlocks(markdown, pageUid);
@@ -835,12 +884,25 @@ export class PageOperations {
       }
     }
 
+    // Report the protection rather than applying it silently. Without this, a
+    // caller told "3 blocks deleted, 5 created" has no way to explain the
+    // blocks still on the page afterwards, and a user debugging that has
+    // nothing to go on. It is a count, never content — and these tags are
+    // documented as "keep it out of the AI's way", not a secrecy boundary
+    // (`tools/helpers/hidden.ts`), so a count is well within their contract.
+    const preservationNote =
+      hiddenCount > 0
+        ? ` ${hiddenCount} hidden block${hiddenCount === 1 ? '' : 's'} ` +
+          `(#.rm-hide / #.rm-private) ${hiddenCount === 1 ? 'was' : 'were'} excluded from the diff and left untouched.`
+        : '';
+
     return {
       success: true,
       actions,
       stats,
       preserved_uids: [...diff.preservedUids],
-      summary: dryRun ? `[DRY RUN] ${summary}` : summary
+      ...(hiddenCount > 0 && { preserved_hidden: hiddenCount }),
+      summary: (dryRun ? `[DRY RUN] ${summary}` : summary) + preservationNote
     };
   }
 
