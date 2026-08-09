@@ -58,7 +58,8 @@ describe('read → write-back is a no-op', () => {
   it('keeps every multi-line block on one physical line', async () => {
     const lines = bodyOf(await readMarkdown()).split('\n').filter((l) => l.trim());
 
-    // Nine blocks in the fixture, so nine lines. A spill shows up as ten.
+    // Nine blocks in the fixture, so nine lines. Two fixture blocks carry an
+    // embedded newline, so a spill shows up as eleven.
     expect(lines).toHaveLength(9);
     for (const line of lines) {
       expect(line, `line without a bullet: ${JSON.stringify(line)}`).toMatch(/^\s*-\s/);
@@ -73,8 +74,14 @@ describe('read → write-back is a no-op', () => {
       lines.map((l) => [l.trim().replace(/^-\s*/, ''), depth(l)] as const)
     );
 
-    // The exact shape the bug destroyed: Timeline is a child of Project Alpha,
-    // NOT of the sibling that precedes it.
+    // What this establishes: the renderer's own indentation for each block is
+    // internally consistent, and the multi-line block's newline is carried as
+    // an escaped `\n` in-line rather than spilling to a bare physical line.
+    // It does NOT, on its own, prove Timeline keeps its real parent across a
+    // round trip — pre-fix, the renderer still prints Timeline at the right
+    // depth (only the spilled line's *own* indentation is wrong), and the
+    // actual reparenting only appears once this markdown is re-parsed for a
+    // diff. See "does not reparent Timeline" below for that proof.
     expect(byText.get('Project Alpha')).toBe(0);
     expect(byText.get('Research')).toBe(1);
     expect(byText.get('Line one\\nLine two')).toBe(2);
@@ -89,5 +96,42 @@ describe('read → write-back is a no-op', () => {
     const body = bodyOf(await readMarkdown());
     expect(body).toContain('[[>]] [[!TIP]] Heads up\\nCallout body');
     expect(body).not.toMatch(/^Callout body/m);
+  });
+
+  it('does not reparent Timeline out from under Project Alpha', async () => {
+    // The direct proof the other assertions in this file cannot give: read
+    // the dry-run diff's own actions rather than inferring structure from
+    // rendered indentation. `nst000008` is Timeline's block uid (see the
+    // page00002 fixture in tests/fake-roam-backend.mjs). Pre-fix, the actual
+    // dry-run output contained:
+    //
+    //   { "action": "move-block",
+    //     "block": { "uid": "nst000008" },
+    //     "location": { "parent-uid": "nst000007", "order": 0 } }
+    //
+    // i.e. Timeline reparented under `nst000007` ("after the callout"), a
+    // block inside Research's own subtree, instead of staying under
+    // `nst000001` (Project Alpha). A no-op round trip must propose no
+    // move-block for Timeline at all.
+    const markdown = await readMarkdown();
+
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_update_page_markdown', {
+          title: 'Nested Page',
+          markdown: bodyOf(markdown),
+          dry_run: true,
+        })
+      )
+    );
+
+    const timelineMoves = result.actions.filter(
+      (a: { action: string; block?: { uid: string } }) =>
+        a.action === 'move-block' && a.block?.uid === 'nst000008'
+    );
+    expect(
+      timelineMoves,
+      `Timeline was reparented: ${JSON.stringify(timelineMoves, null, 2)}`
+    ).toEqual([]);
   });
 });
