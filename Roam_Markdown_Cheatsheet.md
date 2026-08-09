@@ -1,4 +1,4 @@
-# Roam Markdown Cheatsheet v2.6.0
+# Roam Markdown Cheatsheet v2.7.0
 
 ## Core Syntax
 
@@ -60,14 +60,13 @@ rely on.
 all treat a line break as a block break. Use `roam_process_batch_actions`, which
 writes block strings literally — put a real newline in the `string`.
 
-⚠️ Reads encode soft line breaks as `\n` and mark the payload with a leading
-`<!-- roam:escaped-newlines -->` comment. If you edit that markdown and pass it
-back to `roam_update_page_markdown`, **keep the marker line** — it is what tells
-the server the text is encoded. Drop it and those blocks arrive with a literal
-`\n` in them.
-
-⚠️ Backslashes are NOT special in markdown you author. `$$\nabla f$$` and
-`C:\newdir` are written exactly as typed.
+⚠️ Reads render a soft line break as `⏎` so the block stays on one line, and a
+payload containing any is marked with a leading `<!-- roam:escaped-newlines -->`
+comment. If you edit that markdown and pass it back to
+`roam_update_page_markdown`, **keep the marker line** — it is what tells the
+server `⏎` means a line break there. Content you add yourself is safe either
+way: backslashes are never special, and `$$\nabla f$$` or `C:\newdir` are
+written exactly as typed.
 
 ### Attributes
 ```

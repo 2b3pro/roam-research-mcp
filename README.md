@@ -208,16 +208,13 @@ Results are cached for 30 seconds — an edit to the page takes effect without a
 
 Note that guidelines are read through the normal page path, so blocks tagged `#.rm-hide` / `#.rm-private` are withheld from them too — see below.
 
-Reads of a page containing a soft line break (Shift+Enter) encode it as `\n`
-and prefix the markdown with a `<!-- roam:escaped-newlines -->` marker; pages
-with no soft line break render exactly as before, with no marker and no
-escaping. If you edit that markdown and write it back through
-`roam_update_page_markdown`, keep the marker line — it's what tells the server
-the text is encoded. Markdown you author yourself is never decoded, so
-backslashes such as `$$\nabla f$$` or `C:\newdir` are always safe. There is no
-markdown syntax for writing a soft line break — `roam_process_batch_actions` is
-the only tool that writes one, since it takes block strings literally.
-`roam_get_guidelines` is exempt from encoding: it renders prose.
+Reads of a page containing a soft line break render it as `⏎` so each block
+stays on one line — an unescaped newline lands at column 0 and reparents
+everything after it on write-back. Such payloads carry a leading
+`<!-- roam:escaped-newlines -->` marker; keep it if you write the markdown
+back. Markdown you author is never decoded: backslashes are not special, and
+only `⏎` inside a marked payload is interpreted. `roam_get_guidelines` output
+is plain prose — no sentinel, no marker.
 
 ---
 

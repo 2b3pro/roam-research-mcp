@@ -11,34 +11,39 @@
   ancestor; `roam_update_page_markdown` then generated the moves to make the
   real page match. Reading a page and writing back a revision — the documented
   purpose of the tool — was enough to trigger it.
-  - **The fix is conditional.** A block string is only newline-escaped
-    (`\n` for a newline) when the page actually contains a soft line break,
-    and the render is then marked with a leading `<!-- roam:escaped-newlines -->`
-    comment so a later parse can tell "this text is encoded" from "this text
-    just contains a literal backslash-n." Pages with no multi-line block
-    render exactly as before — byte-identical, no marker, no escaping.
-  - **`\n` is still not user-facing syntax.** `roam_process_batch_actions`
-    — which writes block strings literally — remains the only way to write a
-    soft line break. `roam_create_page`, `roam_import_markdown`,
-    `roam_create_outline` and `roam_update_page_markdown` all treat a line
-    break as a block break, unchanged. Markdown you author yourself, including
-    `$$\nabla f$$` and `C:\newdir`, is never decoded — only a payload carrying
-    the marker is, and only per-block, after the document has already been
-    split into blocks.
-  - **`roam get` → `roam save --update` is now clean.** Reading a page and
-    writing the same markdown back produces no diff, including for pages with
-    soft line breaks.
-  - **Scope:** `roam_fetch_page_by_title` (`markdown`) and
-    `roam_fetch_page_full_view` changed what they emit;
-    `roam_update_page_markdown`, `roam save --update`, `roam_import_markdown`,
-    `roam_create_outline`, `roam_create_page` and `roam save` changed what they
-    accept. `roam_get_guidelines` is deliberately **unescaped** — it renders
-    prose, not round-trip input.
+  - **The fix encodes with a sentinel, not an escape.** A soft line break now
+    renders as a single `⏎` character (U+23CE) rather than a `\n` escape, and
+    a page containing one is marked with a leading
+    `<!-- roam:escaped-newlines -->` comment. Pages with no multi-line block
+    render exactly as before — byte-identical, no marker, no encoding.
+  - **Backslash escaping does not exist, anywhere.** The earlier `\n` design
+    needed backslash-doubling to tell a real escape from a literal
+    backslash-n, and that rule still corrupted authored content: `\n` is a
+    common PREFIX (`\nabla`, `\neq`, `C:\new…`), not just an escape sequence.
+    `⏎` essentially never occurs in authored text, so it needs no such rule —
+    `$$\nabla f$$` and `C:\newdir` are written exactly as typed everywhere,
+    including inside a marked payload.
+  - **Detection tolerates the leading title header.** `roam_fetch_page_by_title`
+    prepends `# Title` before the marker; the old check only looked at line 1
+    and never decoded a payload submitted verbatim. Detection now accepts the
+    marker on the line after a leading header, so a verbatim submit — and
+    `roam get` → `roam save --update` — round-trip cleanly.
+  - **Display-only outputs carry no marker.** `roam_fetch_page_full_view` and
+    sub-pages use the `⏎` sentinel unconditionally, with no
+    `<!-- roam:escaped-newlines -->` marker — nothing decodes them, so there
+    is nothing to preserve on write-back.
+  - **The accepted corner:** a block genuinely containing a literal `⏎`
+    round-trips it into a newline. Content-level, vanishingly rare, and
+    pinned by a test so it stays a documented choice rather than an accident.
+  - **Sizing:** this changes what `format: "markdown"` and `roam get` emit for
+    any page with a multi-line block — **at least a minor, plausibly a major;
+    decide at release.**
   - **Verified against the prior state.** `src/server/multiline-roundtrip.test.ts`
     asserts a read → write-back is a no-op *and* that every parent/child
-    relationship survives; it fails against the unfixed code. Checking only the
-    action count would have passed on the flattened tree, which is how this
-    survived.
+    relationship survives; it fails against the unfixed code. The case that
+    would have caught this — `C3: renderer output submitted VERBATIM, header
+    included, is a no-op` — is exactly the one Revision 2's tests skipped by
+    stripping the header themselves before submitting it back.
 
 ### v3.2.0 (2026-08-09)
 
