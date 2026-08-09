@@ -13,7 +13,7 @@ import {
   generateBlockUid
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
-import { escapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
+import { escapeBlockString, unescapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
@@ -890,7 +890,36 @@ export class PageOperations {
     const existingBlocks = pruneHiddenExistingBlocks(allExistingBlocks);
 
     // 4. Convert new markdown to block structure
-    const newBlocks = markdownToBlocks(markdown, pageUid);
+    //
+    // Decode ONLY when our own renderer said it encoded. Revision 1 decoded
+    // everything and turned `$$\nabla f$$` into `$$<newline>abla f$$`. The
+    // marker is the provenance signal that makes decoding safe.
+    //
+    // Detection looks at the first NON-EMPTY line rather than a fixed index:
+    // the renderer places the marker right after the `# Title` header, but
+    // callers commonly strip that header themselves before submitting, so by
+    // the time markdown reaches here the marker may be the very first line.
+    const lines = markdown.split('\n');
+    const markerAt = lines.findIndex((l) => l.trim().length > 0);
+    const isEscaped = markerAt !== -1 && lines[markerAt].trim() === ESCAPED_NEWLINES_MARKER;
+
+    let effectiveMarkdown = markdown;
+    if (isEscaped) {
+      // Strip the marker line itself, or it becomes a stray block on the page.
+      lines.splice(markerAt, 1);
+      effectiveMarkdown = lines.join('\n');
+    }
+
+    // Decode AFTER parsing, per block -- never on the whole document before
+    // parsing. Decoding the document first would turn every `\n` into a real
+    // newline and then split on newlines, which is exactly the flattening
+    // bug this whole effort exists to fix.
+    const newBlocks = markdownToBlocks(effectiveMarkdown, pageUid);
+    if (isEscaped) {
+      for (const block of newBlocks) {
+        block.text = unescapeBlockString(block.text);
+      }
+    }
 
     // 5. Compute diff
     const diff = diffBlockTrees(existingBlocks, newBlocks, pageUid);

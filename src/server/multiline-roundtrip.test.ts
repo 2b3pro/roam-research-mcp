@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { McpHarness } from './testing/mcp-harness.js';
+import { ESCAPED_NEWLINES_MARKER } from '../shared/block-escaping.js';
 
 /**
  * The acceptance criterion for docs/multiline-block-roundtrip-spec.md:
@@ -34,8 +35,18 @@ const readMarkdown = async () =>
     })
   );
 
-/** Strip the `# Title` header the markdown renderer prepends. */
-const bodyOf = (markdown: string) => markdown.split('\n').slice(2).join('\n');
+/**
+ * Strip only the `# Title` line the markdown renderer prepends.
+ *
+ * Deliberately NOT a fixed 2-line strip: when the page needed escaping, the
+ * renderer inserts `ESCAPED_NEWLINES_MARKER` as the line right after the
+ * title, and that marker has to survive into whatever gets handed back to
+ * `roam_update_page_markdown` -- it is the only signal that tells the write
+ * path decoding is safe. Stripping a second fixed line would silently
+ * discard it, exactly like a caller who "just removes the title" for
+ * submission.
+ */
+const bodyOf = (markdown: string) => markdown.split('\n').slice(1).join('\n');
 
 describe('read → write-back is a no-op', () => {
   it('produces an empty diff', async () => {
@@ -56,7 +67,11 @@ describe('read → write-back is a no-op', () => {
   });
 
   it('keeps every multi-line block on one physical line', async () => {
-    const lines = bodyOf(await readMarkdown()).split('\n').filter((l) => l.trim());
+    // Excludes the escaped-newlines marker line: it is provenance metadata
+    // for the write path, not a block, and this test counts blocks.
+    const lines = bodyOf(await readMarkdown())
+      .split('\n')
+      .filter((l) => l.trim() && l.trim() !== ESCAPED_NEWLINES_MARKER);
 
     // Nine blocks in the fixture, so nine lines. Two fixture blocks carry an
     // embedded newline, so a spill shows up as eleven.
@@ -133,5 +148,27 @@ describe('read → write-back is a no-op', () => {
       timelineMoves,
       `Timeline was reparented: ${JSON.stringify(timelineMoves, null, 2)}`
     ).toEqual([]);
+  });
+});
+
+describe('the decode is gated on the marker', () => {
+  it('does not decode a payload that lacks the marker', async () => {
+    // The safety property. Hand-authored LaTeX must survive a page rewrite.
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_update_page_markdown', {
+          title: 'Nested Page',
+          markdown: '- $$\\nabla f$$\n',
+          dry_run: true,
+        })
+      )
+    );
+
+    const created = result.actions.filter((a: { action: string }) => a.action === 'create-block');
+    expect(created.length).toBeGreaterThan(0);
+    for (const a of created) {
+      expect(a.block.string).not.toContain('\n');
+    }
+    expect(JSON.stringify(result.actions)).toContain('nabla');
   });
 });
