@@ -23,6 +23,7 @@
 const PAGES = {
   'Test Page': 'page00001',
   'roam/agent guidelines': 'guide0001',
+  'Nested Page': 'page00002',
 };
 
 /**
@@ -60,6 +61,17 @@ const BLOCKS = {
   ],
   guide0001: [
     ['gblock001', 'Tag every book page with Type:: Book', 0, 'guide0001'],
+  ],
+  page00002: [
+    ['nst000001', 'Project Alpha', 0, 'page00002'],
+    ['nst000002', 'Research', 0, 'nst000001'],
+    ['nst000003', 'Line one\nLine two', 0, 'nst000002'],
+    ['nst000004', 'grandchild under the multi-line block', 0, 'nst000003'],
+    ['nst000005', 'sibling after the multi-line block', 1, 'nst000002'],
+    ['nst000006', '[[>]] [[!TIP]] Heads up\nCallout body', 2, 'nst000002'],
+    ['nst000007', 'after the callout', 3, 'nst000002'],
+    ['nst000008', 'Timeline', 1, 'nst000001'],
+    ['nst000009', 'Q1 kickoff', 0, 'nst000008'],
   ],
 };
 
