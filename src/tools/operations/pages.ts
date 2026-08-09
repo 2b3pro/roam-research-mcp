@@ -13,6 +13,7 @@ import {
   generateBlockUid
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
+import { escapeBlockString } from '../../shared/block-escaping.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
@@ -536,7 +537,17 @@ export class PageOperations {
 
   async fetchPageByTitle(
     title: string,
-    format: 'markdown' | 'raw' | 'structure' = 'raw'
+    format: 'markdown' | 'raw' | 'structure' = 'raw',
+    /**
+     * Encode newlines so each block is one line (`shared/block-escaping.ts`).
+     * Required by anything whose output may be fed back to
+     * `roam_update_page_markdown`; wrong for anything shown as prose.
+     *
+     * Defaults to OFF so a caller that has not considered this renders today's
+     * output rather than silently acquiring doubled backslashes. `guidelines.ts`
+     * relies on that default.
+     */
+    options: { escapeNewlines?: boolean } = {}
   ): Promise<string> {
     if (!title) {
       throw new McpError(ErrorCode.InvalidRequest, 'title is required');
@@ -761,14 +772,18 @@ export class PageOperations {
           const indent = '  '.repeat(level);
           let md: string;
 
+          const text = options.escapeNewlines
+            ? escapeBlockString(block.string)
+            : block.string;
+
           // Check block heading level and format accordingly
           if (block.heading && block.heading > 0) {
             // Format as heading with appropriate number of hashtags
             const hashtags = '#'.repeat(block.heading);
-            md = `${indent}${hashtags} ${block.string}`;
+            md = `${indent}${hashtags} ${text}`;
           } else {
             // No heading, use bullet point (current behavior)
-            md = `${indent}- ${block.string}`;
+            md = `${indent}- ${text}`;
           }
 
           if (block.children.length > 0) {

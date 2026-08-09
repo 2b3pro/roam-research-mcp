@@ -274,3 +274,26 @@ describe('parse-side tools accept soft line breaks', () => {
     expect(result.created_blocks?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('markdown render escapes newlines for the round trip', () => {
+  it('emits a multi-line block on a single line', async () => {
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', {
+        title: 'Test Page',
+        format: 'markdown',
+      })
+    );
+
+    // The fixture's multi-line block must not spill onto a second physical
+    // line — that spill is what resets the indentation baseline.
+    expect(text).toContain('Soft break one\\nSoft break two');
+    expect(text).not.toMatch(/^Soft break two/m);
+  });
+
+  it('does not escape the guidelines page, which is read as prose', async () => {
+    // Same renderer, different caller. A backslash in someone's conventions
+    // must not come back doubled.
+    const result = JSON.parse(McpHarness.text(await harness.call('roam_get_guidelines')));
+    expect(result.guidelines).not.toContain('\\\\');
+  });
+});

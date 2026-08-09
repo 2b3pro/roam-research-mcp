@@ -54,6 +54,9 @@ const BLOCKS = {
       6,
       'page00001',
     ],
+    // A soft line break: ONE block whose string contains a newline. Rendering
+    // this without escaping is what flattens the page.
+    ['soft00001', 'Soft break one\nSoft break two', 7, 'page00001'],
   ],
   guide0001: [
     ['gblock001', 'Tag every book page with Type:: Book', 0, 'guide0001'],
