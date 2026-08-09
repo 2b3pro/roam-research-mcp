@@ -11,7 +11,7 @@ describe('CLI markdown output', () => {
     // this renderer feeds the same parser the MCP tool does.
     const out = formatPageOutput('P', [block('a', 'one\ntwo')], {} as any);
     expect(out).toContain('<!-- roam:escaped-newlines -->');
-    expect(out).toContain('one\\ntwo');
+    expect(out).toContain('one⏎two');
     expect(out).not.toMatch(/^two/m);
   });
 

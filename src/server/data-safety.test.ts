@@ -227,7 +227,7 @@ describe('markdown render escapes newlines for the round trip', () => {
 
     // The fixture's multi-line block must not spill onto a second physical
     // line — that spill is what resets the indentation baseline.
-    expect(text).toContain('Soft break one\\nSoft break two');
+    expect(text).toContain('Soft break one⏎Soft break two');
     expect(text).not.toMatch(/^Soft break two/m);
   });
 
@@ -243,7 +243,7 @@ describe('markdown render escapes newlines for the round trip', () => {
       await harness.call('roam_fetch_page_full_view', { title: 'Test Page' })
     );
 
-    expect(text).toContain('Soft break one\\nSoft break two');
+    expect(text).toContain('Soft break one⏎Soft break two');
     expect(text).not.toMatch(/^Soft break two/m);
   });
 });
@@ -258,7 +258,7 @@ describe('escaping is conditional and self-identifying', () => {
     );
 
     expect(text).toContain('<!-- roam:escaped-newlines -->');
-    expect(text).toContain('Soft break one\\nSoft break two');
+    expect(text).toContain('Soft break one⏎Soft break two');
     expect(text).not.toMatch(/^Soft break two/m);
   });
 

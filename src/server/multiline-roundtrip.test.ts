@@ -99,7 +99,7 @@ describe('read → write-back is a no-op', () => {
     // diff. See "does not reparent Timeline" below for that proof.
     expect(byText.get('Project Alpha')).toBe(0);
     expect(byText.get('Research')).toBe(1);
-    expect(byText.get('Line one\\nLine two')).toBe(2);
+    expect(byText.get('Line one⏎Line two')).toBe(2);
     expect(byText.get('grandchild under the multi-line block')).toBe(3);
     expect(byText.get('sibling after the multi-line block')).toBe(2);
     expect(byText.get('after the callout')).toBe(2);
@@ -109,7 +109,7 @@ describe('read → write-back is a no-op', () => {
 
   it('round-trips a callout without splitting its body out', async () => {
     const body = bodyOf(await readMarkdown());
-    expect(body).toContain('[[>]] [[!TIP]] Heads up\\nCallout body');
+    expect(body).toContain('[[>]] [[!TIP]] Heads up⏎Callout body');
     expect(body).not.toMatch(/^Callout body/m);
   });
 

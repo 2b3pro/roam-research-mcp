@@ -1,44 +1,32 @@
 import { describe, it, expect } from 'vitest';
-import { escapeBlockString, unescapeBlockString, ESCAPED_NEWLINES_MARKER, needsNewlineEscaping } from './block-escaping.js';
+import {
+  escapeBlockString,
+  unescapeBlockString,
+  needsNewlineEscaping,
+  ESCAPED_NEWLINES_MARKER,
+  SOFT_BREAK_SENTINEL,
+} from './block-escaping.js';
 
-describe('escapeBlockString', () => {
-  it('leaves ordinary text untouched', () => {
-    expect(escapeBlockString('A plain block')).toBe('A plain block');
+describe('the sentinel encoding', () => {
+  it('renders a newline as the sentinel', () => {
+    expect(escapeBlockString('one\ntwo')).toBe('one⏎two');
   });
 
-  it('turns a real newline into the two characters backslash-n', () => {
-    expect(escapeBlockString('one\ntwo')).toBe('one\\ntwo');
+  it('restores a newline from the sentinel', () => {
+    expect(unescapeBlockString('one⏎two')).toBe('one\ntwo');
   });
 
-  it('escapes the escape character first, so a literal survives', () => {
-    // Order matters: newline-first would produce `a\nb` for BOTH inputs,
-    // making them indistinguishable on the way back.
-    expect(escapeBlockString('a\\nb')).toBe('a\\\\nb');
-    expect(escapeBlockString('a\nb')).toBe('a\\nb');
-  });
-});
-
-describe('unescapeBlockString', () => {
-  it('leaves ordinary text untouched', () => {
-    expect(unescapeBlockString('A plain block')).toBe('A plain block');
+  it('has no backslash rules at all', () => {
+    // The Revision 2 design escaped backslashes and decoded `\n`, which
+    // corrupted every LaTeX command and Windows path beginning `\n`. Deleted.
+    for (const s of ['$$\\nabla f$$', 'C:\\newdir', 'a \\neq b', '\\\\', 'ends with \\']) {
+      expect(escapeBlockString(s)).toBe(s);
+      expect(unescapeBlockString(s)).toBe(s);
+    }
   });
 
-  it('restores a newline', () => {
-    expect(unescapeBlockString('one\\ntwo')).toBe('one\ntwo');
-  });
-
-  it('does not re-examine its own output', () => {
-    // The naive two-pass regex turns this into a real newline. It must not.
-    expect(unescapeBlockString('a\\\\nb')).toBe('a\\nb');
-  });
-
-  it('keeps a trailing lone backslash', () => {
-    // The end-of-string boundary: there is no successor to consume.
-    expect(unescapeBlockString('ends with\\')).toBe('ends with\\');
-  });
-
-  it('leaves an unrecognised escape alone', () => {
-    expect(unescapeBlockString('a\\tb')).toBe('a\\tb');
+  it('is the identity on newline-free text', () => {
+    expect(escapeBlockString('plain [[Page]] text')).toBe('plain [[Page]] text');
   });
 });
 
@@ -47,58 +35,53 @@ describe('round trip', () => {
     '',
     'plain',
     'one\ntwo',
-    'a\\nb',
-    'console.log("a\\nb");',
+    '$$\\nabla f$$ and C:\\newdir on\ntwo lines',
     '```javascript\nconst x = 1;\n```',
     '[[>]] [[!TIP]] Title\nBody',
     'trailing backslash \\',
-    '\\\\',
     '\n',
-    '\\',
-    'mixed \\ and \n and \\n together',
   ];
 
   it.each(CASES)('survives: %j', (input) => {
     expect(unescapeBlockString(escapeBlockString(input))).toBe(input);
   });
 
-  it('survives fuzzing biased toward backslashes and newlines', () => {
-    // A deterministic PRNG: the suite must fail reproducibly, and
-    // Math.random would make a failure impossible to re-run.
+  it('documents the corner: a literal sentinel round-trips to a newline', () => {
+    // Chosen, not accidental: a block genuinely containing ⏎ is vanishingly
+    // rare, and the damage is a soft break inside one block — content-level,
+    // never structural. Compare Revision 2, where the colliding character
+    // was `\`, which LaTeX generates systematically.
+    expect(unescapeBlockString(escapeBlockString('literal ⏎ here'))).toBe('literal \n here');
+  });
+
+  it('survives fuzzing over newline-heavy strings', () => {
     let seed = 0x2b3f00d;
     const rand = () => {
       seed = (seed * 1664525 + 1013904223) >>> 0;
       return seed / 0x100000000;
     };
-    const ALPHABET = ['\\', '\n', 'n', 'a', ' ', '`', '\\n', '\\\\', '[[', 'x'];
-
+    const ALPHABET = ['\n', 'a', ' ', '\\', 'n', '`', '[[', '$', 'x'];
     for (let i = 0; i < 5000; i++) {
       const len = Math.floor(rand() * 12);
       let s = '';
-      for (let j = 0; j < len; j++) {
-        s += ALPHABET[Math.floor(rand() * ALPHABET.length)];
-      }
+      for (let j = 0; j < len; j++) s += ALPHABET[Math.floor(rand() * ALPHABET.length)];
       expect(unescapeBlockString(escapeBlockString(s)), `input ${JSON.stringify(s)}`).toBe(s);
     }
   });
 });
 
-describe('needsNewlineEscaping', () => {
-  it('is false when no block holds a newline', () => {
-    expect(needsNewlineEscaping(['plain', 'C:\\newdir', 'a \\neq b'])).toBe(false);
-  });
-
-  it('is true as soon as one block holds a newline', () => {
+describe('needsNewlineEscaping and the marker (unchanged from R2)', () => {
+  it('is true only when some block holds a newline', () => {
+    expect(needsNewlineEscaping(['plain', 'C:\\newdir'])).toBe(false);
     expect(needsNewlineEscaping(['plain', 'one\ntwo'])).toBe(true);
-  });
-
-  it('is false for an empty page', () => {
     expect(needsNewlineEscaping([])).toBe(false);
   });
-});
 
-describe('ESCAPED_NEWLINES_MARKER', () => {
-  it('is an HTML comment, so it is inert if it ever reaches a graph', () => {
+  it('keeps the marker an inert HTML comment', () => {
     expect(ESCAPED_NEWLINES_MARKER).toBe('<!-- roam:escaped-newlines -->');
+  });
+
+  it('exports the sentinel for callers that must reference it', () => {
+    expect(SOFT_BREAK_SENTINEL).toBe('⏎');
   });
 });

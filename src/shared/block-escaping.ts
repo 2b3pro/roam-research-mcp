@@ -11,59 +11,45 @@
  * Keeping each block on one line is therefore not cosmetic: it is what makes
  * the round trip preserve hierarchy at all.
  *
+ * A soft break is rendered as a single sentinel character, U+23CE `⏎`, rather
+ * than a backslash escape. Two earlier revisions used `\n` (with backslash
+ * doubling to disambiguate a literal backslash-n); both corrupted ordinary
+ * content, because `\n` is a common PREFIX in authored text — LaTeX commands
+ * (`\nabla`, `\neq`) and Windows paths (`C:\new…`) all begin with it, so
+ * decoding `\n` anywhere corrupted them. `⏎` essentially never occurs in
+ * authored text, so decoding it is safe even for blocks the agent wrote
+ * itself. No backslash rules exist at all any more.
+ *
  * See `docs/multiline-block-roundtrip-spec.md`.
  */
 
 /**
- * Render a block string as a single line.
+ * The single-line stand-in for a soft line break: U+23CE RETURN SYMBOL.
  *
- * ORDER IS THE CORRECTNESS ARGUMENT. The backslash is escaped first; doing
- * newlines first would encode both a real newline and a literal backslash-n
- * as `\n`, and they could not be told apart on the way back.
+ * Revision 2 used `\n` escapes with backslash doubling. That failed twice:
+ * `\n` is a common PREFIX in ordinary content (`\nabla`, `\neq`, `C:\new…`),
+ * so decoding it anywhere an agent may have authored text corrupted LaTeX and
+ * Windows paths — even the marker could not make it safe per-block. `⏎`
+ * essentially never occurs in authored text, so decoding it inside a marked
+ * payload is safe INCLUDING for blocks the agent wrote. No backslash rules
+ * exist at all any more.
+ *
+ * The accepted corner: a block genuinely containing a literal `⏎` round-trips
+ * it into a newline. Content-level, degrades to a soft break, documented, and
+ * pinned by a test so it stays a choice rather than an accident.
  */
+export const SOFT_BREAK_SENTINEL = '⏎';
+
+/** Render a block string as a single line. Identity for newline-free text. */
 export function escapeBlockString(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/\n/g, '\\n');
+  return text.includes('\n') ? text.replace(/\n/g, SOFT_BREAK_SENTINEL) : text;
 }
 
-/**
- * Restore a block string from its single-line form.
- *
- * Deliberately not a pair of regex replaces: `.replace(/\\n/g,'\n')` followed
- * by `.replace(/\\\\/g,'\\')` re-examines its own output and turns the encoded
- * form of a literal backslash-n into a real newline. This scans once,
- * left to right, consuming each escape together with its successor and never
- * looking at what it has already emitted.
- *
- * Built with slice + join rather than `+=` in a character loop — the same
- * shape that makes the end-of-string case obvious: a trailing lone backslash
- * has no successor to consume and must survive as itself.
- */
+/** Restore soft line breaks. Call ONLY on marker-carrying payloads. */
 export function unescapeBlockString(text: string): string {
-  const first = text.indexOf('\\');
-  if (first === -1) return text; // the overwhelmingly common case
-
-  const parts: string[] = [];
-  let last = 0;
-
-  for (let i = first; i < text.length; i++) {
-    if (text.charCodeAt(i) !== 92 /* backslash */) continue;
-
-    const next = text[i + 1];
-    if (next === 'n') {
-      parts.push(text.slice(last, i), '\n');
-    } else if (next === '\\') {
-      parts.push(text.slice(last, i), '\\');
-    } else {
-      // Not an escape we emit (or a trailing lone backslash). Leave it, and
-      // do not consume a successor that may itself start a real escape.
-      continue;
-    }
-    last = i + 2;
-    i++; // skip the successor we just consumed
-  }
-
-  parts.push(text.slice(last));
-  return parts.join('');
+  return text.includes(SOFT_BREAK_SENTINEL)
+    ? text.replace(/⏎/g, '\n')
+    : text;
 }
 
 /**
