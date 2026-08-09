@@ -73,9 +73,9 @@ describe('read → write-back is a no-op', () => {
       .split('\n')
       .filter((l) => l.trim() && l.trim() !== ESCAPED_NEWLINES_MARKER);
 
-    // Nine blocks in the fixture, so nine lines. Two fixture blocks carry an
-    // embedded newline, so a spill shows up as eleven.
-    expect(lines).toHaveLength(9);
+    // Eleven blocks in the fixture, so eleven lines. Two fixture blocks carry
+    // an embedded newline, so a spill shows up as thirteen.
+    expect(lines).toHaveLength(11);
     for (const line of lines) {
       expect(line, `line without a bullet: ${JSON.stringify(line)}`).toMatch(/^\s*-\s/);
     }
@@ -170,5 +170,53 @@ describe('the decode is gated on the marker', () => {
       expect(a.block.string).not.toContain('\n');
     }
     expect(JSON.stringify(result.actions)).toContain('nabla');
+  });
+});
+
+describe('Revision 2 acceptance criteria', () => {
+  it('round-trips a page containing LaTeX, a Windows path and a stray fence', async () => {
+    // Every shape that Revision 1 destroyed, on one page, through the real
+    // tools. Zero actions is the only acceptable answer.
+    const markdown = await readMarkdown();
+
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_update_page_markdown', {
+          title: 'Nested Page',
+          markdown: bodyOf(markdown),
+          dry_run: true,
+        })
+      )
+    );
+
+    expect(
+      result.actions.map((a: { action: string }) => a.action),
+      `unexpected actions: ${JSON.stringify(result.actions, null, 2)}`
+    ).toEqual([]);
+  });
+
+  it('degrades to literal text, never deletion, when the marker is stripped', async () => {
+    // The failure that will actually happen: an agent rebuilds the markdown
+    // and drops the marker. It must not delete or reparent anything.
+    const markdown = await readMarkdown();
+    const body = bodyOf(markdown)
+      .split('\n')
+      .filter((l) => l.trim() !== ESCAPED_NEWLINES_MARKER)
+      .join('\n');
+
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_update_page_markdown', {
+          title: 'Nested Page',
+          markdown: body,
+          dry_run: true,
+        })
+      )
+    );
+
+    const deletes = result.actions.filter((a: { action: string }) => a.action === 'delete-block');
+    const moves = result.actions.filter((a: { action: string }) => a.action === 'move-block');
+    expect(deletes, 'a dropped marker must never delete a block').toEqual([]);
+    expect(moves, 'a dropped marker must never reparent a block').toEqual([]);
   });
 });

@@ -72,6 +72,13 @@ const BLOCKS = {
     ['nst000007', 'after the callout', 3, 'nst000002'],
     ['nst000008', 'Timeline', 1, 'nst000001'],
     ['nst000009', 'Q1 kickoff', 0, 'nst000008'],
+    // Revision 2 acceptance fixtures: hostile shapes that Revision 1 destroyed.
+    // A real backslash (not an escape) before "nabla" and "newdir" -- in this
+    // .mjs string literal, '\\n' is the two characters backslash-n, matching
+    // the LaTeX gradient operator and a Windows path, neither of which is a
+    // line break.
+    ['nst000010', 'LaTeX $$\\nabla f$$ and a path C:\\newdir', 2, 'nst000001'],
+    ['nst000011', 'wrap it in ``` to make code', 3, 'nst000001'],
   ],
 };
 
