@@ -243,25 +243,34 @@ describe('parse-side tools accept soft line breaks', () => {
     // The Task 3 fence guard reaching a second caller. Before it, the fence
     // opened a region that consumed the item after it.
     //
-    // No assertion on `created_blocks` here (the brief's original draft
-    // checked its length): roam_create_outline always re-queries Roam after
-    // writing, via a find-clause shape (`:find ?b-uid ?order ...`) the fixture
-    // does not model (see `answer()` in fake-roam-backend.mjs) — every call
-    // to this tool gets back an empty `created_blocks` against this fixture,
-    // independent of content or of the fence guard. `success: true` (no
-    // thrown error) is what this harness can honestly attest to; the fence
-    // guard itself is unit-tested in src/markdown-utils.test.ts.
+    // Content note: this is a single-line, self-closing fence with NO `\n`
+    // anywhere — not real, not escaped. (The brief's original draft used
+    // '```js\\nconst x = 1;\\n```', an escaped-newline fence.) That content
+    // still exercises the exact same regression — createOutline's own
+    // isCodeBlock check requires a REAL newline to skip the bullet prefix, so
+    // an escaped one still arrives here as an ordinary bulleted line, and it
+    // is the bullet prefix ("- ```js...") that shifts the fence markers off
+    // column 0 and triggers the mid-line splice `fenceClosesOnSameLine`
+    // guards in markdown-utils.ts. But an escaped-newline fence also gets
+    // unescaped into real newlines by Task 4's decode step before it is
+    // written, so the block's stored string no longer matches the raw
+    // `item.text` roam_create_outline's own post-write verification queries
+    // by (see `findBlockWithRetry` in outline.ts) — that verification would
+    // fail to find it even with correct fence-guard behavior, for reasons
+    // unrelated to this test's target. Dropping the escape avoids that
+    // unrelated mismatch and lets `created_blocks` actually reflect reality.
     const result = JSON.parse(
       McpHarness.text(
         await harness.call('roam_create_outline', {
           page_title_uid: 'Test Page',
           outline: [
-            { text: '```js\\nconst x = 1;\\n```', level: 1 },
+            { text: '```js console.log(1);```', level: 1 },
             { text: 'after the code block', level: 1 },
           ],
         })
       )
     );
     expect(result.success).toBe(true);
+    expect(result.created_blocks?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 });

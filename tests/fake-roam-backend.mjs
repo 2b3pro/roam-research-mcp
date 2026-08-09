@@ -60,6 +60,24 @@ const BLOCKS = {
   ],
 };
 
+/**
+ * Blocks actually written during a test run, as [uid, string, order, parentUid].
+ * Populated by the `/write` handler below as `create-block` actions land.
+ *
+ * This does NOT contradict "block contents are not modelled" above — that
+ * remains true for every read path except the one narrow query this exists
+ * for: `roam_create_outline`'s post-write verification
+ * (`OutlineOperations.findBlockWithRetry`, see the `:find ?b-uid ?order`
+ * branch in `answer()`). Without it that query always answers `[]`, so
+ * `created_blocks` in the tool's response is always empty regardless of what
+ * was actually written — which means a regression that silently merges two
+ * blocks into one (e.g. a broken fence guard swallowing a sibling) produces
+ * the exact same "empty created_blocks" response as correct behavior. A test
+ * asserting a block count needs this to be real.
+ */
+const CREATED_BLOCKS = [];
+let createdBlockOrder = 0;
+
 const HIDE_TAG = /(?:#\[\[|\[\[)\.rm-(?:hide|private)\]\]|#\.rm-(?:hide|private)(?![\w-])/i;
 
 const allBlocks = () => Object.values(BLOCKS).flat();
@@ -146,6 +164,35 @@ function answer(query, args) {
     return hiddenDescendantPairs();
   }
 
+  // roam_create_outline's post-write verification: does the given page/parent
+  // already contain a block with this exact string? (OutlineOperations.
+  // findBlockWithRetry — `:find ?b-uid ?order` is distinctive to that one
+  // query.) Answered from CREATED_BLOCKS, which the /write handler populates
+  // as create-block actions land, rather than the fixture's usual honest `[]`
+  // for reads against unmodelled content: this is the one path a test needs
+  // to observe what was actually written, to catch content ending up merged
+  // into the wrong block.
+  if (query.includes(':find ?b-uid ?order')) {
+    const pageUid = query.match(/:block\/uid "([^"]*)"/)?.[1];
+    const blockString = query.match(/:block\/string "([^"]*)"/)?.[1];
+    if (pageUid === undefined || blockString === undefined) return [];
+    return CREATED_BLOCKS
+      .filter(([, str, , parentUid]) => parentUid === pageUid && str === blockString)
+      .map(([uid, , order]) => [uid, order]);
+  }
+
+  // roam_create_outline's second post-write step, fetchBlockWithChildren's
+  // own-string lookup by UID (`:find ?string ... :in $ ?uid`, no other
+  // find-vars — distinct from block-retrieval.ts's `?string ?order ?heading`
+  // and memory.ts's `?string ?time ?uid`, which carry extra find-vars before
+  // `:in`). A block found via the branch above still needs to answer this
+  // one before roam_create_outline reports it in `created_blocks`.
+  if (/:find \?string\s*:in \$ \?uid\b/.test(query)) {
+    const uid = args?.[0];
+    const match = CREATED_BLOCKS.find(([blockUid]) => blockUid === uid);
+    return match ? [[match[1]]] : [];
+  }
+
   // Page lookup by title. `:find ?uid .` is a scalar find — return the bare uid.
   if (query.includes(':node/title')) {
     const titles = [...query.matchAll(/:node\/title "([^"]*)"/g)].map((m) => m[1]);
@@ -199,8 +246,25 @@ globalThis.fetch = async function fakeRoamFetch(input, init) {
       BLOCKS[PAGES[body.page.title]] ??= [];
     }
 
-    // Block contents are not modelled: these tests assert on what a caller gets
-    // back from a write, not on what the graph then looks like.
+    // Track create-block actions (bare, or bundled in a batch-actions call)
+    // so the one verification query that needs them (see the `:find ?b-uid
+    // ?order` branch in `answer()`) can find what was actually written.
+    const writtenActions = body?.action === 'batch-actions' ? (body.actions ?? [])
+      : body?.action === 'create-block' ? [body]
+      : [];
+    for (const action of writtenActions) {
+      if (action?.action !== 'create-block') continue;
+      const parentUid = action.location?.['parent-uid'];
+      const uid = action.block?.uid;
+      const str = action.block?.string;
+      if (parentUid && uid && str !== undefined) {
+        CREATED_BLOCKS.push([uid, str, createdBlockOrder++, parentUid]);
+      }
+    }
+
+    // Beyond that narrow tracking, block contents are not modelled: these
+    // tests assert on what a caller gets back from a write, not on what the
+    // graph then looks like.
     return json({ success: true });
   }
 
