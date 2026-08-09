@@ -61,6 +61,7 @@ const BLOCKS = {
   ],
   guide0001: [
     ['gblock001', 'Tag every book page with Type:: Book', 0, 'guide0001'],
+    ['gblock002', 'Paths like C:\\newdir stays as typed', 1, 'guide0001'],
   ],
   page00002: [
     ['nst000001', 'Project Alpha', 0, 'page00002'],

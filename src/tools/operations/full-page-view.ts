@@ -4,7 +4,7 @@ import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import { collectHiddenUids, pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
-import { escapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
+import { escapeBlockString } from '../../shared/block-escaping.js';
 import type { RoamBlock } from '../types/index.js';
 import type { PageOperations } from './pages.js';
 
@@ -139,34 +139,12 @@ export class FullPageViewOperations {
 
     const linkedReferenceGroups = Array.from(groupMap.values());
 
-    // 7. Decide whether ANY visible content needs newline escaping. This tool
-    // renders two distinct groups of blocks through `renderBlocks` — the
-    // page's own content and each linked reference's children — and a payload
-    // half-escaped (one group encoded, the other left with raw newlines) is
-    // worse than one not escaped at all. So the predicate considers both, and
-    // if either needs it, both get it.
-    //
-    // The referring block's OWN string (as opposed to its children) is
-    // rendered directly below, not through `renderBlocks`, and is left out of
-    // this collection to match: it was never escaped before this feature and
-    // stays that way here.
-    const allStrings: string[] = [];
-    const collectStrings = (blocks: RoamBlock[]): void => {
-      for (const b of blocks) {
-        allStrings.push(b.string);
-        collectStrings(b.children);
-      }
-    };
-    collectStrings(pageBlocks);
-    for (const group of linkedReferenceGroups) {
-      for (const ref of group.references) {
-        collectStrings(ref.block.children);
-      }
-    }
-    const escaping = needsNewlineEscaping(allStrings);
-
-    // 8. Render as markdown
-    return this.renderMarkdown(title, pageBlocks, linkedReferenceGroups, escaping, truncated ? allUniqueRefs.length : undefined);
+    // 7. Render as markdown. This output is display-only — never valid
+    // `roam_update_page_markdown` input, and nothing decodes it — so
+    // `renderBlocks` applies the `⏎` sentinel to every block string
+    // unconditionally (it's the identity for newline-free text) rather than
+    // gating on a per-page predicate.
+    return this.renderMarkdown(title, pageBlocks, linkedReferenceGroups, truncated ? allUniqueRefs.length : undefined);
   }
 
   // ─── Private: fetch all blocks that reference this page ──────────────────────
@@ -288,19 +266,7 @@ export class FullPageViewOperations {
         const pageData = await this.pageOps.fetchPageByUid(uid);
         const blocks = pageData?.blocks ?? [];
         if (blocks.length > 0) {
-          const subPageStrings: string[] = [];
-          const collectSubPageStrings = (bs: RoamBlock[]): void => {
-            for (const b of bs) {
-              subPageStrings.push(b.string);
-              collectSubPageStrings(b.children);
-            }
-          };
-          collectSubPageStrings(blocks);
-          const subPageEscaping = needsNewlineEscaping(subPageStrings);
-          if (subPageEscaping) {
-            lines.push(ESCAPED_NEWLINES_MARKER);
-          }
-          lines.push(this.renderBlocks(blocks, 0, subPageEscaping));
+          lines.push(this.renderBlocks(blocks, 0));
         } else {
           lines.push('*(no content)*');
         }
@@ -325,19 +291,15 @@ export class FullPageViewOperations {
     title: string,
     pageBlocks: RoamBlock[],
     linkedRefs: LinkedReferenceGroup[],
-    escaping: boolean,
     totalAvailable?: number
   ): string {
     const lines: string[] = [];
 
     // Page header and own content
     lines.push(`# ${title}`);
-    if (escaping) {
-      lines.push(ESCAPED_NEWLINES_MARKER);
-    }
     lines.push('');
     if (pageBlocks.length > 0) {
-      lines.push(this.renderBlocks(pageBlocks, 0, escaping));
+      lines.push(this.renderBlocks(pageBlocks, 0));
     } else {
       lines.push('*(no content)*');
     }
@@ -377,7 +339,7 @@ export class FullPageViewOperations {
 
           // Children of the referring block
           if (ref.block.children.length > 0) {
-            lines.push(this.renderBlocks(ref.block.children, ref.breadcrumbs.length + 1, escaping));
+            lines.push(this.renderBlocks(ref.block.children, ref.breadcrumbs.length + 1));
           }
 
           lines.push('');
@@ -388,13 +350,13 @@ export class FullPageViewOperations {
     return lines.join('\n');
   }
 
-  private renderBlocks(blocks: RoamBlock[], baseIndent: number, escaping: boolean): string {
+  private renderBlocks(blocks: RoamBlock[], baseIndent: number): string {
     const renderBlock = (block: RoamBlock, depth: number): string => {
       const indent = '  '.repeat(depth);
-      // Conditional: escaping only runs when the page (or its linked
-      // references) actually contains a soft line break. A page with none
-      // renders byte-identical to how it did before this feature existed.
-      const text = escaping ? escapeBlockString(block.string) : block.string;
+      // Unconditional: `escapeBlockString` is the identity for newline-free
+      // text, so pages with no soft line breaks render byte-identical to how
+      // they did before this feature existed — no predicate needed.
+      const text = escapeBlockString(block.string);
       let line: string;
       if (block.heading && block.heading > 0) {
         const hashes = '#'.repeat(block.heading);

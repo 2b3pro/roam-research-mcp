@@ -231,20 +231,25 @@ describe('markdown render escapes newlines for the round trip', () => {
     expect(text).not.toMatch(/^Soft break two/m);
   });
 
-  it('does not escape the guidelines page, which is read as prose', async () => {
-    // Same renderer, different caller. A backslash in someone's conventions
-    // must not come back doubled.
+  it('leaves guidelines prose untouched: raw backslash, no marker, no sentinel games', async () => {
+    // Review #2 found the old version of this test could not fail: the
+    // fixture had no backslash to double. Now it does.
     const result = JSON.parse(McpHarness.text(await harness.call('roam_get_guidelines')));
-    expect(result.guidelines).not.toContain('\\\\');
+    expect(result.guidelines).toContain('C:\\newdir stays as typed');
+    expect(result.guidelines).not.toContain('<!-- roam:escaped-newlines -->');
   });
 
-  it('uses the same encoding in the full-page view', async () => {
+  it('renders multi-line blocks on one line in the full view, with NO marker', async () => {
+    // This output is never valid update_page_markdown input (breadcrumbs,
+    // reference sections) and nothing decodes it. A marker that can never be
+    // honoured is noise that invites an agent to trust the wrong payload.
     const text = McpHarness.text(
       await harness.call('roam_fetch_page_full_view', { title: 'Test Page' })
     );
 
     expect(text).toContain('Soft break one⏎Soft break two');
     expect(text).not.toMatch(/^Soft break two/m);
+    expect(text).not.toContain('<!-- roam:escaped-newlines -->');
   });
 });
 
