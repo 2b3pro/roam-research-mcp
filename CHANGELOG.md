@@ -1,6 +1,6 @@
 # Changelog
 
-### v3.1.0 (2026-08-05)
+### v3.1.0 (2026-08-09)
 
 **In one line:** stdio mode was also opening an HTTP listener, on every network interface, with no authentication — it now opens no socket at all, and the two transport modes are mutually exclusive.
 
