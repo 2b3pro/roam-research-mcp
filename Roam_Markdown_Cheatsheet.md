@@ -49,6 +49,19 @@ Append `+` or `-` to make it foldable — `[[!TIP]]+` starts expanded, `[[!TIP]]
 ⚠️ `[[>]]` and `[[!TIP]]` are real page references, so every callout backlinks to those pages. That is normal and how the feature works — don't "clean it up."
 ⚠️ A plain `> quote` is an ordinary blockquote, not a callout. The two are unrelated.
 
+### ⚠️ Multi-line blocks and page rewrites
+
+A block can hold a **soft line break** (Shift+Enter, stored as `\n` in the block
+string). Callout bodies require one; fenced code blocks are full of them.
+
+**Do not run `roam_update_page_markdown` — or `roam save --update` — on a page
+containing a callout, a fenced code block, or any Shift+Enter line break.** It
+will split those blocks and **flatten the hierarchy of everything after them**,
+reparenting blocks under the wrong ancestors.
+
+Use `roam_process_batch_actions` for those pages. It writes block strings
+literally, and is currently the only way to create a soft line break at all.
+
 ### Attributes
 ```
 Type:: Book
