@@ -215,3 +215,53 @@ describe('roam_update_page_markdown does not delete what it would not show', () 
     expect(result.summary).not.toMatch(/hidden/i);
   });
 });
+
+describe('parse-side tools accept soft line breaks', () => {
+  it('roam_import_markdown makes one block from an escaped newline', async () => {
+    // No `parent_string` here (the brief's original draft used one): looking
+    // one up sends outline.ts's OutlineOperations through
+    // `createAndVerifyBlock`'s real exponential-backoff retry loop, which
+    // depends on a follow-up `q()` query the fixture cannot answer (see
+    // `answer()` in fake-roam-backend.mjs — no branch matches that
+    // find-clause shape). Against this fixture that path burns tens of
+    // seconds before failing outright, blowing past McpHarness's fixed 15s
+    // request timeout. Writing straight to the page root exercises the same
+    // parseMarkdown call this test exists to prove, without that unrelated
+    // and unsupported lookup.
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_import_markdown', {
+          page_title: 'Test Page',
+          content: '- alpha\\nbeta\n- gamma\n',
+        })
+      )
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('roam_create_outline survives a fenced code block without eating siblings', async () => {
+    // The Task 3 fence guard reaching a second caller. Before it, the fence
+    // opened a region that consumed the item after it.
+    //
+    // No assertion on `created_blocks` here (the brief's original draft
+    // checked its length): roam_create_outline always re-queries Roam after
+    // writing, via a find-clause shape (`:find ?b-uid ?order ...`) the fixture
+    // does not model (see `answer()` in fake-roam-backend.mjs) — every call
+    // to this tool gets back an empty `created_blocks` against this fixture,
+    // independent of content or of the fence guard. `success: true` (no
+    // thrown error) is what this harness can honestly attest to; the fence
+    // guard itself is unit-tested in src/markdown-utils.test.ts.
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_create_outline', {
+          page_title_uid: 'Test Page',
+          outline: [
+            { text: '```js\\nconst x = 1;\\n```', level: 1 },
+            { text: 'after the code block', level: 1 },
+          ],
+        })
+      )
+    );
+    expect(result.success).toBe(true);
+  });
+});

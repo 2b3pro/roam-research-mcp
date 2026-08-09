@@ -7,6 +7,7 @@ import type {
   RoamMoveBlock
 } from '@roam-research/roam-api-sdk';
 import { randomBytes } from 'crypto';
+import { unescapeBlockString } from './shared/block-escaping.js';
 
 export type BatchAction =
   | RoamCreateBlock
@@ -375,7 +376,12 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     const { heading_level, content: finalContent } = parseMarkdownHeadingLevel(contentToParse);
 
     const node: MarkdownNode = {
-      content: finalContent,
+      // Decoded here and NOT at the fenced-code site below: a hand-written
+      // multi-line fence already holds literal text, and decoding it would
+      // turn source containing a backslash-n into a real newline. An escaped
+      // code block never reaches that site — Task 3 keeps it on one line, so
+      // it arrives here as an ordinary block whose content contains backticks.
+      content: unescapeBlockString(finalContent),
       level,
       ...(heading_level > 0 && { heading_level }),
       children: []
