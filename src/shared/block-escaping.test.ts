@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapeBlockString, unescapeBlockString } from './block-escaping.js';
+import { escapeBlockString, unescapeBlockString, ESCAPED_NEWLINES_MARKER, needsNewlineEscaping } from './block-escaping.js';
 
 describe('escapeBlockString', () => {
   it('leaves ordinary text untouched', () => {
@@ -80,5 +80,25 @@ describe('round trip', () => {
       }
       expect(unescapeBlockString(escapeBlockString(s)), `input ${JSON.stringify(s)}`).toBe(s);
     }
+  });
+});
+
+describe('needsNewlineEscaping', () => {
+  it('is false when no block holds a newline', () => {
+    expect(needsNewlineEscaping(['plain', 'C:\\newdir', 'a \\neq b'])).toBe(false);
+  });
+
+  it('is true as soon as one block holds a newline', () => {
+    expect(needsNewlineEscaping(['plain', 'one\ntwo'])).toBe(true);
+  });
+
+  it('is false for an empty page', () => {
+    expect(needsNewlineEscaping([])).toBe(false);
+  });
+});
+
+describe('ESCAPED_NEWLINES_MARKER', () => {
+  it('is an HTML comment, so it is inert if it ever reaches a graph', () => {
+    expect(ESCAPED_NEWLINES_MARKER).toBe('<!-- roam:escaped-newlines -->');
   });
 });

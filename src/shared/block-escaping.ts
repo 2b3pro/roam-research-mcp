@@ -65,3 +65,29 @@ export function unescapeBlockString(text: string): string {
   parts.push(text.slice(last));
   return parts.join('');
 }
+
+/**
+ * Marks a rendered payload whose block strings were escaped.
+ *
+ * Revision 1 decoded `\n` unconditionally, which corrupted every LaTeX command
+ * and Windows path that begins `\n` — `$$\nabla f$$` became `$$<newline>abla
+ * f$$`. An escape sequence built from characters that occur in ordinary content
+ * can only be decoded where the ENCODER is known to have run. This marker is
+ * how the decoder knows.
+ *
+ * An HTML comment on purpose: inert everywhere, and harmless if it ever lands
+ * in a block by accident.
+ */
+export const ESCAPED_NEWLINES_MARKER = '<!-- roam:escaped-newlines -->';
+
+/**
+ * Does this page need escaping at all?
+ *
+ * Escaping is conditional so a page with no multi-line block renders exactly
+ * as it did before any of this work — no marker, no backslash doubling. That
+ * is the overwhelming majority of pages, and it keeps the blast radius of the
+ * encoding near zero.
+ */
+export function needsNewlineEscaping(blockStrings: readonly string[]): boolean {
+  return blockStrings.some((s) => s.includes('\n'));
+}

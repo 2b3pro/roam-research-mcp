@@ -247,3 +247,32 @@ describe('markdown render escapes newlines for the round trip', () => {
     expect(text).not.toMatch(/^Soft break two/m);
   });
 });
+
+describe('escaping is conditional and self-identifying', () => {
+  it('marks and escapes a page that has a multi-line block', async () => {
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', {
+        title: 'Test Page',
+        format: 'markdown',
+      })
+    );
+
+    expect(text).toContain('<!-- roam:escaped-newlines -->');
+    expect(text).toContain('Soft break one\\nSoft break two');
+    expect(text).not.toMatch(/^Soft break two/m);
+  });
+
+  it('leaves a page with no multi-line block completely alone', async () => {
+    // No marker, no escaping — byte-identical to pre-Revision-1 output. The
+    // guidelines fixture page holds one ordinary block.
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', {
+        title: 'roam/agent guidelines',
+        format: 'markdown',
+      })
+    );
+
+    expect(text).not.toContain('<!-- roam:escaped-newlines -->');
+    expect(text).not.toContain('\\\\');
+  });
+});

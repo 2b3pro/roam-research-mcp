@@ -13,7 +13,7 @@ import {
   generateBlockUid
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
-import { escapeBlockString } from '../../shared/block-escaping.js';
+import { escapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
@@ -765,6 +765,20 @@ export class PageOperations {
       b.string = await resolveRefs(this.graph, b.string);
     }));
 
+    // Collect every visible block string to decide whether this page needs the
+    // encoding at all. A page with no soft line break renders exactly as it
+    // did before this feature existed.
+    const allStrings: string[] = [];
+    const collectStrings = (blocks: RoamBlock[]): void => {
+      for (const b of blocks) {
+        allStrings.push(b.string);
+        collectStrings(b.children);
+      }
+    };
+    collectStrings(visibleRoots);
+
+    const escaping = options.escapeNewlines === true && needsNewlineEscaping(allStrings);
+
     // Convert to markdown with proper nesting
     const toMarkdown = (blocks: RoamBlock[], level: number = 0): string => {
       return blocks
@@ -772,7 +786,7 @@ export class PageOperations {
           const indent = '  '.repeat(level);
           let md: string;
 
-          const text = options.escapeNewlines
+          const text = escaping
             ? escapeBlockString(block.string)
             : block.string;
 
@@ -794,7 +808,10 @@ export class PageOperations {
         .join('\n');
     };
 
-    return `# ${title}\n\n${toMarkdown(visibleRoots)}`;
+    const body = toMarkdown(visibleRoots);
+    return escaping
+      ? `# ${title}\n${ESCAPED_NEWLINES_MARKER}\n\n${body}`
+      : `# ${title}\n\n${body}`;
   }
 
   /**
