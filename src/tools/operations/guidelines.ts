@@ -10,12 +10,18 @@
  * server's mechanics and lives in a file. Guidelines are per-graph, live-edited
  * from inside Roam, and answer "how does this user want their graph handled".
  *
+ * The result also carries `roamSyntax` (see `../roam-syntax.ts`) on every path,
+ * whether or not a guidelines page exists. Conventions are the user's to supply
+ * and may be absent; the data-safety rules are the server's and never are.
+ *
  * Read by default; set `guidelinesPage: false` on a graph to disable it there.
+ * Disabling suppresses the user's conventions, not `roamSyntax`.
  */
 
 import type { Graph } from '@roam-research/roam-api-sdk';
 import { PageOperations } from './pages.js';
 import { formatRoamDate } from '../../utils/helpers.js';
+import { ROAM_SYNTAX } from '../roam-syntax.js';
 
 /** The shared convention, read by default and by Roam's own MCP server. */
 export const DEFAULT_GUIDELINES_PAGE = 'roam/agent guidelines';
@@ -25,6 +31,14 @@ export interface GuidelinesResult {
   page: string | null;
   exists: boolean;
   guidelines: string | null;
+  /**
+   * The data-safety rules from `ROAM_SYNTAX`, on every result — including when
+   * no guidelines page exists, when they are disabled, and when the read
+   * failed. The user's conventions are optional; these are not, and this call
+   * is the one channel that reaches a client which never fetches the
+   * cheatsheet. Constant, so it does not affect caching.
+   */
+  roamSyntax: string;
   /** Today's daily note title, in Roam's ordinal format — useful orientation. */
   todaysDailyNote: string;
   nextSteps: string;
@@ -69,9 +83,10 @@ export class GuidelinesOperations {
         page: null,
         exists: false,
         guidelines: null,
+        roamSyntax: ROAM_SYNTAX,
         todaysDailyNote: today,
         nextSteps:
-          'Guidelines are disabled for this graph. Proceed using the Roam Markdown Cheatsheet for syntax.',
+          'Guidelines are disabled for this graph. Follow `roamSyntax` below, and load the Roam Markdown Cheatsheet for anything it does not cover.',
       };
     }
 
@@ -89,10 +104,12 @@ export class GuidelinesOperations {
           page: this.guidelinesPage,
           exists: false,
           guidelines: null,
+          roamSyntax: ROAM_SYNTAX,
           todaysDailyNote: today,
           nextSteps:
             `No "${this.guidelinesPage}" page exists in this graph, so there are no user conventions to follow. ` +
-            `Do not call this tool again for this graph this session. Proceed using the Roam Markdown Cheatsheet for syntax. ` +
+            `Do not call this tool again for this graph this session. The \`roamSyntax\` rules below still apply — they are about data safety, not convention. ` +
+            `Load the Roam Markdown Cheatsheet for syntax they do not cover. ` +
             `The user can create the page at any time to set conventions.`,
         };
       } else {
@@ -104,10 +121,12 @@ export class GuidelinesOperations {
           page: this.guidelinesPage,
           exists: true,
           guidelines,
+          roamSyntax: ROAM_SYNTAX,
           todaysDailyNote: today,
           nextSteps:
             `You now have this graph's conventions. Do not call this tool again for this graph this session — you already have what you need. ` +
             `Apply these conventions to reads as well as writes: they change how results should be interpreted and presented, not just how content is written. ` +
+            `Where they are silent, the \`roamSyntax\` rules govern; where they conflict, conventions win on style and \`roamSyntax\` wins on data safety. ` +
             `Today's daily note is "${today}".`,
         };
       }
@@ -117,10 +136,13 @@ export class GuidelinesOperations {
         page: this.guidelinesPage,
         exists: false,
         guidelines: null,
+        roamSyntax: ROAM_SYNTAX,
         todaysDailyNote: today,
         nextSteps:
           `Could not read "${this.guidelinesPage}" (${error instanceof Error ? error.message : String(error)}). ` +
-          `Proceed using the Roam Markdown Cheatsheet for syntax.`,
+          `The graph's conventions are unavailable, so be conservative about placement and style. ` +
+          `The \`roamSyntax\` rules below are unaffected — they ship with the server. ` +
+          `Load the Roam Markdown Cheatsheet for syntax they do not cover.`,
       };
     }
 

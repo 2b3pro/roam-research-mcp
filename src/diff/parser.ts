@@ -7,6 +7,7 @@
 
 import type { ExistingBlock, RoamApiBlock, NewBlock, BlockRef } from './types.js';
 import { generateBlockUid, parseMarkdown, convertToRoamMarkdown } from '../markdown-utils.js';
+import { isHiddenBlockString } from '../tools/helpers/hidden.js';
 
 /**
  * Parse a raw Roam API block into an ExistingBlock structure.
@@ -51,6 +52,56 @@ export function parseExistingBlocks(pageData: RoamApiBlock): ExistingBlock[] {
   );
 
   return childrenSorted.map((c) => parseExistingBlock(c, null));
+}
+
+/**
+ * Drop `#.rm-hide` / `#.rm-private` subtrees from a diff baseline.
+ *
+ * THE RULE THIS ENFORCES: **the baseline a diff deletes from must be the same
+ * page the caller was allowed to read.**
+ *
+ * Every read path filters these subtrees out, so an agent composing replacement
+ * markdown cannot include what it was never shown. The diff then compared that
+ * markdown against the *unfiltered* page, found the hidden blocks unaccounted
+ * for, and deleted them — turning "hide this from the AI" into "let the AI
+ * delete this", with no undo. Pruning the baseline makes the two views agree:
+ * a block that is invisible is also unmatched-against, so it is never a
+ * deletion candidate.
+ *
+ * WHAT THIS DOES NOT PRESERVE: position. A surviving hidden block keeps its
+ * original `:block/order`, while the new blocks are numbered from the markdown,
+ * so a hidden block can end up sharing an order with a visible sibling and
+ * settle either side of it. Ordering is a sort key, not content — and the
+ * alternative, reserving slots for blocks the caller cannot see, would let
+ * hidden content dictate visible layout. Content survives; exact position may
+ * not.
+ *
+ * @param blocks - Parsed baseline, straight from `parseExistingBlocks`
+ * @returns The same trees with hidden blocks and their descendants removed
+ */
+export function pruneHiddenExistingBlocks(blocks: ExistingBlock[]): ExistingBlock[] {
+  const kept: ExistingBlock[] = [];
+  for (const block of blocks) {
+    // The whole subtree goes: a visible child of a hidden parent is still
+    // content the caller never saw, so it is equally undeletable.
+    if (isHiddenBlockString(block.text)) continue;
+    kept.push({ ...block, children: pruneHiddenExistingBlocks(block.children) });
+  }
+  return kept;
+}
+
+/** How many blocks `pruneHiddenExistingBlocks` would remove, counting subtrees. */
+export function countHiddenExistingBlocks(blocks: ExistingBlock[]): number {
+  let count = 0;
+  for (const block of blocks) {
+    if (isHiddenBlockString(block.text)) {
+      // The block plus everything under it, all of which is being protected.
+      count += 1 + flattenExistingBlocks(block.children).length;
+    } else {
+      count += countHiddenExistingBlocks(block.children);
+    }
+  }
+  return count;
 }
 
 /**

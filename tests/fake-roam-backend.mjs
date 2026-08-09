@@ -45,6 +45,15 @@ const BLOCKS = {
     ['near00002', 'Other near miss, must stay #.rm-highlight', 4, 'page00001'],
     ['vis000002', 'Second visible block', 5, 'page00001'],
     ['vischild1', 'Visible child of a visible block', 0, 'vis000002'],
+    // Longer than the 80-char preview cut in the `structure` format, so a test
+    // can watch the truncation markers appear. The tail is what must NOT come
+    // back in a preview, and it is unique so a test can prove that.
+    [
+      'long00001',
+      'This block runs past the eighty character preview boundary on purpose, and here is the TAIL_MARKER that only the full read returns.',
+      6,
+      'page00001',
+    ],
   ],
   guide0001: [
     ['gblock001', 'Tag every book page with Type:: Book', 0, 'guide0001'],
@@ -80,11 +89,46 @@ function hiddenDescendantPairs() {
  * Answer a Datalog query with fixture data.
  * Returns whatever belongs under `{result: ...}`.
  */
+/**
+ * The nested `(pull ...)` shape `roam_update_page_markdown` diffs against,
+ * built from the same flat fixture the other reads use.
+ *
+ * This one matters more than it looks: the diff deletes whatever its baseline
+ * contains and the submitted markdown does not. Without this handler the query
+ * falls through to `[]`, the diff sees an empty page, and a test asserting
+ * "hidden blocks are not deleted" passes because NOTHING is deleted. The
+ * fixture has to hold real blocks for that assertion to mean anything.
+ */
+function pullTree(uid) {
+  const children = allBlocks()
+    .filter(([, , , parentUid]) => parentUid === uid)
+    .sort((a, b) => a[2] - b[2])
+    .map(([childUid, str, order]) => {
+      const node = {
+        ':block/uid': childUid,
+        ':block/string': str,
+        ':block/order': order,
+      };
+      const grandchildren = pullTree(childUid);
+      if (grandchildren.length > 0) node[':block/children'] = grandchildren;
+      return node;
+    });
+  return children;
+}
+
 function answer(query, args) {
   // Page-content query: [uid, string, order, parentUid] for everything on a page.
   if (query.includes(':find ?block-uid ?block-str ?order ?parent-uid')) {
     const pageUid = args?.[1];
     return BLOCKS[pageUid] ?? [];
+  }
+
+  // The diff baseline: a scalar `(pull ?page [... {:block/children ...}])`
+  // keyed by a page uid inlined in the query text rather than bound via :in.
+  if (query.includes('(pull ?page') && query.includes(':block/children')) {
+    const pageUid = query.match(/:block\/uid "([^"]+)"/)?.[1];
+    if (!pageUid || !BLOCKS[pageUid]) return null;
+    return { ':block/uid': pageUid, ':block/children': pullTree(pageUid) };
   }
 
   // Heading levels. Nothing in the fixture carries one.

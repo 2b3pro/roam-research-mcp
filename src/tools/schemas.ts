@@ -197,7 +197,7 @@ export const toolSchemas = {
   roam_get_guidelines: {
     name: 'roam_get_guidelines',
     annotations: READ,
-    description: 'Retrieve this graph\'s user-defined agent conventions, read from the `[[roam/agent guidelines]]` page inside the graph (configurable per graph). These are the user\'s own rules — how they tag, how they name and namespace pages, what to never do, how they want your voice attributed.\n\nCall this ONCE per graph per session, before other tools, INCLUDING for reads: conventions change how results should be interpreted and presented, not just how content is written. Returns today\'s daily note title as orientation.\n\nDistinct from `roam_markdown_cheatsheet`, which covers Roam syntax and this server\'s mechanics. Guidelines answer "how does this user want their graph handled". Returns exists:false rather than failing when no page has been created.',
+    description: 'Retrieve this graph\'s user-defined agent conventions, read from the `[[roam/agent guidelines]]` page inside the graph (configurable per graph). These are the user\'s own rules — how they tag, how they name and namespace pages, what to never do, how they want your voice attributed.\n\nAlso returns `roamSyntax`: the rules whose violation destroys content — whole-page rewrites that delete, truncated previews written back as content, retyped block references, and the syntax that differs from standard markdown. These are returned on every call, including when the graph has no guidelines page, and they hold regardless of what the conventions say.\n\nCall this ONCE per graph per session, before other tools, INCLUDING for reads: conventions change how results should be interpreted and presented, not just how content is written. Returns today\'s daily note title as orientation.\n\nDistinct from `roam_markdown_cheatsheet`, which is the complete syntax reference — components, queries, embeds, tool selection. Call that when you need to look something up; this one you need before writing at all. Returns exists:false rather than failing when no page has been created.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({}),
@@ -240,7 +240,7 @@ export const toolSchemas = {
           enum: ['markdown', 'raw', 'structure'],
           default: 'raw',
           description:
-            "Format output as markdown, JSON, or structure. 'markdown' returns readable string; 'raw' returns full JSON with nested blocks; 'structure' returns flattened list optimized for surgical updates (uid, order, text preview, depth, parent_uid)"
+            "Format output as markdown, JSON, or structure. 'markdown' returns readable string; 'raw' returns full JSON with nested blocks; 'structure' returns a flattened list (uid, order, text, depth, parent_uid) for locating blocks to update. In 'structure', `text` is a PREVIEW cut at 80 characters — an entry marked `truncated: true` is a fragment, and writing it back would replace the block with its own opening. Use it to find the uid, then fetch that block with roam_fetch_block before editing its text."
         }
       }),
       required: ['title']
@@ -661,7 +661,7 @@ export const toolSchemas = {
   roam_markdown_cheatsheet: {
     name: 'roam_markdown_cheatsheet',
     annotations: READ,
-    description: 'Provides the comprehensive Roam syntax reference. Covers: formatting, links & references (page refs, block refs, embeds including embed-children and embed-path), tags, dates, tasks, attributes, queries (native and :q Datalog tables with built-in rules), tables, kanban, mermaid diagrams (with theme support), advanced components (dropdowns, tooltips, templates, document mode, word-count), CSS tags (#.rm-E, #.rm-hide, etc.), anti-patterns, tool selection guide, and API efficiency tips.\n\n**IMPORTANT:** Always load this cheatsheet before creating or updating Roam content. It prevents common syntax errors and guides tool selection.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
+    description: 'Provides the comprehensive Roam syntax reference. Covers: formatting, links & references (page refs, block refs, embeds including embed-children and embed-path), tags, dates, tasks, callouts, attributes, queries (native `{{query}}` with its clause rules and page-ref inheritance, plus :q Datalog tables with built-in rules), tables, kanban, mermaid diagrams (with theme support), advanced components (dropdowns, tooltips, templates, document mode, word-count), CSS tags (#.rm-E, #.rm-hide, etc.), anti-patterns, tool selection guide, and API efficiency tips.\n\n**IMPORTANT:** Always load this cheatsheet before creating or updating Roam content. It prevents common syntax errors and guides tool selection.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({}),
@@ -961,11 +961,15 @@ export const toolSchemas = {
           items: { type: 'string' },
           description: 'Blocks whose UIDs survived the diff, so refs to them still resolve'
         },
+        preserved_hidden: {
+          type: 'number',
+          description: 'Present only when non-zero: how many #.rm-hide / #.rm-private blocks were excluded from the diff and left on the page untouched'
+        },
         summary: { type: 'string' }
       },
       ['success', 'actions', 'stats', 'preserved_uids', 'summary']
     ),
-    description: 'Update an existing page with new markdown content using smart diff. Preserves block UIDs where possible and generates minimal changes. This is ideal for:\n- Syncing external markdown files to Roam\n- AI-assisted content updates that preserve references\n- Batch content modifications without losing block references\n\n**How it works:**\n1. Fetches existing page blocks\n2. Matches new content to existing blocks by text similarity\n3. Generates minimal create/update/move/delete operations\n4. Preserves UIDs for matched blocks (keeping references intact)\n\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
+    description: 'Update an existing page with new markdown content using smart diff. Preserves block UIDs where possible and generates minimal changes. This is ideal for:\n- Syncing external markdown files to Roam\n- AI-assisted content updates that preserve references\n- Batch content modifications without losing block references\n\n**⚠️ This REPLACES the page, it does not append.** Any block your markdown does not account for is deleted. Pass the complete intended page, or use `roam_process_batch_actions` / `roam_create_outline` to change only part of one. Use `dry_run: true` to see the actions first.\n\n**How it works:**\n1. Fetches existing page blocks\n2. Matches new content to existing blocks by text similarity\n3. Generates minimal create/update/move/delete operations\n4. Preserves UIDs for matched blocks (keeping references intact)\n\n`#.rm-hide` / `#.rm-private` subtrees are excluded from the diff and left untouched — you cannot see them, so you cannot be asked to account for them. `preserved_hidden` reports how many, when any.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session, and load the Roam Markdown Cheatsheet, before using this tool.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({
