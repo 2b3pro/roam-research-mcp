@@ -2,6 +2,46 @@
 
 ### Unreleased
 
+- **⚠️ Data loss: one soft line break flattened a page.** A Roam block may
+  contain a newline — a Shift+Enter soft break, which callout bodies require
+  and fenced code blocks are full of. The markdown renderer emitted one `- `
+  line per block, so that newline spilled onto a second physical line at
+  **column 0**, which reset the parser's indentation baseline. Every block
+  after it collapsed toward the root and was reparented under the wrong
+  ancestor; `roam_update_page_markdown` then generated the moves to make the
+  real page match. Reading a page and writing back a revision — the documented
+  purpose of the tool — was enough to trigger it.
+  - **The fix:** block strings are now escaped (`\n` for a newline, `\\` for a
+    backslash) when rendered to markdown and decoded when parsed back, so each
+    block occupies exactly one line and can no longer disturb the indentation
+    that encodes hierarchy. Lossless for any content, with a property test.
+  - **`\n` is now real syntax.** It is how you write a soft line break in
+    markdown passed to `roam_create_page`, `roam_import_markdown`,
+    `roam_create_outline` or `roam_update_page_markdown`. Previously the only
+    way was `roam_process_batch_actions`. A literal backslash-n is `\\n`. This
+    is a behaviour change for anyone already passing `\n` as content.
+    `roam_create_outline` writes the block correctly but currently omits it
+    from the returned `created_blocks`, because its post-write verification
+    looks the block up by the raw, still-escaped text instead of the decoded
+    string that was actually written — a known pre-existing verification
+    mismatch, not data loss.
+  - **Also fixed: a self-contained code fence no longer swallows the page.** A
+    line carrying both an opening and a closing fence is content, not the start
+    of a fenced region. Previously it opened a region that never closed and
+    consumed every following block, and left a junk `-` block behind on each
+    rewrite of a page containing a code block.
+  - **Scope:** `roam_fetch_page_by_title` (`markdown`) and
+    `roam_fetch_page_full_view` changed what they emit;
+    `roam_update_page_markdown`, `roam save --update`, `roam_import_markdown`,
+    `roam_create_outline`, `roam_create_page` and `roam save` changed what they
+    accept. `roam_get_guidelines` is deliberately **unescaped** — it renders
+    prose, not round-trip input.
+  - **Verified against the prior state.** `src/server/multiline-roundtrip.test.ts`
+    asserts a read → write-back is a no-op *and* that every parent/child
+    relationship survives; it fails against the unfixed code. Checking only the
+    action count would have passed on the flattened tree, which is how this
+    survived.
+
 **In one line:** `roam_update_page_markdown` was deleting the very blocks the `#.rm-hide` filter exists to protect; that is fixed, the rules that prevent an agent destroying content now ride on every `roam_get_guidelines` response, and the cheatsheet gained callouts and the `{{query}}` rules it was missing.
 
 **Must ship as a minor at least.** The changes add keys to what two tools return, and §4 of [`docs/architecture.md`](docs/architecture.md) counts a change to the shape of a tool result — including keys inside the JSON a read tool serialises into its text channel — as at least a minor. All are purely additive: no field was renamed, removed, or given a new meaning.

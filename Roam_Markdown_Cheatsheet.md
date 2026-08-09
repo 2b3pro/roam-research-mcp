@@ -1,4 +1,4 @@
-# Roam Markdown Cheatsheet v2.4.0
+# Roam Markdown Cheatsheet v2.5.0
 
 ## Core Syntax
 
@@ -49,18 +49,21 @@ Append `+` or `-` to make it foldable — `[[!TIP]]+` starts expanded, `[[!TIP]]
 ⚠️ `[[>]]` and `[[!TIP]]` are real page references, so every callout backlinks to those pages. That is normal and how the feature works — don't "clean it up."
 ⚠️ A plain `> quote` is an ordinary blockquote, not a callout. The two are unrelated.
 
-### ⚠️ Multi-line blocks and page rewrites
+### Soft line breaks
 
-A block can hold a **soft line break** (Shift+Enter, stored as `\n` in the block
-string). Callout bodies require one; fenced code blocks are full of them.
+A block can hold more than one line — a **soft line break** (Shift+Enter in the
+UI). It stays *one* block, which is what callout bodies and fenced code blocks
+rely on.
 
-**Do not run `roam_update_page_markdown` — or `roam save --update` — on a page
-containing a callout, a fenced code block, or any Shift+Enter line break.** It
-will split those blocks and **flatten the hierarchy of everything after them**,
-reparenting blocks under the wrong ancestors.
+Write one as `\n`:
 
-Use `roam_process_batch_actions` for those pages. It writes block strings
-literally, and is currently the only way to create a soft line break at all.
+    - [[>]] [[!TIP]] Heads up\nThe body, in the same block.
+
+To write a literal backslash-n instead — in code, say — double it: `\\n`.
+
+⚠️ Reads use the same encoding, so a multi-line block comes back on one line
+with `\n` in it. Keep it that way when writing back. Turning it into a real
+line break splits the block and flattens everything nested after it.
 
 ### Attributes
 ```

@@ -208,6 +208,12 @@ Results are cached for 30 seconds — an edit to the page takes effect without a
 
 Note that guidelines are read through the normal page path, so blocks tagged `#.rm-hide` / `#.rm-private` are withheld from them too — see below.
 
+Block strings round-trip through `format: "markdown"` with newlines encoded as
+`\n` (and a literal backslash as `\\`), so a block with a soft line break stays
+on one line. That encoding is what keeps a page's hierarchy intact when you read
+it and write it back — an unescaped newline lands at column 0 and reparents
+everything after it. `roam_get_guidelines` is exempt: it renders prose.
+
 ---
 
 ## Hiding content from the AI
