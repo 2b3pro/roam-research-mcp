@@ -1,10 +1,25 @@
 # Changelog
 
-### Unreleased
+### v3.2.0 (2026-08-09)
 
-**In one line:** `roam_update_page_markdown` was deleting the very blocks the `#.rm-hide` filter exists to protect; that is fixed, the rules that prevent an agent destroying content now ride on every `roam_get_guidelines` response, and the cheatsheet gained callouts and the `{{query}}` rules it was missing.
+**In one line:** two ways `roam_update_page_markdown` could silently delete your blocks are fixed — one where the `#.rm-hide` tag caused the deletion it exists to prevent, and one where a block merely *mentioning* a ``` fence swallowed every block after it.
 
-**Must ship as a minor at least.** The changes add keys to what two tools return, and §4 of [`docs/architecture.md`](docs/architecture.md) counts a change to the shape of a tool result — including keys inside the JSON a read tool serialises into its text channel — as at least a minor. All are purely additive: no field was renamed, removed, or given a new meaning.
+**Why a minor.** The changes add keys to what two tools return, and §4 of [`docs/architecture.md`](docs/architecture.md) counts a change to the shape of a tool result — including keys inside the JSON a read tool serialises into its text channel — as at least a minor. All are purely additive: no field was renamed, removed, or given a new meaning, and no default changed.
+
+**What is NOT in this release.** A block can hold a soft line break (Shift+Enter), and such a block still does not survive `roam_update_page_markdown` — it splits, and the page's hierarchy below it flattens. That work was built, failed review twice on its own design, and was held back rather than shipped half-trusted. The cheatsheet now tells you plainly not to run a page rewrite on a page containing a callout, a fenced code block or a Shift+Enter, and to use `roam_process_batch_actions` for those pages instead. That is honest harm reduction, not a fix; the fix is still owed.
+
+- **⚠️ Data loss: a block that mentioned a code fence swallowed the rest of the page.** `parseMarkdown` splices a line at a mid-line ``` so its fence state machine can gather the following lines. It did that for *any* line containing a fence anywhere — including a block whose text merely mentions one. That opened a fenced region which never closes, and the parser consumed everything after it:
+
+  ```
+  - wrap it in ``` to make code       parses to ONE block, "wrap it in"
+  - second block                      the other three vanish, and
+  - third block                       roam_update_page_markdown then issues
+  - fourth block                      delete-block for each of them
+  ```
+
+  - **Were you affected?** If any block in a page you rewrote contained ``` — discussing code formatting is enough — then yes. Technical graphs are the likely victims. Roam has no undo for API writes.
+  - **The fix:** split only for the exact "bullet followed by nothing but a fence opener" shape, which is the sole case the splice was ever meant to serve. Verified against a hand-written opener with and without a language tag, an indented opener, prose mentioning a fence mid-sentence, prose ending with a fence, and balanced prose — plus that a fenced block nested under a parent still attaches to the right parent.
+  - A spurious `-` block that used to appear ahead of every code block is gone with it: under the new rule the spliced-off remainder is always just the bullet marker, so it is no longer emitted as its own block.
 
 - **⚠️ Data loss: a page rewrite deleted hidden blocks.** `roam_update_page_markdown` fetched the **whole** page as its diff baseline and deleted every block the submitted markdown did not account for. But every read path withholds `#.rm-hide` / `#.rm-private` subtrees, so an agent composing replacement markdown had no way to include content it was never shown. The result inverted the tag's purpose: marking a block "hide from the AI" is what made the AI delete it, through an API with no undo.
   - **Were you affected?** Only if you use both the hide tags and whole-page rewrites — `roam_update_page_markdown`, or `roam save --update` on the CLI, which shares the method. If you have never tagged a block `#.rm-hide` or `#.rm-private`, nothing changed for you. Note the trigger did not require an agent to do anything wrong: reading a page and writing back a revision is exactly the documented use.
