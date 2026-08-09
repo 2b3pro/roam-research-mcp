@@ -1,4 +1,4 @@
-# Roam Markdown Cheatsheet v2.5.0
+# Roam Markdown Cheatsheet v2.6.0
 
 ## Core Syntax
 
@@ -55,15 +55,19 @@ A block can hold more than one line — a **soft line break** (Shift+Enter in th
 UI). It stays *one* block, which is what callout bodies and fenced code blocks
 rely on.
 
-Write one as `\n`:
+**You cannot write one through the markdown tools.** `roam_create_page`,
+`roam_import_markdown`, `roam_create_outline` and `roam_update_page_markdown`
+all treat a line break as a block break. Use `roam_process_batch_actions`, which
+writes block strings literally — put a real newline in the `string`.
 
-    - [[>]] [[!TIP]] Heads up\nThe body, in the same block.
+⚠️ Reads encode soft line breaks as `\n` and mark the payload with a leading
+`<!-- roam:escaped-newlines -->` comment. If you edit that markdown and pass it
+back to `roam_update_page_markdown`, **keep the marker line** — it is what tells
+the server the text is encoded. Drop it and those blocks arrive with a literal
+`\n` in them.
 
-To write a literal backslash-n instead — in code, say — double it: `\\n`.
-
-⚠️ Reads use the same encoding, so a multi-line block comes back on one line
-with `\n` in it. Keep it that way when writing back. Turning it into a real
-line break splits the block and flattens everything nested after it.
+⚠️ Backslashes are NOT special in markdown you author. `$$\nabla f$$` and
+`C:\newdir` are written exactly as typed.
 
 ### Attributes
 ```

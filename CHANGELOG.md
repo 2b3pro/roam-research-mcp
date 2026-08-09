@@ -11,25 +11,31 @@
   ancestor; `roam_update_page_markdown` then generated the moves to make the
   real page match. Reading a page and writing back a revision — the documented
   purpose of the tool — was enough to trigger it.
-  - **The fix:** block strings are now escaped (`\n` for a newline, `\\` for a
-    backslash) when rendered to markdown and decoded when parsed back, so each
-    block occupies exactly one line and can no longer disturb the indentation
-    that encodes hierarchy. Lossless for any content, with a property test.
-  - **`\n` is now real syntax.** It is how you write a soft line break in
-    markdown passed to `roam_create_page`, `roam_import_markdown`,
-    `roam_create_outline` or `roam_update_page_markdown`. Previously the only
-    way was `roam_process_batch_actions`. A literal backslash-n is `\\n`. This
-    is a behaviour change for anyone already passing `\n` as content.
-    `roam_create_outline` writes the block correctly but currently omits it
-    from the returned `created_blocks`, because its post-write verification
-    looks the block up by the raw, still-escaped text instead of the decoded
-    string that was actually written — a known pre-existing verification
-    mismatch, not data loss.
-  - **Also fixed: a self-contained code fence no longer swallows the page.** A
-    line carrying both an opening and a closing fence is content, not the start
-    of a fenced region. Previously it opened a region that never closed and
-    consumed every following block, and left a junk `-` block behind on each
-    rewrite of a page containing a code block.
+  - **The fix is conditional.** A block string is only newline-escaped
+    (`\n` for a newline) when the page actually contains a soft line break,
+    and the render is then marked with a leading `<!-- roam:escaped-newlines -->`
+    comment so a later parse can tell "this text is encoded" from "this text
+    just contains a literal backslash-n." Pages with no multi-line block
+    render exactly as before — byte-identical, no marker, no escaping.
+  - **`\n` is still not user-facing syntax.** `roam_process_batch_actions`
+    — which writes block strings literally — remains the only way to write a
+    soft line break. `roam_create_page`, `roam_import_markdown`,
+    `roam_create_outline` and `roam_update_page_markdown` all treat a line
+    break as a block break, unchanged. Markdown you author yourself, including
+    `$$\nabla f$$` and `C:\newdir`, is never decoded — only a payload carrying
+    the marker is, and only per-block, after the document has already been
+    split into blocks.
+  - **⚠️ Second Critical bug fixed in the same work: a block merely mentioning
+    a code fence swallowed every block after it.** `parseMarkdown` treated any
+    unbalanced triple-backtick as the start of a fenced region — including one
+    just mentioned in prose, like "wrap it in &#96;&#96;&#96; to make code" —
+    so that region never closed and absorbed every following block into it.
+    `roam_update_page_markdown` then read the vanished blocks as deleted and
+    issued `delete-block` for each one — unrecoverable, since Roam has no undo
+    for API writes.
+  - **`roam get` → `roam save --update` is now clean.** Reading a page and
+    writing the same markdown back produces no diff, including for pages with
+    soft line breaks and pages with a bare fence mentioned in a block.
   - **Scope:** `roam_fetch_page_by_title` (`markdown`) and
     `roam_fetch_page_full_view` changed what they emit;
     `roam_update_page_markdown`, `roam save --update`, `roam_import_markdown`,
