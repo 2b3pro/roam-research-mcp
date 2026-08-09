@@ -397,3 +397,42 @@ describe('soft line breaks in parsed markdown', () => {
     expect(nodes[0].content).not.toContain('console.log("a\nb");');
   });
 });
+
+describe('C1: a fence mentioned inside a block does not open a region', () => {
+  it('keeps every block when one block merely contains a fence', () => {
+    const md = [
+      '- wrap it in ``` to make code',
+      '- second block',
+      '- third block',
+      '- fourth block',
+    ].join('\n');
+
+    const nodes = parseMarkdown(md);
+
+    expect(nodes).toHaveLength(4);
+    expect(nodes[0].content).toBe('wrap it in ``` to make code');
+    expect(nodes[3].content).toBe('fourth block');
+  });
+
+  it('keeps a block whose fence is the last thing on the line', () => {
+    const nodes = parseMarkdown('- ends with a fence ```\n- survives');
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1].content).toBe('survives');
+  });
+
+  it('still opens a region for a hand-written fence opener', () => {
+    const md = ['- ```javascript', 'const x = 1;', '```', '- after'].join('\n');
+    const nodes = parseMarkdown(md);
+
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0].content).toContain('const x = 1;');
+    expect(nodes[1].content).toBe('after');
+  });
+
+  it('still opens a region for an opener with no language tag', () => {
+    const md = ['- ```', 'plain code', '```', '- after'].join('\n');
+    const nodes = parseMarkdown(md);
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1].content).toBe('after');
+  });
+});

@@ -155,17 +155,34 @@ function convertToRoamMarkdown(text: string): string {
 }
 
 /**
- * Does this line carry BOTH an opening and a closing code fence?
+ * Is this line a bullet whose only content is a code-fence opener?
  *
- * Such a line is self-contained content — an escaped multi-line block making
- * its round trip — not the start of a fenced region. The fence state machine
- * exists to gather HAND-WRITTEN fences that span real newlines; pointing it at
- * a complete fence makes it scan forward for a close that never comes, and it
- * consumes the rest of the document.
+ * Only such a line may be spliced into "bullet" + "fence" so the fence state
+ * machine can gather the following lines. Any line with content AFTER the
+ * fence is a block that merely CONTAINS backticks — splicing it opens a region
+ * that never closes, and the parser then consumes the rest of the document.
+ *
+ * That was a real, unrecoverable defect: `- wrap it in ``` to make code`
+ * followed by three blocks parsed to a single block "wrap it in", and
+ * roam_update_page_markdown deleted the other three. Roam has no undo.
+ *
+ * This subsumes the earlier balanced-fence guard: a line carrying both an
+ * opening and a closing fence necessarily has content after the opener, so it
+ * never matches this shape.
  */
-function fenceClosesOnSameLine(trimmedLine: string): boolean {
+function isBulletFenceOpener(trimmedLine: string): boolean {
+  return /^\s*[-*+]\s+```[A-Za-z0-9_+-]*\s*$/.test(trimmedLine);
+}
+
+/**
+ * A fence line with content after its opening ``` is content, not a region
+ * opener. Guards the bare (non-bullet) case that the splice rule cannot see,
+ * e.g. a line rendered as ```js\ncode\n``` with no bullet prefix.
+ */
+function fenceHasTrailingContent(trimmedLine: string): boolean {
   const open = trimmedLine.indexOf('```');
-  return open !== -1 && trimmedLine.indexOf('```', open + 3) !== -1;
+  if (open === -1) return false;
+  return trimmedLine.slice(open + 3).replace(/^[A-Za-z0-9_+-]*/, '').trim().length > 0;
 }
 
 function parseMarkdown(markdown: string): MarkdownNode[] {
@@ -179,9 +196,17 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     const trimmedLine = line.trimEnd();
     const codeStartIndex = trimmedLine.indexOf('```');
 
-    if (codeStartIndex > 0 && !fenceClosesOnSameLine(trimmedLine)) {
+    if (codeStartIndex > 0 && isBulletFenceOpener(trimmedLine)) {
+      // Under this rule the text before the fence is ALWAYS just the bullet
+      // marker (isBulletFenceOpener only matches "bullet + nothing but the
+      // fence"), so there is no real content to preserve as its own node.
+      // Pushing it anyway used to leave a bare "-" line that the parser can't
+      // recognise as a bullet once trimmed (no trailing content survives
+      // trimEnd), so it fell through to the plain-line branch and emitted a
+      // spurious "-" block ahead of the code block it introduces. Dropping it
+      // loses nothing: the fence line below carries the same leading
+      // whitespace, so indentation-based nesting is unaffected.
       const indentationWhitespace = line.match(/^\s*/)?.[0] ?? '';
-      processedLines.push(indentationWhitespace + trimmedLine.substring(0, codeStartIndex));
       processedLines.push(indentationWhitespace + trimmedLine.substring(codeStartIndex));
     } else {
       processedLines.push(line);
@@ -195,7 +220,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
   let inCodeBlockFirstPass = false;
   for (const line of processedLines) {
     const trimmedLine = line.trimEnd();
-    if (trimmedLine.match(/^(\s*)```/) && !fenceClosesOnSameLine(trimmedLine)) {
+    if (trimmedLine.match(/^(\s*)```/) && !fenceHasTrailingContent(trimmedLine)) {
       inCodeBlockFirstPass = !inCodeBlockFirstPass;
       if (!inCodeBlockFirstPass) continue; // Skip closing ```
       const indent = line.match(/^\s*/)?.[0].length ?? 0;
@@ -251,7 +276,7 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
     const line = processedLines[i];
     const trimmedLine = line.trimEnd();
 
-    if (trimmedLine.match(/^(\s*)```/) && !fenceClosesOnSameLine(trimmedLine)) {
+    if (trimmedLine.match(/^(\s*)```/) && !fenceHasTrailingContent(trimmedLine)) {
       if (!inCodeBlock) {
         inCodeBlock = true;
         codeBlockContent = trimmedLine.trimStart() + '\n';
