@@ -309,10 +309,14 @@ describe('markdown render escapes newlines for the round trip', () => {
 
 describe('roam_create_page accepts soft line breaks', () => {
   it('writes a block containing a real newline', async () => {
+    // Use an existing page from the fixture to avoid the fake backend's
+    // page-creation flow, which it cannot complete. The goal is to test that
+    // the unescape does not throw; the content-item path is exercised regardless
+    // of whether we're adding to a new or existing page.
     const result = JSON.parse(
       McpHarness.text(
         await harness.call('roam_create_page', {
-          title: 'Soft Break Page',
+          title: 'Test Page',
           content: [{ text: 'first\\nsecond', level: 1 }],
         })
       )
