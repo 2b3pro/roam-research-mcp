@@ -306,3 +306,17 @@ describe('markdown render escapes newlines for the round trip', () => {
     expect(text).not.toMatch(/^Soft break two/m);
   });
 });
+
+describe('roam_create_page accepts soft line breaks', () => {
+  it('writes a block containing a real newline', async () => {
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_create_page', {
+          title: 'Soft Break Page',
+          content: [{ text: 'first\\nsecond', level: 1 }],
+        })
+      )
+    );
+    expect(result.success).toBe(true);
+  });
+});

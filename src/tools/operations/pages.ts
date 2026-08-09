@@ -13,7 +13,7 @@ import {
   generateBlockUid
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
-import { escapeBlockString } from '../../shared/block-escaping.js';
+import { escapeBlockString, unescapeBlockString } from '../../shared/block-escaping.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
@@ -306,7 +306,10 @@ export class PageOperations {
 
           // Convert to node format with level info
           const nodes = normalizedContent.map(block => ({
-            content: convertToRoamMarkdown(block.text.replace(/^#+\s+/, '')),
+            // One content item is already one block, so this path never splits
+            // lines and takes its own decode rather than inheriting
+            // parseMarkdown's. Keeps `\n` meaning a soft line break here too.
+            content: unescapeBlockString(convertToRoamMarkdown(block.text.replace(/^#+\s+/, ''))),
             level: block.level,
             ...(block.heading && { heading_level: block.heading }),
             ...(block.numbered_children && { children_view_type: 'numbered' as const }),
