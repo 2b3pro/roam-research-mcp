@@ -891,22 +891,60 @@ export class PageOperations {
 
     // 4. Convert new markdown to block structure
     //
-    // Decode ONLY when our own renderer said it encoded. Revision 1 decoded
-    // everything and turned `$$\nabla f$$` into `$$<newline>abla f$$`. The
-    // marker is the provenance signal that makes decoding safe.
-    //
-    // Detection looks at the first NON-EMPTY line rather than a fixed index:
-    // the renderer places the marker right after the `# Title` header, but
-    // callers commonly strip that header themselves before submitting, so by
-    // the time markdown reaches here the marker may be the very first line.
+    // Decode ONLY when our own renderer said it encoded. The marker may be
+    // the first non-empty line (header stripped by the caller) or the first
+    // non-empty line after a single leading `#` header (payload submitted
+    // verbatim — the path `roam save --update` takes). Revision 2 checked
+    // only the first line; a verbatim submit therefore never decoded, wrote
+    // the marker as a block, and deleted the blocks it rewrote. The tests
+    // that should have caught it stripped the header themselves.
     const lines = markdown.split('\n');
-    const markerAt = lines.findIndex((l) => l.trim().length > 0);
-    const isEscaped = markerAt !== -1 && lines[markerAt].trim() === ESCAPED_NEWLINES_MARKER;
+    let markerAt = -1;
+    let nonEmptySeen = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const t = lines[i].trim();
+      if (t.length === 0) continue;
+      nonEmptySeen++;
+      if (t === ESCAPED_NEWLINES_MARKER) {
+        markerAt = i;
+        break;
+      }
+      // A single leading header line may precede the marker; anything else
+      // (or a second line that is not the marker) means an unmarked payload.
+      if (nonEmptySeen === 1 && t.startsWith('#')) continue;
+      break;
+    }
+    const isEscaped = markerAt !== -1;
+
+    // `fetchPageByTitle`'s markdown branch always prepends `# ${title}\n` --
+    // it is page-level metadata describing what page this is, never content.
+    // Tolerating the marker after that header (above) is not enough on its
+    // own: a verbatim round trip still hands that literal `# Title` line to
+    // the parser, which turns it into a real heading block with no match in
+    // the existing tree, so the diff creates it and reparents every sibling
+    // after it -- exactly the "no-op round trip" this marker exists to
+    // guarantee. Strip it whenever the first non-empty line matches this
+    // page's own title exactly, independent of whether the marker is also
+    // present -- a dropped marker must still degrade to "literal sentinel
+    // text, same structure", not "literal sentinel text, reparented".
+    // Matching on the title (rather than "any leading `#` line") is
+    // deliberate: a caller who genuinely wants an H1 block of their own
+    // content as the page's first line is never mistaken for this artifact.
+    const trimmedTitle = String(title).trim();
+    const firstNonEmptyAt = lines.findIndex((l) => l.trim().length > 0);
+    const titleHeaderAt =
+      firstNonEmptyAt !== -1 && lines[firstNonEmptyAt].trim() === `# ${trimmedTitle}`
+        ? firstNonEmptyAt
+        : -1;
 
     let effectiveMarkdown = markdown;
-    if (isEscaped) {
-      // Strip the marker line itself, or it becomes a stray block on the page.
-      lines.splice(markerAt, 1);
+    const linesToStrip = [isEscaped ? markerAt : -1, titleHeaderAt]
+      .filter((i) => i !== -1)
+      .sort((a, b) => b - a);
+    if (linesToStrip.length > 0) {
+      // Strip the marker line itself, or it becomes a stray block on the
+      // page. Descending order so removing one index never shifts the other.
+      for (const idx of linesToStrip) lines.splice(idx, 1);
       effectiveMarkdown = lines.join('\n');
     }
 

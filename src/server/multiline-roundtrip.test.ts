@@ -220,3 +220,60 @@ describe('Revision 2 acceptance criteria', () => {
     expect(moves, 'a dropped marker must never reparent a block').toEqual([]);
   });
 });
+
+describe('Revision 3 acceptance criteria', () => {
+  const readVerbatim = async () =>
+    McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', {
+        title: 'Nested Page',
+        format: 'markdown',
+      })
+    );
+
+  const dryRun = async (markdown: string) =>
+    JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_update_page_markdown', {
+          title: 'Nested Page',
+          markdown,
+          dry_run: true,
+        })
+      )
+    );
+
+  it('C3: renderer output submitted VERBATIM, header included, is a no-op', async () => {
+    // The exact path `roam save --update` takes, and the exact case the old
+    // bodyOf() helper hid: the marker sits on line 2, after `# Title`.
+    const result = await dryRun(await readVerbatim());
+    expect(
+      result.actions.map((a: { action: string }) => a.action),
+      `unexpected actions: ${JSON.stringify(result.actions, null, 2)}`
+    ).toEqual([]);
+  });
+
+  it('C4: a block appended inside a marked payload lands byte-identical', async () => {
+    // Read-edit-append is the tool's primary workflow. The appended LaTeX and
+    // path must survive untouched WHILE the page's own multi-line blocks are
+    // still being decoded — both halves in one call.
+    const appended = (await readVerbatim()) + '\n- $$\\nabla f$$ and C:\\newdir appended\n';
+    const result = await dryRun(appended);
+
+    const creates = result.actions.filter((a: { action: string }) => a.action === 'create-block');
+    expect(creates).toHaveLength(1);
+    expect(creates[0].block.string).toBe('$$\\nabla f$$ and C:\\newdir appended');
+    expect(creates[0].block.string).not.toContain('\n');
+    // And nothing else moved: the marked page's existing blocks still decode.
+    expect(result.actions.filter((a: { action: string }) => a.action !== 'create-block')).toEqual([]);
+  });
+
+  it('degrades to literal sentinel text, never deletion, when the marker is dropped', async () => {
+    const noMarker = (await readVerbatim())
+      .split('\n')
+      .filter((l) => l.trim() !== '<!-- roam:escaped-newlines -->')
+      .join('\n');
+    const result = await dryRun(noMarker);
+
+    expect(result.actions.filter((a: { action: string }) => a.action === 'delete-block')).toEqual([]);
+    expect(result.actions.filter((a: { action: string }) => a.action === 'move-block')).toEqual([]);
+  });
+});
