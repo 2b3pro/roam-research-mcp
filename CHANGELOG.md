@@ -1,6 +1,10 @@
 # Changelog
 
-### Unreleased
+### v4.0.0 (2026-08-09)
+
+**In one line:** a block containing a soft line break (Shift+Enter) now survives `roam_update_page_markdown` — read a page, write it back, and nothing moves — via a `⏎` sentinel that never collides with content you author.
+
+**Why a major.** `roam_fetch_page_by_title` (`format: "markdown"`), `roam_fetch_page_full_view`, `roam_get_subpages` and `roam get` all return different bytes than 3.x for any page containing a multi-line block: the newline renders as `⏎`, and round-trippable payloads gain a leading `<!-- roam:escaped-newlines -->` marker line. Pages without a multi-line block render byte-identical to 3.2.0. If you use the server through an AI assistant, nothing is required of you; a script parsing markdown output of multi-line pages sees the new encoding. **If you pinned `roam-research-mcp@3`** (as the 3.1.0 notes suggested), you keep 3.2.0's fixes and its documented multi-line limitation until you re-pin.
 
 - **⚠️ Data loss: one soft line break flattened a page.** A Roam block may
   contain a newline — a Shift+Enter soft break, which callout bodies require
@@ -35,9 +39,9 @@
   - **The accepted corner:** a block genuinely containing a literal `⏎`
     round-trips it into a newline. Content-level, vanishingly rare, and
     pinned by a test so it stays a documented choice rather than an accident.
-  - **Sizing:** this changes what `format: "markdown"` and `roam get` emit for
-    any page with a multi-line block — **at least a minor, plausibly a major;
-    decide at release.**
+  - **Sizing:** decided as a **major** — see the header note. Two commits in
+    this work are themselves marked breaking, and output bytes changed on four
+    read surfaces for multi-line pages.
   - **Verified against the prior state.** `src/server/multiline-roundtrip.test.ts`
     asserts a read → write-back is a no-op *and* that every parent/child
     relationship survives; it fails against the unfixed code. The case that

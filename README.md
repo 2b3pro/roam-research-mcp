@@ -162,6 +162,8 @@ Three things worth knowing:
 - **Read tools deliberately have neither.** They already serialise their whole result into the text channel, so a schema would just double the payload.
 - **These fields are additive-only.** Some clients validate live responses against a cached tool list, so a field will be added or deprecated — never renamed or removed outside a major version.
 
+> **Upgrading to 4.0.0:** markdown reads of a page containing a soft line break (Shift+Enter) now render that break as `⏎` and carry a leading `<!-- roam:escaped-newlines -->` marker, so the page survives a write-back intact. Pages without multi-line blocks are byte-identical to 3.x. AI-assistant users need do nothing; scripts parsing markdown output of multi-line pages see the new encoding. See the [changelog](CHANGELOG.md).
+
 > **Upgrading from 2.x:** three write-result fields were renamed — `uid` → `page_uid` (`roam_create_page`), `created_uids` → `created_blocks` (`roam_create_outline`, `roam_import_markdown`) and `preservedUids` → `preserved_uids` (`roam_update_page_markdown`). This only affects code that reads those names; if you use the server through an AI assistant, nothing changes. See the [changelog](CHANGELOG.md) for why.
 
 ---
