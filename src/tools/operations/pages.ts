@@ -13,7 +13,7 @@ import {
   generateBlockUid
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
-import { escapeBlockString, unescapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
+import { escapeBlockString, unescapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER, SOFT_BREAK_SENTINEL } from '../../shared/block-escaping.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
@@ -924,16 +924,26 @@ export class PageOperations {
     // the existing tree, so the diff creates it and reparents every sibling
     // after it -- exactly the "no-op round trip" this marker exists to
     // guarantee. Strip it whenever the first non-empty line matches this
-    // page's own title exactly, independent of whether the marker is also
-    // present -- a dropped marker must still degrade to "literal sentinel
-    // text, same structure", not "literal sentinel text, reparented".
-    // Matching on the title (rather than "any leading `#` line") is
-    // deliberate: a caller who genuinely wants an H1 block of their own
-    // content as the page's first line is never mistaken for this artifact.
+    // page's own title exactly -- but ONLY when the payload demonstrably came
+    // from our own renderer (`isEscaped`, or the body still carries the
+    // `⏎` sentinel -- the signature of a marker-dropped degradation, since
+    // that scenario is "an agent rebuilt our output and lost the marker" and
+    // the sentinel is what that rebuilding could not have removed). A FRESH,
+    // hand-authored page can legitimately open with an H1 that echoes its own
+    // title (imported docs; an author who titles their own first line) --
+    // essentially never with `⏎` in it. The two wrong calls are not
+    // symmetric: preserving the header when it should have been stripped
+    // creates a harmless, visible stray block; stripping it when it should
+    // not have been touched deletes -- or reparents into corruption -- real,
+    // unrecoverable content, with no undo. The gate always takes the harmless
+    // direction whenever the payload carries no provenance signal.
     const trimmedTitle = String(title).trim();
     const firstNonEmptyAt = lines.findIndex((l) => l.trim().length > 0);
+    const hasRendererProvenance = isEscaped || markdown.includes(SOFT_BREAK_SENTINEL);
     const titleHeaderAt =
-      firstNonEmptyAt !== -1 && lines[firstNonEmptyAt].trim() === `# ${trimmedTitle}`
+      hasRendererProvenance &&
+      firstNonEmptyAt !== -1 &&
+      lines[firstNonEmptyAt].trim() === `# ${trimmedTitle}`
         ? firstNonEmptyAt
         : -1;
 

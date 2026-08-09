@@ -276,4 +276,40 @@ describe('Revision 3 acceptance criteria', () => {
     expect(result.actions.filter((a: { action: string }) => a.action === 'delete-block')).toEqual([]);
     expect(result.actions.filter((a: { action: string }) => a.action === 'move-block')).toEqual([]);
   });
+
+  it('never strips a fresh, hand-authored H1 that happens to echo the page title', async () => {
+    // No marker anywhere and no `⏎` sentinel in the body -- nothing about
+    // this payload came from our renderer. A page whose real first block is
+    // a genuine H1 reading "Nested Page" is plausible (imported docs, an
+    // author echoing the page title), and it must not be silently deleted or
+    // corrupted-via-reparenting just because the text happens to match the
+    // title. The safe failure here is a harmless, visible stray block.
+    //
+    // This payload is intentionally a PARTIAL update (only "Project Alpha",
+    // none of its descendants): `roam_update_page_markdown` REPLACES the
+    // page, so content the markdown does not account for is deleted -- that
+    // is documented, expected behaviour for ANY partial submission, entirely
+    // independent of this gate (a full, faithful, unmarked reproduction of
+    // this page is not constructible at all: its multi-line blocks cannot be
+    // expressed on one physical line without the marker/sentinel this test
+    // deliberately withholds). Asserting "zero delete-block actions" here
+    // would therefore pin an artifact of an incomplete payload, not the
+    // property this test exists to prove. What it does prove: the header
+    // survives as its own honest create-block (the gate did not strip it),
+    // and the real "Project Alpha" anchor it might have been mistaken for is
+    // never itself deleted or overwritten to make room for it.
+    const result = await dryRun('# Nested Page\n- Project Alpha\n');
+
+    const creates = result.actions.filter((a: { action: string }) => a.action === 'create-block');
+    expect(
+      creates.map((a: { block: { string: string } }) => a.block.string),
+      `expected the header line to survive as a stray block: ${JSON.stringify(result.actions, null, 2)}`
+    ).toContain('Nested Page');
+
+    const deletes = result.actions.filter((a: { action: string }) => a.action === 'delete-block');
+    expect(
+      deletes.map((a: { block: { uid: string } }) => a.block.uid),
+      `the header must never consume or delete the real "Project Alpha" anchor block: ${JSON.stringify(result.actions, null, 2)}`
+    ).not.toContain('nst000001');
+  });
 });
