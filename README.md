@@ -183,6 +183,14 @@ This is distinct from `CUSTOM_INSTRUCTIONS_PATH`, and the two compose:
 
 If the page doesn't exist, the tool returns `exists: false` rather than failing, so it is always safe to call.
 
+### It also returns the rules that aren't yours to set
+
+Alongside your conventions, every `roam_get_guidelines` response carries a `roamSyntax` field: the short list of things that *destroy* content — `roam_update_page_markdown` deleting every block your markdown omits, truncated `structure` previews written back as if they were content, block references retyped as plain text — plus a caution that reads silently exclude `#.rm-hide` subtrees, and the handful of places Roam's markdown inverts standard markdown.
+
+Two reasons it rides here rather than in the cheatsheet. It reaches **every** client, including one that never calls `roam_markdown_cheatsheet`; and it is returned even when a graph has **no** guidelines page, which is exactly the case where an agent has least context. The layering is deliberate: **your conventions win on style, `roamSyntax` wins on data safety.** No convention can make a truncated preview complete.
+
+The full syntax reference — components, queries, embeds, tool selection — stays in `roam_markdown_cheatsheet`. `roamSyntax` is ~800 tokens and deliberately capped.
+
 Each graph can point at a different page, or turn it off:
 
 ```bash
@@ -209,6 +217,8 @@ Blocks tagged `#.rm-hide` or `#.rm-private` — and everything nested under them
 This follows the same convention as Roam's official MCP server, so a block tagged for one is hidden from the other.
 
 Applied to: `roam_fetch_page_by_title`, `roam_fetch_block`, `roam_fetch_page_full_view`, `roam_get_subpages`, `roam_search_by_text`, `roam_search_for_tag`, `roam_search_by_status`, `roam_search_block_refs`, `roam_search_hierarchy`, `roam_search_by_date`.
+
+**Hidden blocks are also excluded from the page-rewrite diff**, which is what stops them being *deleted* for being absent from markdown the agent could not have written. `roam_update_page_markdown` (and `roam save --update`) replaces a page with what you give it, deleting whatever your markdown omits — so its baseline is pruned by this same filter, on the rule that **the baseline a diff deletes from must be the same page the caller was allowed to read.** It reports `preserved_hidden` when it protected anything. Content is preserved; exact ordering relative to visible siblings may shift. This was a real data-loss bug before the fix — see the [changelog](CHANGELOG.md).
 
 **This is a convenience filter, not a security guarantee.** `roam_datomic_query` reads the database directly and deliberately does **not** apply it, so a capable agent can still surface hidden blocks through raw Datalog. Treat these tags as "keep it out of the AI's way," not "keep it secret."
 

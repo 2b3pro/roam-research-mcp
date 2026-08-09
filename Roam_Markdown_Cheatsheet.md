@@ -1,4 +1,4 @@
-# Roam Markdown Cheatsheet v2.3.0
+# Roam Markdown Cheatsheet v2.4.0
 
 ## Core Syntax
 
@@ -31,6 +31,23 @@ Always ordinal format: `[[January 1st, 2025]]`, `[[December 23rd, 2024]]`
 ### Tasks
 - Todo: `{{[[TODO]]}} task`
 - Done: `{{[[DONE]]}} task`
+
+### Callouts
+Styled blockquotes with an icon and colour. Two page refs open the block: `[[>]]` marks it a callout, `[[!TYPE]]` picks the style.
+
+```
+[[>]] [[!TIP]] Title text
+Body on the next line
+```
+
+The body is a **soft line break inside the same block** (Shift+Enter in the UI, `\n` in the block string) — not a child block. A child block renders as a nested bullet inside the callout instead, which is usually not what you want.
+
+Types: `NOTE` `INFO` `SUMMARY` `TIP` `SUCCESS` `QUESTION` `WARNING` `FAILURE` `DANGER` `BUG` `EXAMPLE` `QUOTE`
+
+Append `+` or `-` to make it foldable — `[[!TIP]]+` starts expanded, `[[!TIP]]-` starts collapsed.
+
+⚠️ `[[>]]` and `[[!TIP]]` are real page references, so every callout backlinks to those pages. That is normal and how the feature works — don't "clean it up."
+⚠️ A plain `> quote` is an ordinary blockquote, not a callout. The two are unrelated.
 
 ### Attributes
 ```
@@ -67,7 +84,31 @@ const x = 1;
 {{[[query]]: {or: [[A]] [[B]]}}}
 {{[[query]]: {not: [[exclude]]}}}
 {{[[query]]: {between: [[January 1st, 2025]] [[January 31st, 2025]]}}}
+{{[[query]]: {and: [[Project]] {search: mobile}}}}
 ```
+
+Clauses nest: `{and: [[Project]] {not: [[DONE]]}}`.
+
+**Queries match REFERENCES, not text.** Operands must be `[[Page]]` or `((block-uid))` — bare or quoted words do not match. `{and: TODO}` and `{and: "project alpha"}` both find nothing; write `{and: [[TODO]]}` and `{and: [[project alpha]]}`. For free text use `roam_search_by_text`, or a `{search:}` clause.
+
+**`{search:}` only works nested inside `{and:}` or `{or:}`** — never on its own, and it is the one clause that takes plain text rather than a reference.
+
+**`{between:}` only works on Daily Notes pages.** It filters by the daily page a block lives on, so it does nothing for content on ordinary pages. It accepts shorthands: `[[today]]`, `[[yesterday]]`, `[[last week]]`, `[[next month]]`.
+
+Also available: `{created-by: [[User]]}`, `{edited-by: [[User]]}`, `{by: [[User]]}`.
+
+#### Page-ref inheritance — the non-obvious one
+**A block inherits its parent's page refs for query matching.** So this TODO matches `{and: [[TODO]] [[Project Alpha]]}` even though it contains no reference to Project Alpha:
+
+```
+- Notes on [[Project Alpha]]
+    - {{[[TODO]]}} Ship the thing
+```
+
+Three consequences:
+- **Don't tag every child with the parent's ref** — it is already inherited, and the duplication just clutters the backlinks.
+- **Do tag a child explicitly** if you want it to match *independently* of where it sits. Move it later and inherited matching goes with the old parent.
+- **Reading results:** a returned block may not visibly contain the thing you queried for. The matching ref can be on an ancestor. Don't report the result as wrong, and don't "fix" the block by adding the tag.
 
 ### Calculator
 `{{[[calc]]: 2 + 2}}`
@@ -170,6 +211,11 @@ Theme via CSS: `:root { --mermaidjs-theme: dark; }` (in `roam/css`)
 | `- *bullet` | `- bullet` |
 | `* bullet` | `- bullet` |
 | `**Attr**:: val` | `Attr:: val` |
+| `{and: TODO}` | `{and: [[TODO]]}` (queries match refs, not words) |
+| `{and: "project alpha"}` | `{and: [[project alpha]]}` |
+| `{{[[query]]: {search: text}}}` | `{{[[query]]: {and: {search: text}}}}` (never standalone) |
+| `> [[!TIP]] Title` | `[[>]] [[!TIP]] Title` |
+| callout body as a child block | body as `\n` in the same block |
 
 ## Tool Selection
 

@@ -8,7 +8,12 @@ vi.mock('./pages.js', () => ({
   PageOperations: vi.fn().mockImplementation(() => ({ getPageUid, fetchPageByTitle })),
 }));
 
-import { GuidelinesOperations, DEFAULT_GUIDELINES_PAGE } from './guidelines.js';
+import {
+  GuidelinesOperations,
+  DEFAULT_GUIDELINES_PAGE,
+  type GuidelinesResult,
+} from './guidelines.js';
+import { ROAM_SYNTAX } from '../roam-syntax.js';
 
 /** A fresh Graph object per test — the cache is keyed by graph identity. */
 const newGraph = () => ({}) as Graph;
@@ -78,6 +83,44 @@ describe('GuidelinesOperations', () => {
     expect(res.exists).toBe(false);
     expect(res.guidelines).toBeNull();
     expect(res.nextSteps).toMatch(/network down/);
+  });
+
+  it('carries the safety rules down every path, conventions or not', async () => {
+    // The rules are the server's, not the user's, so no branch may drop them:
+    // a graph with no guidelines page, or one that failed to read, is exactly
+    // where an agent has least context and most needs them. Table-driven so a
+    // new branch without them shows up as a missing case, not a silent gap.
+    const paths: [string, () => Promise<GuidelinesResult>][] = [
+      [
+        'page exists',
+        () => {
+          getPageUid.mockResolvedValue('abc123456');
+          fetchPageByTitle.mockResolvedValue('rules');
+          return new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
+        },
+      ],
+      [
+        'no page created',
+        () => {
+          getPageUid.mockResolvedValue(null);
+          return new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
+        },
+      ],
+      ['disabled for this graph', () => new GuidelinesOperations(newGraph(), null).getGuidelines()],
+      [
+        'lookup failed',
+        () => {
+          getPageUid.mockRejectedValue(new Error('network down'));
+          return new GuidelinesOperations(newGraph(), DEFAULT_GUIDELINES_PAGE).getGuidelines();
+        },
+      ],
+    ];
+
+    for (const [label, run] of paths) {
+      vi.clearAllMocks();
+      const res = await run();
+      expect(res.roamSyntax, label).toBe(ROAM_SYNTAX);
+    }
   });
 
   it('always reports today in Roam ordinal date format', async () => {

@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   parseExistingBlock,
   parseExistingBlocks,
+  pruneHiddenExistingBlocks,
+  countHiddenExistingBlocks,
   flattenExistingBlocks,
   markdownToBlocks,
   getBlockDepth,
 } from './parser.js';
-import type { RoamApiBlock } from './types.js';
+import type { ExistingBlock, RoamApiBlock } from './types.js';
 
 describe('parseExistingBlock', () => {
   it('parses a simple block', () => {
@@ -121,6 +123,124 @@ describe('parseExistingBlocks', () => {
     const blocks = parseExistingBlocks(pageData);
 
     expect(blocks).toEqual([]);
+  });
+});
+
+describe('pruneHiddenExistingBlocks', () => {
+  /** Terse ExistingBlock builder — only text and children matter here. */
+  const block = (uid: string, text: string, children: ExistingBlock[] = []): ExistingBlock => ({
+    uid,
+    text,
+    order: 0,
+    heading: null,
+    children,
+    parentUid: null,
+  });
+
+  const uidsOf = (blocks: ExistingBlock[]): string[] =>
+    flattenExistingBlocks(blocks).map((b) => b.uid);
+
+  it('drops a hidden block together with its whole subtree', () => {
+    // The subtree matters: a visible child of a hidden parent is still content
+    // the caller never saw, so it is equally undeletable.
+    const tree = [
+      block('keep00001', 'visible'),
+      block('hide00001', 'secret #.rm-hide', [
+        block('hidekid01', 'this child is not itself tagged', [
+          block('hidekid02', 'nor is this grandchild'),
+        ]),
+      ]),
+      block('keep00002', 'visible too'),
+    ];
+
+    expect(uidsOf(pruneHiddenExistingBlocks(tree))).toEqual(['keep00001', 'keep00002']);
+  });
+
+  it('drops a hidden child while keeping its visible parent', () => {
+    const tree = [
+      block('keep00001', 'a visible parent', [
+        block('keep00002', 'a visible child'),
+        block('hide00001', 'a hidden child [[.rm-private]]'),
+      ]),
+    ];
+
+    expect(uidsOf(pruneHiddenExistingBlocks(tree))).toEqual(['keep00001', 'keep00002']);
+  });
+
+  it('keeps tags that merely start like a hide tag', () => {
+    // Over-hiding is the safe direction for a privacy filter but the wrong
+    // direction here: pruning too much means the diff deletes too much.
+    const tree = [
+      block('keep00001', 'near miss #.rm-hidden'),
+      block('keep00002', 'other near miss #.rm-highlight'),
+    ];
+
+    expect(uidsOf(pruneHiddenExistingBlocks(tree))).toEqual(['keep00001', 'keep00002']);
+  });
+
+  it('returns new arrays rather than mutating the baseline', () => {
+    // The caller still holds the unpruned tree to count from.
+    const tree = [block('keep00001', 'visible', [block('hide00001', 'x #.rm-hide')])];
+    const pruned = pruneHiddenExistingBlocks(tree);
+
+    expect(tree[0].children).toHaveLength(1);
+    expect(pruned[0].children).toHaveLength(0);
+    expect(pruned[0]).not.toBe(tree[0]);
+  });
+
+  it('leaves a tree with nothing hidden untouched', () => {
+    const tree = [block('keep00001', 'visible', [block('keep00002', 'also visible')])];
+    expect(uidsOf(pruneHiddenExistingBlocks(tree))).toEqual(['keep00001', 'keep00002']);
+  });
+});
+
+describe('countHiddenExistingBlocks', () => {
+  const block = (uid: string, text: string, children: ExistingBlock[] = []): ExistingBlock => ({
+    uid,
+    text,
+    order: 0,
+    heading: null,
+    children,
+    parentUid: null,
+  });
+
+  it('counts a hidden block and every descendant it protects', () => {
+    const tree = [
+      block('keep00001', 'visible'),
+      block('hide00001', 'secret #.rm-hide', [
+        block('hidekid01', 'child', [block('hidekid02', 'grandchild')]),
+      ]),
+    ];
+
+    expect(countHiddenExistingBlocks(tree)).toBe(3);
+  });
+
+  it('finds hidden blocks nested under visible ones', () => {
+    const tree = [
+      block('keep00001', 'visible', [
+        block('keep00002', 'visible', [block('hide00001', 'deep secret #.rm-private')]),
+      ]),
+    ];
+
+    expect(countHiddenExistingBlocks(tree)).toBe(1);
+  });
+
+  it('agrees with what pruning actually removes', () => {
+    // The count is reported to the caller as `preserved_hidden`; a count that
+    // disagreed with the pruning would be a lie in the tool's own summary.
+    const tree = [
+      block('keep00001', 'visible'),
+      block('hide00001', 'a #.rm-hide', [block('hidekid01', 'b')]),
+      block('keep00002', 'visible', [block('hide00002', 'c [[.rm-private]]')]),
+    ];
+
+    const before = flattenExistingBlocks(tree).length;
+    const after = flattenExistingBlocks(pruneHiddenExistingBlocks(tree)).length;
+    expect(before - after).toBe(countHiddenExistingBlocks(tree));
+  });
+
+  it('is zero when nothing is tagged', () => {
+    expect(countHiddenExistingBlocks([block('keep00001', 'visible')])).toBe(0);
   });
 });
 
