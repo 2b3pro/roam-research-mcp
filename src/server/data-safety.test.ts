@@ -296,4 +296,13 @@ describe('markdown render escapes newlines for the round trip', () => {
     const result = JSON.parse(McpHarness.text(await harness.call('roam_get_guidelines')));
     expect(result.guidelines).not.toContain('\\\\');
   });
+
+  it('uses the same encoding in the full-page view', async () => {
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_full_view', { title: 'Test Page' })
+    );
+
+    expect(text).toContain('Soft break one\\nSoft break two');
+    expect(text).not.toMatch(/^Soft break two/m);
+  });
 });

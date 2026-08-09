@@ -4,6 +4,7 @@ import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import { collectHiddenUids, pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
+import { escapeBlockString } from '../../shared/block-escaping.js';
 import type { RoamBlock } from '../types/index.js';
 import type { PageOperations } from './pages.js';
 
@@ -348,12 +349,15 @@ export class FullPageViewOperations {
   private renderBlocks(blocks: RoamBlock[], baseIndent: number): string {
     const renderBlock = (block: RoamBlock, depth: number): string => {
       const indent = '  '.repeat(depth);
+      // Unconditional here: this tool has no prose-display caller, unlike
+      // fetchPageByTitle, whose guidelines path must stay unescaped.
+      const text = escapeBlockString(block.string);
       let line: string;
       if (block.heading && block.heading > 0) {
         const hashes = '#'.repeat(block.heading);
-        line = `${indent}${hashes} ${block.string}`;
+        line = `${indent}${hashes} ${text}`;
       } else {
-        line = `${indent}- ${block.string}`;
+        line = `${indent}- ${text}`;
       }
       const childLines = block.children.map(c => renderBlock(c, depth + 1)).join('\n');
       return childLines ? `${line}\n${childLines}` : line;
