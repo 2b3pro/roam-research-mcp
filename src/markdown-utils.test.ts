@@ -353,51 +353,6 @@ And this--too`;
   });
 });
 
-describe('soft line breaks in parsed markdown', () => {
-  it('decodes an escaped newline into one block with a real newline', () => {
-    const nodes = parseMarkdown('- one\\ntwo');
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].content).toBe('one\ntwo');
-  });
-
-  it('keeps a literal backslash-n written as a double escape', () => {
-    const nodes = parseMarkdown('- console.log("a\\\\nb")');
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].content).toBe('console.log("a\\nb")');
-  });
-
-  it('preserves hierarchy around a soft-break block', () => {
-    // The whole point. Content AFTER the multi-line block is what gets
-    // reparented when this is broken.
-    const md = [
-      '- Parent',
-      '  - one\\ntwo',
-      '    - grandchild',
-      '  - sibling',
-    ].join('\n');
-
-    const nodes = parseMarkdown(md);
-
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].content).toBe('Parent');
-    expect(nodes[0].children).toHaveLength(2);
-    expect(nodes[0].children[0].content).toBe('one\ntwo');
-    expect(nodes[0].children[0].children[0].content).toBe('grandchild');
-    expect(nodes[0].children[1].content).toBe('sibling');
-  });
-
-  it('does NOT unescape inside a hand-written fenced code block', () => {
-    // A genuine multi-line fence already holds literal text. Decoding there
-    // would turn source code containing \n into a real newline.
-    const md = ['```javascript', 'console.log("a\\nb");', '```'].join('\n');
-    const nodes = parseMarkdown(md);
-
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].content).toContain('console.log("a\\nb");');
-    expect(nodes[0].content).not.toContain('console.log("a\nb");');
-  });
-});
-
 describe('C1: a fence mentioned inside a block does not open a region', () => {
   it('keeps every block when one block merely contains a fence', () => {
     const md = [
@@ -434,5 +389,22 @@ describe('C1: a fence mentioned inside a block does not open a region', () => {
     const nodes = parseMarkdown(md);
     expect(nodes).toHaveLength(2);
     expect(nodes[1].content).toBe('after');
+  });
+});
+
+describe('C2: ordinary backslash content is never decoded', () => {
+  // `\n` is not a rare literal — it is a common PREFIX, and LaTeX generates
+  // it systematically. Decoding it unconditionally corrupted all of these.
+  it.each([
+    ['$$\\nabla f$$', 'LaTeX gradient'],
+    ['C:\\newdir\\notes', 'Windows path'],
+    ['a \\neq b', 'LaTeX not-equal'],
+    ['\\nu and \\newline', 'more LaTeX'],
+    ['matches \\name here', 'regex-ish'],
+  ])('leaves %s untouched (%s)', (input) => {
+    const nodes = parseMarkdown(`- ${input}`);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].content).toBe(input);
+    expect(nodes[0].content).not.toContain('\n');
   });
 });

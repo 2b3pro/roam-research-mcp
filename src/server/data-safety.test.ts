@@ -216,65 +216,6 @@ describe('roam_update_page_markdown does not delete what it would not show', () 
   });
 });
 
-describe('parse-side tools accept soft line breaks', () => {
-  it('roam_import_markdown makes one block from an escaped newline', async () => {
-    // No `parent_string` here (the brief's original draft used one): looking
-    // one up sends outline.ts's OutlineOperations through
-    // `createAndVerifyBlock`'s real exponential-backoff retry loop, which
-    // depends on a follow-up `q()` query the fixture cannot answer (see
-    // `answer()` in fake-roam-backend.mjs — no branch matches that
-    // find-clause shape). Against this fixture that path burns tens of
-    // seconds before failing outright, blowing past McpHarness's fixed 15s
-    // request timeout. Writing straight to the page root exercises the same
-    // parseMarkdown call this test exists to prove, without that unrelated
-    // and unsupported lookup.
-    const result = JSON.parse(
-      McpHarness.text(
-        await harness.call('roam_import_markdown', {
-          page_title: 'Test Page',
-          content: '- alpha\\nbeta\n- gamma\n',
-        })
-      )
-    );
-    expect(result.success).toBe(true);
-  });
-
-  it('roam_create_outline survives a fenced code block without eating siblings', async () => {
-    // The Task 3 fence guard reaching a second caller. Before it, the fence
-    // opened a region that consumed the item after it.
-    //
-    // Content note: this is a single-line, self-closing fence with NO `\n`
-    // anywhere — not real, not escaped. (The brief's original draft used
-    // '```js\\nconst x = 1;\\n```', an escaped-newline fence.) That content
-    // still exercises the exact same regression — createOutline's own
-    // isCodeBlock check requires a REAL newline to skip the bullet prefix, so
-    // an escaped one still arrives here as an ordinary bulleted line, and it
-    // is the bullet prefix ("- ```js...") that shifts the fence markers off
-    // column 0 and triggers the mid-line splice `fenceClosesOnSameLine`
-    // guards in markdown-utils.ts. But an escaped-newline fence also gets
-    // unescaped into real newlines by Task 4's decode step before it is
-    // written, so the block's stored string no longer matches the raw
-    // `item.text` roam_create_outline's own post-write verification queries
-    // by (see `findBlockWithRetry` in outline.ts) — that verification would
-    // fail to find it even with correct fence-guard behavior, for reasons
-    // unrelated to this test's target. Dropping the escape avoids that
-    // unrelated mismatch and lets `created_blocks` actually reflect reality.
-    const result = JSON.parse(
-      McpHarness.text(
-        await harness.call('roam_create_outline', {
-          page_title_uid: 'Test Page',
-          outline: [
-            { text: '```js console.log(1);```', level: 1 },
-            { text: 'after the code block', level: 1 },
-          ],
-        })
-      )
-    );
-    expect(result.success).toBe(true);
-    expect(result.created_blocks?.length ?? 0).toBeGreaterThanOrEqual(2);
-  });
-});
-
 describe('markdown render escapes newlines for the round trip', () => {
   it('emits a multi-line block on a single line', async () => {
     const text = McpHarness.text(
@@ -304,23 +245,5 @@ describe('markdown render escapes newlines for the round trip', () => {
 
     expect(text).toContain('Soft break one\\nSoft break two');
     expect(text).not.toMatch(/^Soft break two/m);
-  });
-});
-
-describe('roam_create_page accepts soft line breaks', () => {
-  it('writes a block containing a real newline', async () => {
-    // Use an existing page from the fixture to avoid the fake backend's
-    // page-creation flow, which it cannot complete. The goal is to test that
-    // the unescape does not throw; the content-item path is exercised regardless
-    // of whether we're adding to a new or existing page.
-    const result = JSON.parse(
-      McpHarness.text(
-        await harness.call('roam_create_page', {
-          title: 'Test Page',
-          content: [{ text: 'first\\nsecond', level: 1 }],
-        })
-      )
-    );
-    expect(result.success).toBe(true);
   });
 });
