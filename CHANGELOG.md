@@ -1,6 +1,6 @@
 # Changelog
 
-### v4.0.0 (2026-08-09)
+### v4.0.0 (2026-09-06)
 
 **In one line:** a block containing a soft line break (Shift+Enter) now survives `roam_update_page_markdown` — read a page, write it back, and nothing moves — via a `⏎` sentinel that never collides with content you author.
 
@@ -48,6 +48,52 @@
     would have caught this — `C3: renderer output submitted VERBATIM, header
     included, is a no-op` — is exactly the one Revision 2's tests skipped by
     stripping the header themselves before submitting it back.
+
+- **⚠️ Data loss: a page rewrite could delete every block on the page.** A
+  payload whose first block is a bare, unterminated fence opener (the
+  renderer's own shape for a block that starts with a fence, and a pasted
+  snippet's shape too) parsed to zero blocks for non-empty input. Diffing zero
+  new blocks against N existing ones silently queued N deletes.
+  - **The fix:** `roam_update_page_markdown` refuses the write, `dry_run`
+    included, when non-empty markdown parses to nothing and the page has
+    existing blocks. Genuinely empty markdown still clears a page, as
+    documented.
+
+- **⚠️ Data loss: a hand-authored H1 echoing the page title was deleted on
+  update.** The title-header strip, added so renderer output round-trips,
+  fired on text match alone with no check that the payload came from the
+  renderer. A page whose real first block is a genuine heading repeating its
+  own title, a plausible pattern for imported documents, lost that block on an
+  ordinary update with no marker anywhere.
+  - **The fix:** the strip is gated on provenance: the
+    `<!-- roam:escaped-newlines -->` marker, or a `⏎` sentinel in the body,
+    which survives even when an agent rebuilt the output and dropped the
+    marker. The two wrong calls are not symmetric. Keeping a header that
+    should have been stripped leaves a harmless visible stray; stripping one
+    that should have stayed destroys content with no undo. With no provenance
+    signal, the gate takes the harmless direction. A test pins the scenario.
+
+- **Linked references are encoded too.** `roam_fetch_page_full_view` never
+  escaped the block and breadcrumb strings of referring blocks, so a soft
+  line break in one spilled onto a bare physical line. The test fixture had
+  misrouted the referring-blocks query (it contains `:node/title`, so it fell
+  into the page-title branch), which is why no test could reach them. Both
+  fixed.
+
+- **Browser clients failed CORS preflight.** Since protocol revision
+  2025-06-18 a client MUST send `MCP-Protocol-Version` on every request after
+  initialization, and SSE resumption sends `Last-Event-ID`. Neither was in
+  `Access-Control-Allow-Headers`, so a browser-based client's preflight failed
+  and the real request was never issued, with nothing logged server-side.
+  Non-browser clients skip preflight, which is how it stayed invisible.
+  - **Verified against the prior state.** `src/server/cors-preflight.test.ts`
+    sends a real OPTIONS request to the built server and asserts every
+    required header is allowed; it fails on the old allowlist.
+
+- **The MCP SDK is pinned to 1.25.1.** The range `^1.13.2` resolved to
+  whatever 1.x npm served at install time, and only `build/` ships to npm, so
+  the lockfile never reached users. Pinned to the version the suite runs
+  against.
 
 ### v3.2.0 (2026-08-09)
 
