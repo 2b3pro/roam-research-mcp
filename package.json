@@ -45,7 +45,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.13.2",
+    "@modelcontextprotocol/sdk": "1.25.1",
     "@roam-research/roam-api-sdk": "^0.10.0",
     "commander": "^14.0.2",
     "dotenv": "^16.4.7"
