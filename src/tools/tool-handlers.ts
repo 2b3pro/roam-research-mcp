@@ -62,7 +62,9 @@ export class ToolHandlers {
   }
 
   async fetchPageByTitle(title: string, format?: 'markdown' | 'raw' | 'structure') {
-    return this.pageOps.fetchPageByTitle(title, format);
+    // The MCP read tool's markdown may be handed straight back to
+    // roam_update_page_markdown, so it must be round-trippable.
+    return this.pageOps.fetchPageByTitle(title, format, { escapeNewlines: true });
   }
 
   async fetchPageFullView(title: string, children_depth?: number, max_references?: number) {

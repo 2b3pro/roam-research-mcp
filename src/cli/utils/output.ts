@@ -1,5 +1,6 @@
 import type { RoamBlock } from '../../types/roam.js';
 import type { GroupedResults } from './sort-group.js';
+import { escapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
 
 export interface OutputOptions {
   json?: boolean;
@@ -8,28 +9,51 @@ export interface OutputOptions {
 }
 
 /**
- * Convert RoamBlock hierarchy to markdown with proper indentation
+ * Convert RoamBlock hierarchy to markdown with proper indentation.
+ *
+ * `escape` mirrors `PageOperations.fetchPageByTitle`'s markdown branch: a
+ * block may contain a soft line break (Shift+Enter), and this renderer emits
+ * one `- ` line per block, so an unescaped newline spills onto a second
+ * physical line with no bullet, resetting the parser's indentation baseline
+ * and reparenting everything after it. Callers that render a full page
+ * compute whether escaping is needed and set this flag; callers that never
+ * feed their output back through `updatePageMarkdown` can leave it off.
  */
-export function blocksToMarkdown(blocks: RoamBlock[], level: number = 0): string {
+export function blocksToMarkdown(blocks: RoamBlock[], level: number = 0, escape: boolean = false): string {
   return blocks
     .map(block => {
       const indent = '  '.repeat(level);
       let md: string;
+      const text = escape ? escapeBlockString(block.string) : block.string;
 
       // Check block heading level and format accordingly
       if (block.heading && block.heading > 0) {
         const hashtags = '#'.repeat(block.heading);
-        md = `${indent}${hashtags} ${block.string}`;
+        md = `${indent}${hashtags} ${text}`;
       } else {
-        md = `${indent}- ${block.string}`;
+        md = `${indent}- ${text}`;
       }
 
       if (block.children && block.children.length > 0) {
-        md += '\n' + blocksToMarkdown(block.children, level + 1);
+        md += '\n' + blocksToMarkdown(block.children, level + 1, escape);
       }
       return md;
     })
     .join('\n');
+}
+
+/**
+ * Collect every block string in a tree, for deciding whether a page needs
+ * newline escaping at all (see `blocksToMarkdown`).
+ */
+function collectBlockStrings(blocks: RoamBlock[], out: string[] = []): string[] {
+  for (const block of blocks) {
+    out.push(block.string);
+    if (block.children && block.children.length > 0) {
+      collectBlockStrings(block.children, out);
+    }
+  }
+  return out;
 }
 
 /**
@@ -59,7 +83,11 @@ export function formatPageOutput(
   }
 
   const displayBlocks = options.flat ? flattenBlocks(blocks) : blocks;
-  return `# ${title}\n\n${blocksToMarkdown(displayBlocks)}`;
+  const escape = needsNewlineEscaping(collectBlockStrings(displayBlocks));
+  const body = blocksToMarkdown(displayBlocks, 0, escape);
+  return escape
+    ? `# ${title}\n${ESCAPED_NEWLINES_MARKER}\n\n${body}`
+    : `# ${title}\n\n${body}`;
 }
 
 /**
@@ -75,7 +103,9 @@ export function formatBlockOutput(
   }
 
   const displayBlocks = options.flat ? flattenBlocks([block]) : [block];
-  return blocksToMarkdown(displayBlocks);
+  const escape = needsNewlineEscaping(collectBlockStrings(displayBlocks));
+  const body = blocksToMarkdown(displayBlocks, 0, escape);
+  return escape ? `${ESCAPED_NEWLINES_MARKER}\n\n${body}` : body;
 }
 
 /**

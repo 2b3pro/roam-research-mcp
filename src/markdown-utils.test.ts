@@ -317,6 +317,44 @@ And this--too`;
       expect(nested[2].children.map(c => c.content)).toEqual(['continue all']);
     });
   });
+
+  describe('self-contained code fences', () => {
+    it('does not swallow the blocks after a one-line fenced block', () => {
+      // A fence that opens AND closes on one line is content, not a region.
+      // Treating it as a region opens a fence that never closes, and every
+      // following line is consumed as code. The embedded newlines are written
+      // as the current renderer's `⏎` sentinel (shared/block-escaping.ts),
+      // not the dead design's literal-backslash-n wire shape from an earlier
+      // revision -- what this pins is unchanged either way: a self-contained
+      // fence line does not open a multi-line region.
+      const md = [
+        '- ```javascript⏎const x = 1;⏎```',
+        '- A block AFTER the code block',
+        '- And another',
+      ].join('\n');
+
+      const nodes = parseMarkdown(md);
+
+      expect(nodes).toHaveLength(3);
+      expect(nodes[2].content).toBe('And another');
+    });
+
+    it('stops emitting an empty block for the bullet before a fence', () => {
+      const nodes = parseMarkdown('- ```js\\ncode\\n```');
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].content).not.toBe('-');
+    });
+
+    it('still gathers a genuine multi-line fence into one node', () => {
+      // The hand-written case the fence machinery exists for. Unchanged.
+      const md = ['```javascript', 'const x = 1;', '```', '- after'].join('\n');
+      const nodes = parseMarkdown(md);
+
+      expect(nodes).toHaveLength(2);
+      expect(nodes[0].content).toContain('const x = 1;');
+      expect(nodes[1].content).toBe('after');
+    });
+  });
 });
 
 describe('C1: a fence mentioned inside a block does not open a region', () => {
@@ -355,5 +393,22 @@ describe('C1: a fence mentioned inside a block does not open a region', () => {
     const nodes = parseMarkdown(md);
     expect(nodes).toHaveLength(2);
     expect(nodes[1].content).toBe('after');
+  });
+});
+
+describe('C2: ordinary backslash content is never decoded', () => {
+  // `\n` is not a rare literal — it is a common PREFIX, and LaTeX generates
+  // it systematically. Decoding it unconditionally corrupted all of these.
+  it.each([
+    ['$$\\nabla f$$', 'LaTeX gradient'],
+    ['C:\\newdir\\notes', 'Windows path'],
+    ['a \\neq b', 'LaTeX not-equal'],
+    ['\\nu and \\newline', 'more LaTeX'],
+    ['matches \\name here', 'regex-ish'],
+  ])('leaves %s untouched (%s)', (input) => {
+    const nodes = parseMarkdown(`- ${input}`);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].content).toBe(input);
+    expect(nodes[0].content).not.toContain('\n');
   });
 });

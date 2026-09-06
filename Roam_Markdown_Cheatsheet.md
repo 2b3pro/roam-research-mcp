@@ -1,4 +1,4 @@
-# Roam Markdown Cheatsheet v2.4.0
+# Roam Markdown Cheatsheet v2.7.0
 
 ## Core Syntax
 
@@ -49,18 +49,30 @@ Append `+` or `-` to make it foldable — `[[!TIP]]+` starts expanded, `[[!TIP]]
 ⚠️ `[[>]]` and `[[!TIP]]` are real page references, so every callout backlinks to those pages. That is normal and how the feature works — don't "clean it up."
 ⚠️ A plain `> quote` is an ordinary blockquote, not a callout. The two are unrelated.
 
-### ⚠️ Multi-line blocks and page rewrites
+### Soft line breaks
 
-A block can hold a **soft line break** (Shift+Enter, stored as `\n` in the block
-string). Callout bodies require one; fenced code blocks are full of them.
+A block can hold more than one line — a **soft line break** (Shift+Enter in the
+UI). It stays *one* block, which is what callout bodies and fenced code blocks
+rely on.
 
-**Do not run `roam_update_page_markdown` — or `roam save --update` — on a page
-containing a callout, a fenced code block, or any Shift+Enter line break.** It
-will split those blocks and **flatten the hierarchy of everything after them**,
-reparenting blocks under the wrong ancestors.
+**You cannot write one through the markdown tools.** `roam_create_page`,
+`roam_import_markdown`, `roam_create_outline` and `roam_update_page_markdown`
+all treat a line break as a block break. Use `roam_process_batch_actions`, which
+writes block strings literally — put a real newline in the `string`.
 
-Use `roam_process_batch_actions` for those pages. It writes block strings
-literally, and is currently the only way to create a soft line break at all.
+The one exception: inside a payload carrying the `<!-- roam:escaped-newlines -->`
+marker (below), a `⏎` decodes to a real soft line break on write. So keeping —
+or adding — a `⏎` in a marker-carrying payload handed to
+`roam_update_page_markdown` *is* the one markdown-tools path that writes one.
+Without the marker, `⏎` is just the character; it does not decode.
+
+⚠️ Reads render a soft line break as `⏎` so the block stays on one line, and a
+payload containing any is marked with a leading `<!-- roam:escaped-newlines -->`
+comment. If you edit that markdown and pass it back to
+`roam_update_page_markdown`, **keep the marker line** — it is what tells the
+server `⏎` means a line break there. Content you add yourself is safe either
+way: backslashes are never special, and `$$\nabla f$$` or `C:\newdir` are
+written exactly as typed.
 
 ### Attributes
 ```

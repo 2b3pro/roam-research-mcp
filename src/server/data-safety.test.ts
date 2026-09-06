@@ -215,3 +215,92 @@ describe('roam_update_page_markdown does not delete what it would not show', () 
     expect(result.summary).not.toMatch(/hidden/i);
   });
 });
+
+describe('markdown render escapes newlines for the round trip', () => {
+  it('emits a multi-line block on a single line', async () => {
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', {
+        title: 'Test Page',
+        format: 'markdown',
+      })
+    );
+
+    // The fixture's multi-line block must not spill onto a second physical
+    // line — that spill is what resets the indentation baseline.
+    expect(text).toContain('Soft break one⏎Soft break two');
+    expect(text).not.toMatch(/^Soft break two/m);
+  });
+
+  it('leaves guidelines prose untouched: raw backslash, no marker, no sentinel games', async () => {
+    // Review #2 found the old version of this test could not fail: the
+    // fixture had no backslash to double. Now it does.
+    const result = JSON.parse(McpHarness.text(await harness.call('roam_get_guidelines')));
+    expect(result.guidelines).toContain('C:\\newdir stays as typed');
+    expect(result.guidelines).not.toContain('<!-- roam:escaped-newlines -->');
+  });
+
+  it('renders multi-line blocks on one line in the full view, with NO marker', async () => {
+    // This output is never valid update_page_markdown input (breadcrumbs,
+    // reference sections) and nothing decodes it. A marker that can never be
+    // honoured is noise that invites an agent to trust the wrong payload.
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_full_view', { title: 'Test Page' })
+    );
+
+    expect(text).toContain('Soft break one⏎Soft break two');
+    expect(text).not.toMatch(/^Soft break two/m);
+    expect(text).not.toContain('<!-- roam:escaped-newlines -->');
+  });
+});
+
+describe('full page view escapes linked-reference block strings', () => {
+  it('shows the referring block text with ⏎, not spilled onto a second line, not undefined', async () => {
+    // Fixture: `linkref01` on "Test Page" references "Nested Page" and
+    // carries a real embedded newline (tests/fake-roam-backend.mjs). Before
+    // this fixture had a properly-dispatched branch, the referring-blocks
+    // query misrouted into the page-title-lookup branch and every linked
+    // reference rendered as the literal string "undefined".
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_full_view', { title: 'Nested Page' })
+    );
+
+    expect(text).not.toContain('undefined');
+    expect(text).toContain('See [[Nested Page]] for the plan⏎and a second line');
+    expect(text).not.toMatch(/^and a second line/m);
+  });
+});
+
+describe('escaping is conditional and self-identifying', () => {
+  it('marks and escapes a page that has a multi-line block', async () => {
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', {
+        title: 'Test Page',
+        format: 'markdown',
+      })
+    );
+
+    expect(text).toContain('<!-- roam:escaped-newlines -->');
+    expect(text).toContain('Soft break one⏎Soft break two');
+    expect(text).not.toMatch(/^Soft break two/m);
+  });
+
+  it('leaves a page with no multi-line block completely alone', async () => {
+    // No marker, no escaping — byte-identical to pre-Revision-1 output. The
+    // guidelines fixture page holds one ordinary block.
+    const text = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', {
+        title: 'roam/agent guidelines',
+        format: 'markdown',
+      })
+    );
+
+    expect(text).not.toContain('<!-- roam:escaped-newlines -->');
+    // Was `expect(text).not.toContain('\\\\')` -- an assertion that can no
+    // longer fail once backslash-doubling was deleted (nothing in this
+    // renderer ever doubles a backslash any more, escaping or not). Assert on
+    // something that CAN fail instead: the fixture's literal single backslash
+    // (`gblock002` in tests/fake-roam-backend.mjs: "Paths like C:\newdir
+    // stays as typed") must reach the caller unchanged, byte-for-byte.
+    expect(text).toContain('Paths like C:\\newdir stays as typed');
+  });
+});

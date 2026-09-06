@@ -13,6 +13,7 @@ import {
   generateBlockUid
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
+import { escapeBlockString, unescapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER, SOFT_BREAK_SENTINEL } from '../../shared/block-escaping.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
@@ -20,6 +21,7 @@ import {
   parseExistingBlocks,
   pruneHiddenExistingBlocks,
   countHiddenExistingBlocks,
+  flattenExistingBlocks,
   markdownToBlocks,
   diffBlockTrees,
   generateBatchActions,
@@ -536,7 +538,17 @@ export class PageOperations {
 
   async fetchPageByTitle(
     title: string,
-    format: 'markdown' | 'raw' | 'structure' = 'raw'
+    format: 'markdown' | 'raw' | 'structure' = 'raw',
+    /**
+     * Encode newlines so each block is one line (`shared/block-escaping.ts`).
+     * Required by anything whose output may be fed back to
+     * `roam_update_page_markdown`; wrong for anything shown as prose.
+     *
+     * Defaults to OFF so a caller that has not considered this renders today's
+     * output rather than silently acquiring doubled backslashes. `guidelines.ts`
+     * relies on that default.
+     */
+    options: { escapeNewlines?: boolean } = {}
   ): Promise<string> {
     if (!title) {
       throw new McpError(ErrorCode.InvalidRequest, 'title is required');
@@ -754,6 +766,20 @@ export class PageOperations {
       b.string = await resolveRefs(this.graph, b.string);
     }));
 
+    // Collect every visible block string to decide whether this page needs the
+    // encoding at all. A page with no soft line break renders exactly as it
+    // did before this feature existed.
+    const allStrings: string[] = [];
+    const collectStrings = (blocks: RoamBlock[]): void => {
+      for (const b of blocks) {
+        allStrings.push(b.string);
+        collectStrings(b.children);
+      }
+    };
+    collectStrings(visibleRoots);
+
+    const escaping = options.escapeNewlines === true && needsNewlineEscaping(allStrings);
+
     // Convert to markdown with proper nesting
     const toMarkdown = (blocks: RoamBlock[], level: number = 0): string => {
       return blocks
@@ -761,14 +787,18 @@ export class PageOperations {
           const indent = '  '.repeat(level);
           let md: string;
 
+          const text = escaping
+            ? escapeBlockString(block.string)
+            : block.string;
+
           // Check block heading level and format accordingly
           if (block.heading && block.heading > 0) {
             // Format as heading with appropriate number of hashtags
             const hashtags = '#'.repeat(block.heading);
-            md = `${indent}${hashtags} ${block.string}`;
+            md = `${indent}${hashtags} ${text}`;
           } else {
             // No heading, use bullet point (current behavior)
-            md = `${indent}- ${block.string}`;
+            md = `${indent}- ${text}`;
           }
 
           if (block.children.length > 0) {
@@ -779,7 +809,10 @@ export class PageOperations {
         .join('\n');
     };
 
-    return `# ${title}\n\n${toMarkdown(visibleRoots)}`;
+    const body = toMarkdown(visibleRoots);
+    return escaping
+      ? `# ${title}\n${ESCAPED_NEWLINES_MARKER}\n\n${body}`
+      : `# ${title}\n\n${body}`;
   }
 
   /**
@@ -858,7 +891,114 @@ export class PageOperations {
     const existingBlocks = pruneHiddenExistingBlocks(allExistingBlocks);
 
     // 4. Convert new markdown to block structure
-    const newBlocks = markdownToBlocks(markdown, pageUid);
+    //
+    // Decode ONLY when our own renderer said it encoded. The marker may be
+    // the first non-empty line (header stripped by the caller) or the first
+    // non-empty line after a single leading `#` header (payload submitted
+    // verbatim — the path `roam save --update` takes). Revision 2 checked
+    // only the first line; a verbatim submit therefore never decoded, wrote
+    // the marker as a block, and deleted the blocks it rewrote. The tests
+    // that should have caught it stripped the header themselves.
+    const lines = markdown.split('\n');
+    let markerAt = -1;
+    let nonEmptySeen = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const t = lines[i].trim();
+      if (t.length === 0) continue;
+      nonEmptySeen++;
+      if (t === ESCAPED_NEWLINES_MARKER) {
+        markerAt = i;
+        break;
+      }
+      // A single leading header line may precede the marker; anything else
+      // (or a second line that is not the marker) means an unmarked payload.
+      if (nonEmptySeen === 1 && t.startsWith('#')) continue;
+      break;
+    }
+    const isEscaped = markerAt !== -1;
+
+    // `fetchPageByTitle`'s markdown branch always prepends `# ${title}\n` --
+    // it is page-level metadata describing what page this is, never content.
+    // Tolerating the marker after that header (above) is not enough on its
+    // own: a verbatim round trip still hands that literal `# Title` line to
+    // the parser, which turns it into a real heading block with no match in
+    // the existing tree, so the diff creates it and reparents every sibling
+    // after it -- exactly the "no-op round trip" this marker exists to
+    // guarantee. Strip it whenever the first non-empty line matches this
+    // page's own title exactly -- but ONLY when the payload demonstrably came
+    // from our own renderer (`isEscaped`, or the body still carries the
+    // `⏎` sentinel -- the signature of a marker-dropped degradation, since
+    // that scenario is "an agent rebuilt our output and lost the marker" and
+    // the sentinel is what that rebuilding could not have removed). A FRESH,
+    // hand-authored page can legitimately open with an H1 that echoes its own
+    // title (imported docs; an author who titles their own first line) --
+    // essentially never with `⏎` in it. The two wrong calls are not
+    // symmetric: preserving the header when it should have been stripped
+    // creates a harmless, visible stray block; stripping it when it should
+    // not have been touched deletes -- or reparents into corruption -- real,
+    // unrecoverable content, with no undo. The gate always takes the harmless
+    // direction whenever the payload carries no provenance signal.
+    const trimmedTitle = String(title).trim();
+    const firstNonEmptyAt = lines.findIndex((l) => l.trim().length > 0);
+    const hasRendererProvenance = isEscaped || markdown.includes(SOFT_BREAK_SENTINEL);
+    const titleHeaderAt =
+      hasRendererProvenance &&
+      firstNonEmptyAt !== -1 &&
+      lines[firstNonEmptyAt].trim() === `# ${trimmedTitle}`
+        ? firstNonEmptyAt
+        : -1;
+
+    let effectiveMarkdown = markdown;
+    const linesToStrip = [isEscaped ? markerAt : -1, titleHeaderAt]
+      .filter((i) => i !== -1)
+      .sort((a, b) => b - a);
+    if (linesToStrip.length > 0) {
+      // Strip the marker line itself, or it becomes a stray block on the
+      // page. Descending order so removing one index never shifts the other.
+      for (const idx of linesToStrip) lines.splice(idx, 1);
+      effectiveMarkdown = lines.join('\n');
+    }
+
+    // Decode AFTER parsing, per block -- never on the whole document before
+    // parsing. Decoding the document first would turn every `\n` into a real
+    // newline and then split on newlines, which is exactly the flattening
+    // bug this whole effort exists to fix.
+    const newBlocks = markdownToBlocks(effectiveMarkdown, pageUid);
+
+    // Submitting empty/whitespace markdown is the documented way to clear a
+    // page, and stays untouched below. This guards the DIFFERENT case: markdown
+    // that is NOT empty but still parsed to zero blocks. That only happens when
+    // the parser swallowed the payload -- the known cause is a first block
+    // whose string is a bare fence opener (e.g. a line reading "- ```js" with
+    // nothing to close it), which is exactly the shape our own renderer emits
+    // for a Roam block whose string starts with a fence, and the shape a
+    // pasted code snippet produces. `markdownToBlocks` then returns an empty
+    // array, and diffing 0 new blocks against N existing ones deletes all N --
+    // silently, against an API with no undo. The asymmetry is deliberate: an
+    // empty parse of EMPTY input is the documented clear-the-page instruction;
+    // an empty parse of NON-EMPTY input is the parser losing the payload, never
+    // an instruction to delete anything.
+    if (effectiveMarkdown.trim().length > 0 && newBlocks.length === 0) {
+      const existingCount = flattenExistingBlocks(existingBlocks).length;
+      if (existingCount > 0) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `markdown parsed to zero blocks even though it is not empty. This usually ` +
+          `means an unterminated \`\`\` fence swallowed the whole payload (a first ` +
+          `block that opens a code fence and never closes it consumes every line ` +
+          `after it). Refusing to write: this would have deleted all ${existingCount} ` +
+          `existing block${existingCount === 1 ? '' : 's'} on "${title}". Check the ` +
+          `markdown for an unbalanced fence, or call again with dry_run: true to ` +
+          `inspect the planned actions before writing.`
+        );
+      }
+    }
+
+    if (isEscaped) {
+      for (const block of newBlocks) {
+        block.text = unescapeBlockString(block.text);
+      }
+    }
 
     // 5. Compute diff
     const diff = diffBlockTrees(existingBlocks, newBlocks, pageUid);

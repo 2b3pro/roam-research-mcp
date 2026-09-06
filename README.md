@@ -162,6 +162,8 @@ Three things worth knowing:
 - **Read tools deliberately have neither.** They already serialise their whole result into the text channel, so a schema would just double the payload.
 - **These fields are additive-only.** Some clients validate live responses against a cached tool list, so a field will be added or deprecated — never renamed or removed outside a major version.
 
+> **Upgrading to 4.0.0:** markdown reads of a page containing a soft line break (Shift+Enter) now render that break as `⏎` and carry a leading `<!-- roam:escaped-newlines -->` marker, so the page survives a write-back intact. Pages without multi-line blocks are byte-identical to 3.x. AI-assistant users need do nothing; scripts parsing markdown output of multi-line pages see the new encoding. See the [changelog](CHANGELOG.md).
+
 > **Upgrading from 2.x:** three write-result fields were renamed — `uid` → `page_uid` (`roam_create_page`), `created_uids` → `created_blocks` (`roam_create_outline`, `roam_import_markdown`) and `preservedUids` → `preserved_uids` (`roam_update_page_markdown`). This only affects code that reads those names; if you use the server through an AI assistant, nothing changes. See the [changelog](CHANGELOG.md) for why.
 
 ---
@@ -207,6 +209,14 @@ Resolution order is **per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → 
 Results are cached for 30 seconds — an edit to the page takes effect without a restart. A starter template lives at [`.roam/agent-guidelines.template.md`](.roam/agent-guidelines.template.md).
 
 Note that guidelines are read through the normal page path, so blocks tagged `#.rm-hide` / `#.rm-private` are withheld from them too — see below.
+
+Reads of a page containing a soft line break render it as `⏎` so each block
+stays on one line — an unescaped newline lands at column 0 and reparents
+everything after it on write-back. Such payloads carry a leading
+`<!-- roam:escaped-newlines -->` marker; keep it if you write the markdown
+back. Markdown you author is never decoded: backslashes are not special, and
+only `⏎` inside a marked payload is interpreted. `roam_get_guidelines` output
+is plain prose — no sentinel, no marker.
 
 ---
 

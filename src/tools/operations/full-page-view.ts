@@ -4,6 +4,7 @@ import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import { collectHiddenUids, pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
+import { escapeBlockString } from '../../shared/block-escaping.js';
 import type { RoamBlock } from '../types/index.js';
 import type { PageOperations } from './pages.js';
 
@@ -138,7 +139,11 @@ export class FullPageViewOperations {
 
     const linkedReferenceGroups = Array.from(groupMap.values());
 
-    // 7. Render as markdown
+    // 7. Render as markdown. This output is display-only — never valid
+    // `roam_update_page_markdown` input, and nothing decodes it — so
+    // `renderBlocks` applies the `⏎` sentinel to every block string
+    // unconditionally (it's the identity for newline-free text) rather than
+    // gating on a per-page predicate.
     return this.renderMarkdown(title, pageBlocks, linkedReferenceGroups, truncated ? allUniqueRefs.length : undefined);
   }
 
@@ -325,12 +330,18 @@ export class FullPageViewOperations {
           // This mirrors Roam's ancestor context display
           for (let i = 0; i < ref.breadcrumbs.length; i++) {
             const prefix = '> '.repeat(i + 1);
-            lines.push(`${prefix}${ref.breadcrumbs[i].string}`);
+            // Same reasoning as `renderBlocks` below: a breadcrumb string can
+            // itself carry a soft line break, and an unescaped one spills onto
+            // a bare physical line with no `> ` prefix at all.
+            lines.push(`${prefix}${escapeBlockString(ref.breadcrumbs[i].string)}`);
           }
 
-          // The referring block itself, indented to sit visually under its breadcrumbs
+          // The referring block itself, indented to sit visually under its
+          // breadcrumbs. Escaped for the same reason `renderBlocks` escapes
+          // every other block string in this file: an unescaped newline spills
+          // the rest of the block onto a bare physical line with no bullet.
           const refIndent = '  '.repeat(ref.breadcrumbs.length);
-          lines.push(`${refIndent}- ${ref.block.string}`);
+          lines.push(`${refIndent}- ${escapeBlockString(ref.block.string)}`);
 
           // Children of the referring block
           if (ref.block.children.length > 0) {
@@ -348,12 +359,16 @@ export class FullPageViewOperations {
   private renderBlocks(blocks: RoamBlock[], baseIndent: number): string {
     const renderBlock = (block: RoamBlock, depth: number): string => {
       const indent = '  '.repeat(depth);
+      // Unconditional: `escapeBlockString` is the identity for newline-free
+      // text, so pages with no soft line breaks render byte-identical to how
+      // they did before this feature existed — no predicate needed.
+      const text = escapeBlockString(block.string);
       let line: string;
       if (block.heading && block.heading > 0) {
         const hashes = '#'.repeat(block.heading);
-        line = `${indent}${hashes} ${block.string}`;
+        line = `${indent}${hashes} ${text}`;
       } else {
-        line = `${indent}- ${block.string}`;
+        line = `${indent}- ${text}`;
       }
       const childLines = block.children.map(c => renderBlock(c, depth + 1)).join('\n');
       return childLines ? `${line}\n${childLines}` : line;

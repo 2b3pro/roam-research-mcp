@@ -1,5 +1,54 @@
 # Changelog
 
+### v4.0.0 (2026-08-09)
+
+**In one line:** a block containing a soft line break (Shift+Enter) now survives `roam_update_page_markdown` — read a page, write it back, and nothing moves — via a `⏎` sentinel that never collides with content you author.
+
+**Why a major.** `roam_fetch_page_by_title` (`format: "markdown"`), `roam_fetch_page_full_view`, `roam_get_subpages` and `roam get` all return different bytes than 3.x for any page containing a multi-line block: the newline renders as `⏎`, and round-trippable payloads gain a leading `<!-- roam:escaped-newlines -->` marker line. Pages without a multi-line block render byte-identical to 3.2.0. If you use the server through an AI assistant, nothing is required of you; a script parsing markdown output of multi-line pages sees the new encoding. **If you pinned `roam-research-mcp@3`** (as the 3.1.0 notes suggested), you keep 3.2.0's fixes and its documented multi-line limitation until you re-pin.
+
+- **⚠️ Data loss: one soft line break flattened a page.** A Roam block may
+  contain a newline — a Shift+Enter soft break, which callout bodies require
+  and fenced code blocks are full of. The markdown renderer emitted one `- `
+  line per block, so that newline spilled onto a second physical line at
+  **column 0**, which reset the parser's indentation baseline. Every block
+  after it collapsed toward the root and was reparented under the wrong
+  ancestor; `roam_update_page_markdown` then generated the moves to make the
+  real page match. Reading a page and writing back a revision — the documented
+  purpose of the tool — was enough to trigger it.
+  - **The fix encodes with a sentinel, not an escape.** A soft line break now
+    renders as a single `⏎` character (U+23CE) rather than a `\n` escape, and
+    a page containing one is marked with a leading
+    `<!-- roam:escaped-newlines -->` comment. Pages with no multi-line block
+    render exactly as before — byte-identical, no marker, no encoding.
+  - **Backslash escaping does not exist, anywhere.** The earlier `\n` design
+    needed backslash-doubling to tell a real escape from a literal
+    backslash-n, and that rule still corrupted authored content: `\n` is a
+    common PREFIX (`\nabla`, `\neq`, `C:\new…`), not just an escape sequence.
+    `⏎` essentially never occurs in authored text, so it needs no such rule —
+    `$$\nabla f$$` and `C:\newdir` are written exactly as typed everywhere,
+    including inside a marked payload.
+  - **Detection tolerates the leading title header.** `roam_fetch_page_by_title`
+    prepends `# Title` before the marker; the old check only looked at line 1
+    and never decoded a payload submitted verbatim. Detection now accepts the
+    marker on the line after a leading header, so a verbatim submit — and
+    `roam get` → `roam save --update` — round-trip cleanly.
+  - **Display-only outputs carry no marker.** `roam_fetch_page_full_view` and
+    sub-pages use the `⏎` sentinel unconditionally, with no
+    `<!-- roam:escaped-newlines -->` marker — nothing decodes them, so there
+    is nothing to preserve on write-back.
+  - **The accepted corner:** a block genuinely containing a literal `⏎`
+    round-trips it into a newline. Content-level, vanishingly rare, and
+    pinned by a test so it stays a documented choice rather than an accident.
+  - **Sizing:** decided as a **major** — see the header note. Two commits in
+    this work are themselves marked breaking, and output bytes changed on four
+    read surfaces for multi-line pages.
+  - **Verified against the prior state.** `src/server/multiline-roundtrip.test.ts`
+    asserts a read → write-back is a no-op *and* that every parent/child
+    relationship survives; it fails against the unfixed code. The case that
+    would have caught this — `C3: renderer output submitted VERBATIM, header
+    included, is a no-op` — is exactly the one Revision 2's tests skipped by
+    stripping the header themselves before submitting it back.
+
 ### v3.2.0 (2026-08-09)
 
 **In one line:** two ways `roam_update_page_markdown` could silently delete your blocks are fixed — one where the `#.rm-hide` tag caused the deletion it exists to prevent, and one where a block merely *mentioning* a ``` fence swallowed every block after it.
