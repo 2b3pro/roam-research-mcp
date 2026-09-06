@@ -359,15 +359,12 @@ Server returns `{"uid_map": {"parent": "Xk7mN2pQ9"}}`.
 
 - **Hierarchy:** 2-4 levels preferred, rarely exceed 5
 - **Blocks:** One idea per block
-- **Page refs vs tags:** `[[Page]]` for expandable concepts, `#tag` for filtering
 - **Embed vs ref:** `((uid))` inline, `{{[[embed]]: ((uid))}}` with children, `{{[[embed-children]]: ((uid))}}` children only, `{{[[embed-path]]: ((uid))}}` with ancestors, `[text](<((uid))>)` link only
-- **No empty blocks or `---` dividers** — use hierarchy for visual separation
+- **No empty blocks** — use hierarchy for visual separation
 - **Never invent a `((uid))`:** use only uids a tool actually returned. A fabricated ref is a broken link.
 
-## Output Conventions
+## Conventions
 
-**Quote:** `<text> —[[Author]] #quote`
-**Definition:** `Term:: definition #definition`
-**Open question:** `{{[[TODO]]}} Research: <question> #[[open questions]]`
+This cheatsheet is syntax only. How to tag, when to use a page ref versus a hashtag, and the shape of a quote, definition, TODO, or footnote are conventions, and they belong to the graph's `[[roam/agent guidelines]]` page (returned by `roam_get_guidelines`) and the personalization layer appended below. Where a convention and this sheet appear to disagree, the convention wins on style; this sheet wins on what Roam will actually render.
 
 ---
