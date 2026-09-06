@@ -20,6 +20,24 @@ Whether you want to give Claude superpowers over your knowledge base or just wan
 
 ![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
 
+## What's New in v4.0
+
+**In one line:** a block containing a soft line break (Shift+Enter) now survives a page rewrite. Read a page, write it back, and nothing moves.
+
+Until now, a multi-line block rendered as two physical lines, the second at column 0. That reset the parser's indentation baseline, so every block after it collapsed toward the root and `roam_update_page_markdown` dutifully generated the moves to make your real page match. Reading a page and writing back a revision, the documented purpose of the tool, was enough to trigger it. Callout bodies and fenced code blocks are exactly the blocks that carry soft breaks.
+
+- **Soft breaks render as `⏎`.** A page containing one gains a leading `<!-- roam:escaped-newlines -->` marker line; keep it if you write the markdown back. Pages with no multi-line block render byte-identical to 3.x, with no marker and no encoding.
+- **Backslashes are never special.** The earlier design escaped newlines as `\n`, which is also a common prefix in authored text: `\nabla`, `\neq`, `C:\newdir`. The sentinel needs no such rule, so all of those are written exactly as typed, everywhere.
+- **Verbatim round-trips are no-ops.** Renderer output submitted back unchanged, title header included, produces zero actions. The CLI shares the fix: `roam get` piped into `roam save --update` leaves the page as it was.
+- **Two more guards on page rewrites.** Non-empty markdown that parses to zero blocks is now refused rather than deleting every block on the page (genuinely empty markdown still clears a page, as documented). And a hand-authored first block that happens to be an H1 echoing the page title is no longer stripped on an ordinary update.
+- **Linked references are encoded too.** `roam_fetch_page_full_view` escapes soft breaks in referring blocks and breadcrumbs, not just the page's own content.
+- **Browser clients pass CORS preflight.** The HTTP transport now allows `MCP-Protocol-Version` and `Last-Event-ID`, both of which a client must send after initialization. Non-browser clients were never affected.
+- **The MCP SDK is pinned** to the version the test suite runs against, so a fresh install gets the protocol surface that was tested rather than whatever npm serves that day.
+
+**Why a major.** Four read surfaces return different bytes for any page containing a multi-line block: `roam_fetch_page_by_title` (`format: "markdown"`), `roam_fetch_page_full_view`, `roam_get_subpages`, and `roam get`. If you use the server through an AI assistant, nothing is required of you. A script that parses markdown output of multi-line pages sees the new encoding. If you pinned `roam-research-mcp@3`, you keep 3.2.0's fixes and its documented multi-line limitation until you re-pin.
+
+Full detail, including the corner cases and how each fix was verified against the prior state, is in the [changelog](CHANGELOG.md).
+
 ## How this differs from Roam's official MCP server
 
 Roam Research ships its own MCP server and CLI ([`@roam-research/roam-mcp`](https://github.com/Roam-Research/roam-tools)). It is a good tool, and this project is not trying to replace it. **They talk to two different Roam APIs, which is the difference everything else follows from.**
