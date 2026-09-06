@@ -1,6 +1,6 @@
 {
   "name": "roam-research-mcp",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "MCP server and CLI for Roam Research",
   "private": false,
   "repository": {
@@ -31,6 +31,7 @@
   "scripts": {
     "build": "echo \"Using custom instructions: .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md\" && tsc && cat Roam_Markdown_Cheatsheet.md .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md > build/Roam_Markdown_Cheatsheet.md && chmod 755 build/index.js build/cli/roam.js",
     "clean": "rm -rf build",
+    "prepublishOnly": "node scripts/check-bundled-cheatsheet.mjs",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "start": "node build/index.js",

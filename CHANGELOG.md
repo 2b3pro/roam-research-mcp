@@ -1,5 +1,14 @@
 # Changelog
 
+### v4.0.1 (2026-09-06)
+
+**In one line:** the 4.0.0 tarball on npm carried the author's private Roam conventions appended to the bundled cheatsheet; 4.0.1 is the same code with a clean cheatsheet and a guard so it cannot happen again.
+
+**Why a patch.** No code changed. The build concatenates `Roam_Markdown_Cheatsheet.md` with `.roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md`. 4.0.0 was published from a shell where that prefix selected a private, untracked file, so every user's `roam_markdown_cheatsheet` resource ended with one person's tagging philosophy, definition format, and page templates, presented as if they were that user's own personalization layer. An agent following them would tag and format a stranger's graph by the author's rules. 4.0.1 is built with the prefix unset, appending the empty template the repository actually ships. If you installed any affected version, re-run `npx -y roam-research-mcp` and you get 4.0.1.
+
+- **The guard.** A `prepublishOnly` script now refuses to publish unless the bundled cheatsheet ends with exactly the tracked default template. It checks the artifact, not the environment, so a stale build or any private layer fails loudly before the tarball leaves the machine. CI passes it unchanged.
+- **Were you affected?** Every version published by hand carried the layer, not just 4.0.0: **2.22.0**, **3.1.0**, **3.2.0** and **4.0.0**, so it has been public since 2026-06-13. Versions built by CI are clean; 3.0.0 was checked directly. Nothing in the layer is a credential. It is conventions, and the harm is behavioural: an agent that loaded the cheatsheet from one of those versions may have applied the author's tagging and formatting rules to your graph.
+
 ### v4.0.0 (2026-09-06)
 
 **In one line:** a block containing a soft line break (Shift+Enter) now survives `roam_update_page_markdown` — read a page, write it back, and nothing moves — via a `⏎` sentinel that never collides with content you author.
