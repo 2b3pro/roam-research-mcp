@@ -1,5 +1,18 @@
 # Changelog
 
+### v4.1.0 (unreleased)
+
+**In one line:** `roam save --parent "((uid))"` silently misrouted about one save in five; there is now a `--parent-uid` flag that always means a UID, and `--parent` no longer guesses.
+
+**Why a minor.** A new flag, and the existing one stops guessing. `--parent` decided whether its value was a UID by looking for a digit in it. Roam UIDs are random over 64 symbols, so about one in five has no digit (45,176 of 209,452 blocks, 21.6%, measured on a real graph). For those, `--parent "((uid))"` was read as heading text: the CLI created a block containing the literal `((uid))` on the daily page and nested your content under that, with exit code 0 and no warning. The only tell was two UIDs on stdout where one was expected. Stdout is unchanged in this release; the new messages go to stderr.
+
+- **New: `--parent-uid <uid>`.** The block your content goes under. Accepts `uid` or `((uid))`, never text. If no block or page with that UID exists the command exits non-zero and writes nothing. It cannot be combined with `--parent`.
+- **`--parent` with a UID is deprecated, and consistent until it goes.** `--parent "((uid))"` is a UID whether or not it contains a digit, and must exist. A bare 9-character value is a UID only if the graph has an entity with that UID; otherwise it is text. Each time `--parent` resolves to a UID, stderr carries a deprecation warning. **In 5.0 `--parent` will always mean the text of the parent block**, so `--parent "((uid))"` will find or create a block whose content is that reference. Move scripts to `--parent-uid` now.
+- **`--page` follows the same rules.** `-p "((uid))"` is a UID regardless of digits and must exist, where a digit-free one used to create a page titled `((uid))`. A bare 9-character `-p` value is a UID only if the graph has it, otherwise a title. `-p Learnings` still resolves by title, as it has since 2.15.1, and is now pinned by a regression test.
+- **Creating a parent block is no longer invisible.** When `--parent "<text>"` matches nothing and a block is created, stderr says so and names its UID.
+- **⚠️ A stale bare UID is now text.** A bare 9-character `--parent` or `-p` value that contains a digit but names nothing in your graph used to fail with "Parent page(s) do not exist" and write nothing. It is now treated as text and found or created, because a bare value cannot be told apart from a title such as `Sprint_23`. If a script passes bare UIDs that may have been deleted, switch it to `--parent-uid` or `((uid))`, both of which error instead of writing.
+- **Other behaviour you may notice.** If you relied on a digit-free `--parent "((uid))"` creating a reference block, it now nests under the referenced block; that meaning returns, for every UID, in 5.0. A cron job that treats any stderr output as failure will see the new warning and notice lines.
+
 ### v4.0.1 (2026-09-06)
 
 **In one line:** the 4.0.0 tarball on npm carried the author's private Roam conventions appended to the bundled cheatsheet; 4.0.1 is the same code with a clean cheatsheet and a guard so it cannot happen again.

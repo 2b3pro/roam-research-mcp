@@ -55,7 +55,8 @@ Options: `-i` case-insensitive, `-n` limit, `--json`
 ```bash
 roam save "<text>"                              # to daily page
 roam save "<text>" -p <page>                    # to specific page
-roam save "<text>" --parent "<heading|((uid))>" # nested under block
+roam save "<text>" --parent-uid <uid>           # nested under block, by UID (must exist)
+roam save "<text>" --parent "<heading text>"    # nested under block, by text (creates if missing)
 roam save --todo "<text>"                       # TODO to daily
 roam save file.md --title "<title>"             # new page from file
 roam save file.md --title "<title>" --update    # smart update (preserves UIDs)
@@ -177,7 +178,7 @@ roam status --json                              # for scripting
 1. **Write-key required** for non-default/protected graphs: `-g system --write-key "$ROAM_SYSTEM_WRITE_KEY"`
 2. **Date pages** use ordinal format: `"January 3rd, 2026"` (not ISO)
 3. **UIDs** are 9-char alphanumeric (`[a-zA-Z0-9_-]{9}`); accept `((uid))` wrapper
-4. **--parent heading** syntax: `"## Section"` creates H2 heading if missing
+4. **--parent is text, --parent-uid is a UID**: `--parent "## Section"` finds or creates that H2 block (stderr says when it creates one); `--parent-uid <uid>` nests under an existing block and errors, writing nothing, if the UID does not exist. Passing a UID to `--parent` still works but is deprecated and becomes text-only in 5.0
 5. **Batch parent** accepts: 9-char UID, `"daily"`, MM-DD-YYYY date, or `{{alias}}` placeholder — NOT page title strings directly
 6. **Tag search** returns blocks WITH children; `--tag` uses AND by default, add `--any` for OR
 7. **--update** on save does smart diff preserving block UIDs

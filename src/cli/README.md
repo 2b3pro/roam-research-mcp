@@ -228,9 +228,13 @@ Arguments:
 Options:
   --title <title>          Create a new page with this title
   --update                 Update existing page using smart diff (preserves block UIDs)
-  -p, --page <ref>         Target page by title or UID (default: daily page, creates if missing)
-  --parent <ref>           Nest under block UID ((uid)) or heading text (creates if missing)
-                           Use # prefix for heading level: "## Section"
+  -p, --page <ref>         Target page by title (creates if missing), or by UID as ((uid))
+                           (must exist). Default: daily page
+  --parent <text>          Nest under the block with this text on the target page (creates
+                           if missing). Use # prefix for heading level: "## Section".
+                           Passing a UID here is deprecated: use --parent-uid
+  --parent-uid <uid>       Nest under the block with this UID (must exist).
+                           Accepts uid or ((uid))
   -c, --categories <tags>  Comma-separated tags appended to first block
   -t, --todo [text]        Add TODO item(s) to daily page. Accepts inline text or stdin
   --json                   Force JSON array format: [{text, level, heading?}, ...]
@@ -249,7 +253,7 @@ roam save --todo "Buy groceries"                # TODO item
 
 # Save under heading (creates if missing)
 roam save --parent "## Notes" "My note"         # Under H2 "Notes" heading
-roam save --parent "((blockUid9))" "Child"      # Under specific block
+roam save --parent-uid blockUid9 "Child"        # Under specific block, by UID
 
 # Target specific page
 roam save -p "Project X" "Status update"        # By title (creates if missing)

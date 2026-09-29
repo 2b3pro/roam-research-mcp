@@ -136,6 +136,21 @@ async function batchCheckExistence(
 }
 
 /**
+ * Check whether a single UID names an existing entity (page or block).
+ * Shares the session cache with `ensurePagesExist`, so a UID confirmed here is
+ * not queried again when a batch then writes under it.
+ */
+export async function uidExists(graph: Graph, uid: string): Promise<boolean> {
+  if (pageUidCache.hasUid(uid)) return true;
+
+  const existing = await batchCheckExistence(graph, [uid]);
+  if (!existing.has(uid)) return false;
+
+  pageUidCache.addUid(uid);
+  return true;
+}
+
+/**
  * Batch create daily pages that don't exist.
  * Uses Roam's createPage API.
  */

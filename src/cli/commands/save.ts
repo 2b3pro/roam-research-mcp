@@ -8,6 +8,8 @@ import { parseMarkdown, generateBlockUid, parseMarkdownHeadingLevel } from '../.
 import { printDebug, exitWithError } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 import { readStdin } from '../utils/input.js';
+import { resolveParentRef, resolvePageRef, type UidExists } from '../utils/ref-resolver.js';
+import { uidExists } from '../../shared/page-validator.js';
 import { formatRoamDate, sanitizeTagName } from '../../utils/helpers.js';
 import { q, createPage as roamCreatePage } from '@roam-research/roam-api-sdk';
 
@@ -107,17 +109,6 @@ function adjustLevelsForHeadingHierarchy(
 }
 
 /**
- * Check if a string looks like a Roam block UID (9 alphanumeric chars with _ or -)
- */
-function isBlockUid(value: string): boolean {
-  // Strip (( )) wrapper if present
-  const cleaned = value.replace(/^\(\(|\)\)$/g, '');
-  // Require at least one digit — real Roam UIDs are randomly generated and
-  // virtually always contain numbers, while page titles like "Learnings" don't.
-  return /^[a-zA-Z0-9_-]{9}$/.test(cleaned) && /\d/.test(cleaned);
-}
-
-/**
  * Check if content looks like a JSON array
  */
 function looksLikeJsonArray(content: string): boolean {
@@ -162,9 +153,10 @@ async function getDailyPageUid(graph: any): Promise<string> {
 }
 
 /**
- * Find or create a heading block on a page
+ * Find or create a heading block on a page. `created` tells the caller whether
+ * a block was added, so it can say so: a created parent is otherwise invisible.
  */
-async function findOrCreateHeading(graph: any, pageUid: string, heading: string, headingLevel?: number): Promise<string> {
+async function findOrCreateHeading(graph: any, pageUid: string, heading: string, headingLevel?: number): Promise<{ uid: string; created: boolean }> {
   // Search for existing heading block
   const headingQuery = `[:find ?uid
                         :in $ ?page-uid ?text
@@ -176,7 +168,7 @@ async function findOrCreateHeading(graph: any, pageUid: string, heading: string,
   const headingResults = await q(graph, headingQuery, [pageUid, heading]) as [string][];
 
   if (headingResults && headingResults.length > 0) {
-    return headingResults[0][0];
+    return { uid: headingResults[0][0], created: false };
   }
 
   // Create the heading block
@@ -191,7 +183,7 @@ async function findOrCreateHeading(graph: any, pageUid: string, heading: string,
     ...(headingLevel && { heading: headingLevel })
   }]);
 
-  return headingUid;
+  return { uid: headingUid, created: true };
 }
 
 /**
@@ -230,7 +222,8 @@ interface SaveOptions extends GraphOptions {
   update?: boolean;
   debug?: boolean;
   page?: string;             // Target page for block (default: daily page)
-  parent?: string;           // Parent: block UID or heading text (auto-detected)
+  parent?: string;           // Parent by text (find or create). UID use is deprecated
+  parentUid?: string;        // Parent by block UID (must exist)
   categories?: string;       // Comma-separated category tags
   todo?: string | boolean;   // TODO item text or flag for stdin
   json?: boolean;            // Force JSON format interpretation
@@ -252,8 +245,9 @@ export function createSaveCommand(): Command {
     .argument('[input]', 'Text, file path, or "-" for stdin (auto-detected)')
     .option('--title <title>', 'Create a new page with this title')
     .option('--update', 'Update existing page using smart diff (preserves block UIDs)')
-    .option('-p, --page <ref>', 'Target page by title or UID (default: daily page, creates if missing)')
-    .option('--parent <ref>', 'Nest under block UID ((uid)) or heading text (creates if missing). Use # prefix for heading level: "## Section"')
+    .option('-p, --page <ref>', 'Target page by title (creates if missing), or by UID as ((uid)) (must exist). Default: daily page')
+    .option('--parent <text>', 'Nest under the block with this text on the target page (creates if missing). Use # prefix for heading level: "## Section". Passing a UID here is deprecated: use --parent-uid')
+    .option('--parent-uid <uid>', 'Nest under the block with this UID (must exist). Accepts uid or ((uid))')
     .option('-c, --categories <tags>', 'Comma-separated tags appended to first block')
     .option('-t, --todo [text]', 'Add TODO item(s) to daily page. Accepts inline text or stdin')
     .option('--json', 'Force JSON array format: [{text, level, heading?}, ...]')
@@ -272,11 +266,11 @@ Examples:
 
   # Save under heading (creates if missing)
   roam save --parent "## Notes" "My note"         # Under H2 "Notes" heading
-  roam save --parent "((blockUid9))" "Child"      # Under specific block
+  roam save --parent-uid blockUid9 "Child"        # Under specific block, by UID
 
   # Target specific page
   roam save -p "Project X" "Status update"        # By title (creates if missing)
-  roam save -p "pageUid123" "Note"                # By UID
+  roam save -p "((pageUid12))" "Note"             # By UID (must exist)
 
   # File operations
   roam save notes.md --title "My Notes"           # Create page from file
@@ -421,25 +415,6 @@ JSON format (--json):
           ? options.categories.split(',').map(c => c.trim()).filter(Boolean)
           : undefined;
 
-        // Determine parent type if specified
-        let parentUid: string | undefined;
-        let parentHeading: string | undefined;
-        let parentHeadingLevel: number | undefined;
-
-        if (options.parent) {
-          const cleanedParent = options.parent.replace(/^\(\(|\)\)$/g, '');
-          if (isBlockUid(cleanedParent)) {
-            parentUid = cleanedParent;
-          } else {
-            // Parse heading syntax from parent text
-            const { heading_level, content } = parseMarkdownHeadingLevel(options.parent);
-            parentHeading = content;
-            if (heading_level > 0) {
-              parentHeadingLevel = heading_level;
-            }
-          }
-        }
-
         // Parse --order option
         let orderValue: 'first' | 'last' | number = 'last';
         if (options.order !== undefined) {
@@ -465,8 +440,7 @@ JSON format (--json):
           printDebug('Order', orderValue);
           printDebug('Graph', options.graph || 'default');
           printDebug('Content blocks', contentBlocks.length);
-          printDebug('Parent UID', parentUid || 'none');
-          printDebug('Parent heading', parentHeading || 'none');
+          printDebug('Parent', options.parentUid ?? options.parent ?? 'none');
           printDebug('Target page', options.page || 'daily page');
           printDebug('Categories', categories || 'none');
           printDebug('Title', options.title || 'none');
@@ -484,6 +458,41 @@ JSON format (--json):
         }
 
         const graph = resolveGraph(options, true);
+
+        // Resolve the parent before any write. A UID is never guessed from its
+        // shape: --parent-uid and ((uid)) must exist, and a bare 9-character
+        // --parent value is a UID only if the graph has it.
+        const exists: UidExists = (uid) => uidExists(graph, uid);
+        const parentTarget = await resolveParentRef(
+          { parent: options.parent, parentUid: options.parentUid },
+          exists
+        );
+
+        let parentUid: string | undefined;
+        let parentHeading: string | undefined;
+        let parentHeadingLevel: number | undefined;
+
+        if (parentTarget?.kind === 'uid') {
+          parentUid = parentTarget.uid;
+          if (parentTarget.deprecated) {
+            console.error(
+              `Warning: passing a block UID to --parent is deprecated. In 5.0 --parent will always mean ` +
+              `the text of the parent block. Use: --parent-uid ${parentUid}`
+            );
+          }
+        } else if (parentTarget) {
+          // Parse heading syntax from parent text
+          const { heading_level, content } = parseMarkdownHeadingLevel(parentTarget.text);
+          parentHeading = content;
+          if (heading_level > 0) {
+            parentHeadingLevel = heading_level;
+          }
+        }
+
+        if (options.debug) {
+          printDebug('Parent UID', parentUid || 'none');
+          printDebug('Parent heading', parentHeading || 'none');
+        }
 
         // Determine operation mode based on options
         const hasParent = parentUid || parentHeading;
@@ -596,13 +605,12 @@ JSON format (--json):
         // Parent heading or target page: get target page UID first
         let pageUid: string;
         if (options.page) {
-          // Strip (( )) wrapper if UID, but NOT [[ ]] (that's valid page title syntax)
-          const cleanedPage = options.page.replace(/^\(\(|\)\)$/g, '');
-          if (isBlockUid(cleanedPage)) {
-            pageUid = cleanedPage;
-          } else {
-            pageUid = await findOrCreatePage(graph, options.page);
-          }
+          // ((uid)) must exist; a bare 9-character value is a UID only if the
+          // graph has it, otherwise a title ("Learnings"). [[ ]] is left alone.
+          const pageTarget = await resolvePageRef(options.page, exists);
+          pageUid = pageTarget.kind === 'uid'
+            ? pageTarget.uid
+            : await findOrCreatePage(graph, pageTarget.title);
         } else {
           pageUid = await getDailyPageUid(graph);
         }
@@ -614,7 +622,11 @@ JSON format (--json):
         // Resolve heading to parent UID if specified
         let targetParentUid: string;
         if (parentHeading) {
-          targetParentUid = await findOrCreateHeading(graph, pageUid, parentHeading, parentHeadingLevel);
+          const heading = await findOrCreateHeading(graph, pageUid, parentHeading, parentHeadingLevel);
+          targetParentUid = heading.uid;
+          if (heading.created) {
+            console.error(`Created parent block "${parentHeading}" (uid: ${heading.uid})`);
+          }
         } else {
           targetParentUid = pageUid;
         }

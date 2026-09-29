@@ -19,11 +19,16 @@
  * quietly passing against a mock that was updated in lockstep.
  */
 
+import { appendFileSync } from 'node:fs';
+
 /** title -> page uid. UIDs are 9 chars, like Roam's. */
 const PAGES = {
   'Test Page': 'page00001',
   'roam/agent guidelines': 'guide0001',
   'Nested Page': 'page00002',
+  // Digit-free on purpose, like roughly one real UID in five. `roam save` used
+  // to decide "is this a UID" by looking for a digit.
+  'Save Fixture': 'savePgAbc',
 };
 
 /**
@@ -80,6 +85,10 @@ const BLOCKS = {
     // line break.
     ['nst000010', 'LaTeX $$\\nabla f$$ and a path C:\\newdir', 2, 'nst000001'],
     ['nst000011', 'wrap it in ``` to make code', 3, 'nst000001'],
+  ],
+  savePgAbc: [
+    ['nodigitAA', 'A parent block whose UID has no digit', 0, 'savePgAbc'],
+    ['exHeadAbc', 'Existing heading', 1, 'savePgAbc'],
   ],
 };
 
@@ -176,6 +185,30 @@ function pullTree(uid) {
 }
 
 function answer(query, args) {
+  // Existence check for a set of UIDs (`batchCheckExistence` in
+  // src/shared/page-validator.ts): which of these are the :block/uid of any
+  // entity? Pages carry :block/uid too, so they count. Every batch write asks
+  // this about its parents before writing, and `roam save` asks it to decide
+  // whether a bare 9-character value is a UID or text.
+  if (query.includes(':in $ [?uid ...]')) {
+    const asked = Array.isArray(args?.[0]) ? args[0] : [];
+    const known = new Set([
+      ...Object.values(PAGES),
+      ...allBlocks().map(([uid]) => uid),
+      ...CREATED_BLOCKS.map(([uid]) => uid),
+    ]);
+    return asked.filter((uid) => known.has(uid)).map((uid) => [uid]);
+  }
+
+  // `roam save --parent "<text>"`: a direct child of the page with exactly this
+  // string (`findOrCreateHeading` in src/cli/commands/save.ts).
+  if (query.includes(':in $ ?page-uid ?text')) {
+    const [pageUid, text] = args ?? [];
+    return [...allBlocks(), ...CREATED_BLOCKS]
+      .filter(([, str, , parentUid]) => parentUid === pageUid && str === text)
+      .map(([uid]) => [uid]);
+  }
+
   // Page-content query: [uid, string, order, parentUid] for everything on a page.
   if (query.includes(':find ?block-uid ?block-str ?order ?parent-uid')) {
     const pageUid = args?.[1];
@@ -289,6 +322,14 @@ globalThis.fetch = async function fakeRoamFetch(input, init) {
 
   if (request.url.endsWith('/write')) {
     const body = await request.json().catch(() => ({}));
+
+    // Opt-in record of every write, one JSON body per line. A CLI run is a
+    // one-shot process, so its writes die with it unless they land on disk;
+    // this is how a test proves "zero writes" rather than inferring it from an
+    // exit code.
+    if (process.env.FAKE_ROAM_WRITE_LOG) {
+      appendFileSync(process.env.FAKE_ROAM_WRITE_LOG, JSON.stringify(body) + '\n');
+    }
 
     // Register created pages so a later title lookup finds them. Write paths
     // that create a page and then read back its UID (getOrCreateTodayPage, for
