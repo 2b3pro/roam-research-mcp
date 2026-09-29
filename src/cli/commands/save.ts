@@ -9,6 +9,7 @@ import { printDebug, exitWithError } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 import { readStdin } from '../utils/input.js';
 import { resolveParentRef, resolvePageRef, type UidExists } from '../utils/ref-resolver.js';
+import { parentUidHint } from '../utils/ref-classifier.js';
 import { uidExists } from '../../shared/page-validator.js';
 import { formatRoamDate, sanitizeTagName } from '../../utils/helpers.js';
 import { q, createPage as roamCreatePage } from '@roam-research/roam-api-sdk';
@@ -246,8 +247,8 @@ export function createSaveCommand(): Command {
     .option('--title <title>', 'Create a new page with this title')
     .option('--update', 'Update existing page using smart diff (preserves block UIDs)')
     .option('-p, --page <ref>', 'Target page by title (creates if missing), or by UID as ((uid)) (must exist). Default: daily page')
-    .option('--parent <text>', 'Nest under the block with this text on the target page (creates if missing). Always text: "((uid))" means a block containing that reference. Use # prefix for heading level: "## Section"')
-    .option('--parent-uid <uid>', 'Nest under the block with this UID (must exist). Accepts uid or ((uid))')
+    .option('--parent <text>', 'Nest under the block with this TEXT on the target page (creates if missing). Never a UID: to nest under a block by its UID, use --parent-uid. Use # prefix for heading level: "## Section"')
+    .option('--parent-uid <uid>', 'Nest under the block with this UID. Accepts uid or ((uid)). The block must exist, or nothing is written')
     .option('-c, --categories <tags>', 'Comma-separated tags appended to first block')
     .option('-t, --todo [text]', 'Add TODO item(s) to daily page. Accepts inline text or stdin')
     .option('--json', 'Force JSON array format: [{text, level, heading?}, ...]')
@@ -258,16 +259,28 @@ export function createSaveCommand(): Command {
     .option('--write-key <key>', 'Write confirmation key (non-default graphs)')
     .option('--debug', 'Show debug information')
     .addHelpText('after', `
+Choosing a parent block:
+  You know the block's UID   ->  --parent-uid <uid>
+      Content goes under that block. If no block has that UID, the command
+      fails and nothing is written. The block already has a page, so -p is
+      ignored.
+  You know the block's text  ->  --parent "<text>"
+      Content goes under the block with that text on the target page (the
+      daily page unless -p is given). The block is created if missing, and
+      stderr says so.
+  --parent is never a UID. --parent "((uid))" means a block containing that
+  reference, not the referenced block. Before 5.0 it meant the block itself.
+
 Examples:
   # Quick saves to daily page
   roam save "Quick note"                          # Single block
   roam save "# Important" -c "work,urgent"        # H1 heading with tags
   roam save --todo "Buy groceries"                # TODO item
 
-  # Save under heading (creates if missing)
-  roam save --parent "## Notes" "My note"         # Under H2 "Notes" heading
-  roam save --parent-uid blockUid9 "Child"        # Under specific block, by UID
-  roam save --parent "((blockUid9))" "Child"      # Under a block that references it
+  # Save under a parent block (see "Choosing a parent block" above)
+  roam save --parent-uid blockUid9 "Child"        # Under the block with this UID
+  roam save --parent "## Notes" "My note"         # Under H2 "Notes" (creates if missing)
+  roam save --parent "((blockUid9))" "Child"      # Under a block CONTAINING that reference
 
   # Target specific page
   roam save -p "Project X" "Status update"        # By title (creates if missing)
@@ -620,6 +633,10 @@ JSON format (--json):
           targetParentUid = heading.uid;
           if (heading.created) {
             console.error(`Created parent block "${parentHeading}" (uid: ${heading.uid})`);
+            // Through 4.1.0 a UID here nested under that block. Say what
+            // happened instead, and how to get the other behaviour.
+            const hint = parentUidHint(options.parent ?? '');
+            if (hint) console.error(hint);
           }
         } else {
           targetParentUid = pageUid;

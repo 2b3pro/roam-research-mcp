@@ -219,6 +219,15 @@ Predicates: `clojure.string/includes?`, `clojure.string/starts-with?`, `<`, `>`,
 
 Save text, files, or JSON to pages/blocks. Auto-detects format.
 
+**Choosing a parent block**
+
+| You know | Use | What happens |
+|---|---|---|
+| The block's UID | `--parent-uid <uid>` | Content goes under that block. If no block has that UID, the command fails and nothing is written. `-p` is ignored |
+| The block's text | `--parent "<text>"` | Content goes under the block with that text on the target page (the daily page unless `-p` is given). The block is created if missing, and stderr says so |
+
+`--parent` is never a UID. `--parent "((uid))"` means a block *containing* that reference, not the referenced block. Before 5.0 it meant the block itself. When `--parent` is given something UID-shaped and creates a block, stderr adds a note naming the `--parent-uid` command to use instead.
+
 ```
 Usage: roam save [options] [input]
 
@@ -230,11 +239,11 @@ Options:
   --update                 Update existing page using smart diff (preserves block UIDs)
   -p, --page <ref>         Target page by title (creates if missing), or by UID as ((uid))
                            (must exist). Default: daily page
-  --parent <text>          Nest under the block with this text on the target page (creates
-                           if missing). Always text: "((uid))" means a block containing
-                           that reference. Use # prefix for heading level: "## Section"
-  --parent-uid <uid>       Nest under the block with this UID (must exist).
-                           Accepts uid or ((uid))
+  --parent <text>          Nest under the block with this TEXT on the target page (creates
+                           if missing). Never a UID: to nest under a block by its UID,
+                           use --parent-uid. Use # prefix for heading level: "## Section"
+  --parent-uid <uid>       Nest under the block with this UID. Accepts uid or ((uid)).
+                           The block must exist, or nothing is written
   -c, --categories <tags>  Comma-separated tags appended to first block
   -t, --todo [text]        Add TODO item(s) to daily page. Accepts inline text or stdin
   --json                   Force JSON array format: [{text, level, heading?}, ...]
@@ -253,8 +262,8 @@ roam save --todo "Buy groceries"                # TODO item
 
 # Save under heading (creates if missing)
 roam save --parent "## Notes" "My note"         # Under H2 "Notes" heading
-roam save --parent-uid blockUid9 "Child"        # Under specific block, by UID
-roam save --parent "((blockUid9))" "Child"      # Under a block that references it
+roam save --parent-uid blockUid9 "Child"        # Under the block with this UID
+roam save --parent "((blockUid9))" "Child"      # Under a block CONTAINING that reference
 
 # Target specific page
 roam save -p "Project X" "Status update"        # By title (creates if missing)

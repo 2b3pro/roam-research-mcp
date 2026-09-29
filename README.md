@@ -28,7 +28,8 @@ Until 4.1.0, `--parent` took either a block UID or heading text and decided whic
 
 - **`--parent-uid <uid>`** nests under the block with that UID. It accepts `uid` or `((uid))`, and if no such block exists the command exits non-zero and writes nothing.
 - **`--parent "<text>"`** nests under the block with that text on the target page, creating it if missing. It is never read as a UID. `--parent "((uid))"` finds or creates a block whose content is that reference, which was not reliably possible before.
-- **Creating a parent block is announced** on stderr, with its UID. Stdout is unchanged.
+- **Creating a parent block is announced** on stderr, with its UID. If the text you gave `--parent` looks like a UID, a second line says what happened and gives the `--parent-uid` command to use instead. Stdout is unchanged.
+- **`roam save --help` leads with the choice.** A "Choosing a parent block" section sits above the examples, so the difference between the two flags is the first thing you read.
 
 **Why a major.** `roam save --parent "((uid))"` and `roam save --parent <uid>` used to nest under that block and now nest under a block containing that text. **If a script passes a UID to `--parent`, change the flag to `--parent-uid`.** Only the CLI is affected: the MCP tools take `parent-uid` as a typed field and behave exactly as before, so if you use the server through an AI assistant, nothing is required of you.
 

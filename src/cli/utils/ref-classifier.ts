@@ -1,7 +1,8 @@
 /**
  * Classify a `roam save --page` reference by what its shape can actually
- * establish. Pure: no graph access. (`--parent` is always text and is not
- * classified; `--parent-uid` is parsed by `parseUidFlag` below.)
+ * establish. Pure: no graph access. (`--parent` is always text; its value is
+ * classified only to word the hint in `parentUidHint`. `--parent-uid` is
+ * parsed by `parseUidFlag`.)
  *
  * This replaces a heuristic that required a digit before believing a value was
  * a UID. About one block UID in five has no digit, so a wrapped UID silently
@@ -45,4 +46,29 @@ export function parseUidFlag(raw: string): string {
     );
   }
   return candidate;
+}
+
+/**
+ * `--parent` is always text. When its value is UID-shaped, the caller may have
+ * meant the block with that UID, which is what the same call did through
+ * 4.1.0. Returns the line that says so and names the flag to use, or undefined
+ * when the value is plainly text. Shape only: no graph access, so it cannot
+ * know whether such a block exists.
+ */
+export function parentUidHint(parent: string): string | undefined {
+  const ref = classifyRef(parent);
+  switch (ref.kind) {
+    case 'uid':
+      return (
+        `Note: --parent is always text, so this created a block containing that reference. ` +
+        `To nest under block ${ref.uid} itself, use: --parent-uid ${ref.uid}`
+      );
+    case 'ambiguous':
+      return (
+        `Note: --parent is always text, so "${ref.value}" was used as the block's text. ` +
+        `If it is a block UID, nest under that block with: --parent-uid ${ref.value}`
+      );
+    case 'text':
+      return undefined;
+  }
 }

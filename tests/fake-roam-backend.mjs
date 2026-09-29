@@ -89,6 +89,9 @@ const BLOCKS = {
   savePgAbc: [
     ['nodigitAA', 'A parent block whose UID has no digit', 0, 'savePgAbc'],
     ['exHeadAbc', 'Existing heading', 1, 'savePgAbc'],
+    // A block whose content is a reference to another block, which is what
+    // `roam save --parent "((uid))"` finds or creates.
+    ['exRefAbcd', '((exHeadAbc))', 2, 'savePgAbc'],
   ],
 };
 

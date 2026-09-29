@@ -9,7 +9,9 @@
 - **`--parent` is text, always.** No graph lookup, no shape test. `--parent "((uid))"` is a block containing that reference, which makes reference blocks usable as parents for every UID. Before 4.1.0 that happened only by accident, for UIDs with no digit.
 - **`--parent-uid` is unchanged from 4.1.0.** It accepts `uid` or `((uid))`, must name an existing block or page, and errors with nothing written otherwise.
 - **The deprecation warning is gone**, along with the lookup behind it. `--parent` no longer makes an extra query for 9-character values.
-- **How to tell if you are affected.** A misrouted save prints two UIDs on stdout where it used to print one, and a line on stderr naming the block it created, for example `Created parent block "((uid))" (uid: ...)`. 4.1.0 printed a deprecation warning for every call that 5.0 changes.
+- **The CLI tells you when this may have happened.** When `--parent` is given something UID-shaped and creates a block, stderr carries two lines: `Created parent block "((uid))" (uid: ...)`, then `Note: --parent is always text ... use: --parent-uid <uid>`. The note is built from the value's shape, with no lookup, so it also appears for a 9-character heading such as `Learnings` the first time that heading is created. It appears only on creation: once the block exists, later saves reuse it silently.
+- **How to tell if you are affected.** Besides the note above, a misrouted save prints two UIDs on stdout where it used to print one. 4.1.0 printed a deprecation warning for every call that 5.0 changes.
+- **Help leads with the choice.** `roam save --help` has a "Choosing a parent block" section above the examples, and the option descriptions say outright that `--parent` is never a UID.
 - **`--page` is unchanged from 4.1.0.** `-p "((uid))"` is a UID and must exist; a bare 9-character value is a UID only if the graph has it.
 - **A short deprecation window.** 4.1.0, which introduced the warning, was published the same day. If you would rather migrate first, pin `roam-research-mcp@4`.
 

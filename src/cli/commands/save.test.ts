@@ -173,9 +173,32 @@ describe('roam save --parent with a UID-shaped value (5.0: always text)', () => 
     expect(run.stderr).not.toMatch(/deprecated/i);
   });
 
+  it('says how to nest under the block itself when it creates a reference block', () => {
+    const run = save('-p', 'Save Fixture', '--parent', '((nodigitAA))', 'child note');
+
+    expect(run.stderr).toContain('--parent is always text');
+    expect(run.stderr).toContain('--parent-uid nodigitAA');
+  });
+
+  it('gives the same guidance for a bare UID', () => {
+    const run = save('-p', 'Save Fixture', '--parent', 'nodigitAA', 'child note');
+
+    expect(run.stderr).toContain('--parent is always text');
+    expect(run.stderr).toContain('--parent-uid nodigitAA');
+  });
+
+  it('stays silent when the reference block already exists', () => {
+    const run = save('-p', 'Save Fixture', '--parent', '((exHeadAbc))', 'child note');
+
+    expect(run.code).toBe(0);
+    expect(run.stderr).toBe('');
+    expect(run.blocks).toHaveLength(1);
+    expect(run.blocks[0].location?.['parent-uid']).toBe('exRefAbcd');
+  });
+
   it('behaves the same whether or not the UID contains a digit', () => {
-    // exHeadAbc is digit-free, page00001 has digits. Neither is looked up.
-    for (const uid of ['exHeadAbc', 'page00001']) {
+    // nodigitAA is digit-free, page00001 has digits. Neither is looked up.
+    for (const uid of ['nodigitAA', 'page00001']) {
       const run = save('-p', 'Save Fixture', '--parent', `((${uid}))`, 'child note');
 
       expect(run.code).toBe(0);
@@ -224,6 +247,8 @@ describe('roam save --parent with text', () => {
     expect(run.stderr).toContain('Brand new');
     expect(run.stderr).toContain(headingUid);
     expect(run.stderr).not.toMatch(/deprecated/i);
+    // Plain heading text is not UID-shaped, so there is nothing to hint at.
+    expect(run.stderr).not.toContain('--parent-uid');
   });
 
   it('reuses an existing heading silently', () => {
@@ -288,5 +313,28 @@ describe('roam save --page', () => {
     expect(run.code).not.toBe(0);
     expect(run.blocks).toEqual([]);
     expect(run.pages).toEqual([]);
+  });
+});
+
+describe('roam save --help', () => {
+  const help = () => {
+    const run = save('--help');
+    return run.stdout + run.stderr;
+  };
+
+  it('explains how to choose between the two parent flags, before the examples', () => {
+    const text = help();
+
+    const guidance = text.indexOf('Choosing a parent block');
+    expect(guidance).toBeGreaterThan(-1);
+    expect(guidance).toBeLessThan(text.indexOf('Examples:'));
+  });
+
+  it('says outright that --parent is never a UID and what "((uid))" means there', () => {
+    const text = help().replace(/\s+/g, ' ');
+
+    expect(text).toMatch(/--parent[^.]*never a UID/i);
+    expect(text).toMatch(/\(\(uid\)\)[^.]*(containing|contains) that reference/i);
+    expect(text).toContain('--parent-uid');
   });
 });

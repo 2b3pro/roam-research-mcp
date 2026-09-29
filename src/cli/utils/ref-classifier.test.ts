@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyRef, parseUidFlag } from './ref-classifier.js';
+import { classifyRef, parseUidFlag, parentUidHint } from './ref-classifier.js';
 
 /**
  * `roam save --parent "((uid))"` used to strip the parens and then require a
@@ -54,6 +54,38 @@ describe('parseUidFlag (--parent-uid)', () => {
     'rejects %j, which is not UID-shaped',
     (value) => {
       expect(() => parseUidFlag(value)).toThrow(/--parent-uid/);
+    }
+  );
+});
+
+/**
+ * `--parent` is always text, so a UID passed to it creates a block containing
+ * that text and exits 0. Through 4.1.0 the same call nested under the block.
+ * The hint is what tells a caller who missed the change, and it is built from
+ * shape alone: no graph lookup.
+ */
+describe('parentUidHint (--parent given something UID-shaped)', () => {
+  it('names the UID and the flag to use for a wrapped UID', () => {
+    const hint = parentUidHint('((aBcDeFgHi))');
+    expect(hint).toContain('--parent is always text');
+    expect(hint).toContain('--parent-uid aBcDeFgHi');
+  });
+
+  it('names the UID and the flag to use for a bare UID', () => {
+    const hint = parentUidHint('ujTvIoRP1');
+    expect(hint).toContain('--parent is always text');
+    expect(hint).toContain('--parent-uid ujTvIoRP1');
+  });
+
+  it('does not decide by digits', () => {
+    expect(parentUidHint('((CYORomQDo))')).toContain('--parent-uid CYORomQDo');
+    expect(parentUidHint('((123456789))')).toContain('--parent-uid 123456789');
+  });
+
+  it.each(['## Notes', 'Notes', '[[Page]]', '((not a uid))', '[Title](((aBcDeFgHi)))', 'see ((aBcDeFgHi))', ''])(
+    'says nothing for %j, which is plainly text',
+    (text) => {
+      expect(parentUidHint(text)).toBeUndefined();
     }
   );
 });
