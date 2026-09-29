@@ -20,6 +20,20 @@ Whether you want to give Claude superpowers over your knowledge base or just wan
 
 ![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
 
+## What's New in v5.0
+
+**In one line:** `roam save` now has one flag for each way of naming a parent block, and neither one guesses. `--parent-uid` is always a UID; `--parent` is always text.
+
+Until 4.1.0, `--parent` took either a block UID or heading text and decided which by looking for a digit in the value. About one Roam UID in five has no digit, so those saves were silently misrouted. 4.1.0 added `--parent-uid` and deprecated passing a UID to `--parent`. 5.0 finishes the split.
+
+- **`--parent-uid <uid>`** nests under the block with that UID. It accepts `uid` or `((uid))`, and if no such block exists the command exits non-zero and writes nothing.
+- **`--parent "<text>"`** nests under the block with that text on the target page, creating it if missing. It is never read as a UID. `--parent "((uid))"` finds or creates a block whose content is that reference, which was not reliably possible before.
+- **Creating a parent block is announced** on stderr, with its UID. Stdout is unchanged.
+
+**Why a major.** `roam save --parent "((uid))"` and `roam save --parent <uid>` used to nest under that block and now nest under a block containing that text. **If a script passes a UID to `--parent`, change the flag to `--parent-uid`.** Only the CLI is affected: the MCP tools take `parent-uid` as a typed field and behave exactly as before, so if you use the server through an AI assistant, nothing is required of you.
+
+Full detail is in the [changelog](CHANGELOG.md).
+
 ## What's New in v4.0
 
 **In one line:** a block containing a soft line break (Shift+Enter) now survives a page rewrite. Read a page, write it back, and nothing moves.
@@ -179,6 +193,8 @@ Three things worth knowing:
 - **Nothing was taken away.** The text channel is unchanged, so a client that ignores `structuredContent` behaves exactly as before.
 - **Read tools deliberately have neither.** They already serialise their whole result into the text channel, so a schema would just double the payload.
 - **These fields are additive-only.** Some clients validate live responses against a cached tool list, so a field will be added or deprecated — never renamed or removed outside a major version.
+
+> **Upgrading to 5.0.0:** CLI only. `roam save --parent` is now always text, so a script passing a block UID to it (`--parent "((uid))"` or `--parent <uid>`) must switch to `--parent-uid`. Left unchanged, such a call exits 0 and nests your content under a new block containing the reference, on the daily page unless `-p` is given. MCP tools are unaffected. See the [changelog](CHANGELOG.md).
 
 > **Upgrading to 4.0.0:** markdown reads of a page containing a soft line break (Shift+Enter) now render that break as `⏎` and carry a leading `<!-- roam:escaped-newlines -->` marker, so the page survives a write-back intact. Pages without multi-line blocks are byte-identical to 3.x. AI-assistant users need do nothing; scripts parsing markdown output of multi-line pages see the new encoding. See the [changelog](CHANGELOG.md).
 

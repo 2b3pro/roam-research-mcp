@@ -19,7 +19,6 @@ describe('resolveParentRef: --parent-uid', () => {
     expect(await resolveParentRef({ parentUid: 'aBcDeFgHi' }, exists)).toEqual({
       kind: 'uid',
       uid: 'aBcDeFgHi',
-      deprecated: false,
     });
   });
 
@@ -51,69 +50,47 @@ describe('resolveParentRef: --parent-uid', () => {
   });
 });
 
-describe('resolveParentRef: --parent (UID use is deprecated)', () => {
+describe('resolveParentRef: --parent is always text (5.0)', () => {
   it('returns undefined when neither flag is given', async () => {
     const { exists } = graphWith();
     expect(await resolveParentRef({}, exists)).toBeUndefined();
   });
 
-  it('treats a wrapped digit-free UID as a UID, flagged deprecated', async () => {
-    // The incident: this exact shape used to become heading text.
-    const { exists } = graphWith('aBcDeFgHi');
+  it('treats a wrapped UID as the text of a reference block, even when that block exists', async () => {
+    const { exists, lookups } = graphWith('aBcDeFgHi');
     expect(await resolveParentRef({ parent: '((aBcDeFgHi))' }, exists)).toEqual({
-      kind: 'uid',
-      uid: 'aBcDeFgHi',
-      deprecated: true,
+      kind: 'heading',
+      text: '((aBcDeFgHi))',
     });
+    expect(lookups).toEqual([]);
   });
 
-  it('throws when a wrapped UID does not exist, instead of creating anything', async () => {
-    const { exists } = graphWith();
-    await expect(resolveParentRef({ parent: '((zzzzzzzzz))' }, exists)).rejects.toThrow(/zzzzzzzzz/);
-  });
-
-  it('resolves a bare UID-shaped value as a UID when the graph has it', async () => {
-    const { exists } = graphWith('aBcDeFgHi');
+  it('treats a bare UID as text, even when that block exists', async () => {
+    const { exists, lookups } = graphWith('aBcDeFgHi');
     expect(await resolveParentRef({ parent: 'aBcDeFgHi' }, exists)).toEqual({
-      kind: 'uid',
-      uid: 'aBcDeFgHi',
-      deprecated: true,
-    });
-  });
-
-  it('resolves a bare UID-shaped value as heading text when the graph does not have it', async () => {
-    const { exists } = graphWith();
-    expect(await resolveParentRef({ parent: 'Learnings' }, exists)).toEqual({
       kind: 'heading',
-      text: 'Learnings',
-    });
-  });
-
-  it('a bare 9-character value containing a digit is no longer assumed to be a UID', async () => {
-    const { exists } = graphWith();
-    expect(await resolveParentRef({ parent: 'Sprint_23' }, exists)).toEqual({
-      kind: 'heading',
-      text: 'Sprint_23',
-    });
-  });
-
-  it('keeps plain heading text as text, with no lookup', async () => {
-    const { exists, lookups } = graphWith();
-    expect(await resolveParentRef({ parent: '## Notes' }, exists)).toEqual({
-      kind: 'heading',
-      text: '## Notes',
+      text: 'aBcDeFgHi',
     });
     expect(lookups).toEqual([]);
   });
 
-  it('treats a wrapper around non-UID text as block content', async () => {
+  it('does not error on a wrapped UID that names nothing: it is text', async () => {
     const { exists, lookups } = graphWith();
-    expect(await resolveParentRef({ parent: '((not a uid))' }, exists)).toEqual({
+    expect(await resolveParentRef({ parent: '((zzzzzzzzz))' }, exists)).toEqual({
       kind: 'heading',
-      text: '((not a uid))',
+      text: '((zzzzzzzzz))',
     });
     expect(lookups).toEqual([]);
   });
+
+  it.each(['Learnings', 'Sprint_23', '## Notes', '((not a uid))', '[Title](((aBcDeFgHi)))'])(
+    'keeps %j as text, with no lookup',
+    async (text) => {
+      const { exists, lookups } = graphWith('aBcDeFgHi');
+      expect(await resolveParentRef({ parent: text }, exists)).toEqual({ kind: 'heading', text });
+      expect(lookups).toEqual([]);
+    }
+  );
 });
 
 describe('resolvePageRef: --page', () => {

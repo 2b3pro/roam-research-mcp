@@ -149,42 +149,58 @@ describe('roam save --parent-uid', () => {
   });
 });
 
-describe('roam save --parent with a UID (deprecated path)', () => {
-  it('THE INCIDENT: a wrapped digit-free UID nests under that block, not under a stray ref block', () => {
-    const run = save('--parent', '((nodigitAA))', 'child note');
+describe('roam save --parent with a UID-shaped value (5.0: always text)', () => {
+  it('a wrapped UID finds or creates a reference block and nests under it', () => {
+    const run = save('-p', 'Save Fixture', '--parent', '((nodigitAA))', 'child note');
 
     expect(run.code).toBe(0);
-    // One UID on stdout. The bug printed two: the invented ref block's as well.
-    expect(run.stdout).toMatch(UID);
     expect(run.pages).toEqual([]);
-    expect(run.blocks).toHaveLength(1);
-    expect(run.blocks[0].location?.['parent-uid']).toBe('nodigitAA');
-    expect(run.blocks.some((b) => b.block?.string === '((nodigitAA))')).toBe(false);
+
+    const ref = run.blocks.find((b) => b.block?.string === '((nodigitAA))');
+    const child = run.blocks.find((b) => b.block?.string === 'child note');
+    expect(ref?.location?.['parent-uid']).toBe('savePgAbc');
+    expect(child?.location?.['parent-uid']).toBe(ref?.block?.uid);
+
+    // Nothing is written under the referenced block itself.
+    expect(run.blocks.some((b) => b.location?.['parent-uid'] === 'nodigitAA')).toBe(false);
+
+    // Stdout: "<first block uid> <parent uid>", as for any --parent text.
+    expect(run.stdout.split(' ')[1]).toBe(ref?.block?.uid);
+
+    // The creation is announced; the 4.1 deprecation warning is gone.
+    expect(run.stderr).toContain('((nodigitAA))');
+    expect(run.stderr).toContain(ref?.block?.uid);
+    expect(run.stderr).not.toMatch(/deprecated/i);
   });
 
-  it('prints a deprecation notice on stderr pointing at --parent-uid', () => {
-    const run = save('--parent', '((nodigitAA))', 'child note');
+  it('behaves the same whether or not the UID contains a digit', () => {
+    // exHeadAbc is digit-free, page00001 has digits. Neither is looked up.
+    for (const uid of ['exHeadAbc', 'page00001']) {
+      const run = save('-p', 'Save Fixture', '--parent', `((${uid}))`, 'child note');
 
-    expect(run.stderr).toMatch(/deprecated/i);
-    expect(run.stderr).toContain('--parent-uid');
+      expect(run.code).toBe(0);
+      const ref = run.blocks.find((b) => b.block?.string === `((${uid}))`);
+      expect(ref?.location?.['parent-uid']).toBe('savePgAbc');
+      expect(run.blocks.some((b) => b.location?.['parent-uid'] === uid)).toBe(false);
+    }
   });
 
-  it('errors with zero writes when the wrapped UID does not exist', () => {
-    const run = save('--parent', '((zzzzzzzzz))', 'child note');
-
-    expect(run.code).not.toBe(0);
-    expect(run.stderr).toContain('zzzzzzzzz');
-    expect(run.blocks).toEqual([]);
-    expect(run.pages).toEqual([]);
-  });
-
-  it('resolves a bare UID by asking the graph', () => {
-    const run = save('--parent', 'nodigitAA', 'child note');
+  it('a wrapped UID that names nothing is still text, not an error', () => {
+    const run = save('-p', 'Save Fixture', '--parent', '((zzzzzzzzz))', 'child note');
 
     expect(run.code).toBe(0);
-    expect(run.blocks).toHaveLength(1);
-    expect(run.blocks[0].location?.['parent-uid']).toBe('nodigitAA');
-    expect(run.stderr).toMatch(/deprecated/i);
+    const ref = run.blocks.find((b) => b.block?.string === '((zzzzzzzzz))');
+    expect(ref?.location?.['parent-uid']).toBe('savePgAbc');
+  });
+
+  it('a bare UID is text, even when that block exists', () => {
+    const run = save('-p', 'Save Fixture', '--parent', 'nodigitAA', 'child note');
+
+    expect(run.code).toBe(0);
+    const heading = run.blocks.find((b) => b.block?.string === 'nodigitAA');
+    expect(heading?.location?.['parent-uid']).toBe('savePgAbc');
+    expect(run.blocks.some((b) => b.location?.['parent-uid'] === 'nodigitAA')).toBe(false);
+    expect(run.stderr).not.toMatch(/deprecated/i);
   });
 });
 
@@ -267,7 +283,7 @@ describe('roam save --page', () => {
   });
 
   it('a missing parent UID errors before the target page is created', () => {
-    const run = save('-p', 'A Page That Does Not Exist Yet', '--parent', '((zzzzzzzzz))', 'note');
+    const run = save('-p', 'A Page That Does Not Exist Yet', '--parent-uid', 'zzzzzzzzz', 'note');
 
     expect(run.code).not.toBe(0);
     expect(run.blocks).toEqual([]);

@@ -222,7 +222,7 @@ interface SaveOptions extends GraphOptions {
   update?: boolean;
   debug?: boolean;
   page?: string;             // Target page for block (default: daily page)
-  parent?: string;           // Parent by text (find or create). UID use is deprecated
+  parent?: string;           // Parent by text (find or create). Never a UID
   parentUid?: string;        // Parent by block UID (must exist)
   categories?: string;       // Comma-separated category tags
   todo?: string | boolean;   // TODO item text or flag for stdin
@@ -246,7 +246,7 @@ export function createSaveCommand(): Command {
     .option('--title <title>', 'Create a new page with this title')
     .option('--update', 'Update existing page using smart diff (preserves block UIDs)')
     .option('-p, --page <ref>', 'Target page by title (creates if missing), or by UID as ((uid)) (must exist). Default: daily page')
-    .option('--parent <text>', 'Nest under the block with this text on the target page (creates if missing). Use # prefix for heading level: "## Section". Passing a UID here is deprecated: use --parent-uid')
+    .option('--parent <text>', 'Nest under the block with this text on the target page (creates if missing). Always text: "((uid))" means a block containing that reference. Use # prefix for heading level: "## Section"')
     .option('--parent-uid <uid>', 'Nest under the block with this UID (must exist). Accepts uid or ((uid))')
     .option('-c, --categories <tags>', 'Comma-separated tags appended to first block')
     .option('-t, --todo [text]', 'Add TODO item(s) to daily page. Accepts inline text or stdin')
@@ -267,6 +267,7 @@ Examples:
   # Save under heading (creates if missing)
   roam save --parent "## Notes" "My note"         # Under H2 "Notes" heading
   roam save --parent-uid blockUid9 "Child"        # Under specific block, by UID
+  roam save --parent "((blockUid9))" "Child"      # Under a block that references it
 
   # Target specific page
   roam save -p "Project X" "Status update"        # By title (creates if missing)
@@ -459,9 +460,8 @@ JSON format (--json):
 
         const graph = resolveGraph(options, true);
 
-        // Resolve the parent before any write. A UID is never guessed from its
-        // shape: --parent-uid and ((uid)) must exist, and a bare 9-character
-        // --parent value is a UID only if the graph has it.
+        // Resolve the parent before any write. --parent-uid is always a UID
+        // and must exist; --parent is always the text of the parent block.
         const exists: UidExists = (uid) => uidExists(graph, uid);
         const parentTarget = await resolveParentRef(
           { parent: options.parent, parentUid: options.parentUid },
@@ -474,12 +474,6 @@ JSON format (--json):
 
         if (parentTarget?.kind === 'uid') {
           parentUid = parentTarget.uid;
-          if (parentTarget.deprecated) {
-            console.error(
-              `Warning: passing a block UID to --parent is deprecated. In 5.0 --parent will always mean ` +
-              `the text of the parent block. Use: --parent-uid ${parentUid}`
-            );
-          }
         } else if (parentTarget) {
           // Parse heading syntax from parent text
           const { heading_level, content } = parseMarkdownHeadingLevel(parentTarget.text);

@@ -1,10 +1,11 @@
 /**
- * Classify a `roam save` reference (`--parent`, `--page`) by what its shape can
- * actually establish. Pure: no graph access.
+ * Classify a `roam save --page` reference by what its shape can actually
+ * establish. Pure: no graph access. (`--parent` is always text and is not
+ * classified; `--parent-uid` is parsed by `parseUidFlag` below.)
  *
  * This replaces a heuristic that required a digit before believing a value was
- * a UID. About one block UID in five has no digit, so `--parent "((uid))"`
- * silently became heading text for those. Shape alone cannot tell a bare
+ * a UID. About one block UID in five has no digit, so a wrapped UID silently
+ * became text for those. Shape alone cannot tell a bare
  * 9-character UID from a 9-character title like "Learnings"; that case is
  * reported as `ambiguous` and the caller asks the graph.
  */

@@ -2,6 +2,10 @@
  * Resolve `roam save`'s `--parent-uid`, `--parent` and `--page` values to a
  * target, asking the graph only where shape cannot decide.
  *
+ * The two parent flags never overlap: `--parent-uid` is always a UID and
+ * `--parent` is always the text of the parent block, so `--parent "((uid))"`
+ * means a block whose content is that reference.
+ *
  * Nothing here writes. Callers resolve every reference before their first
  * write, so a reference that cannot be resolved leaves the graph untouched.
  */
@@ -12,11 +16,8 @@ import { classifyRef, parseUidFlag } from './ref-classifier.js';
 export type UidExists = (uid: string) => Promise<boolean>;
 
 export type ParentTarget =
-  /**
-   * Nest under this block. `deprecated` is true when the UID arrived through
-   * `--parent`, which becomes text-only in 5.0.
-   */
-  | { kind: 'uid'; uid: string; deprecated: boolean }
+  /** Nest under this block. */
+  | { kind: 'uid'; uid: string }
   /** Nest under the block with this text on the target page (find or create). */
   | { kind: 'heading'; text: string };
 
@@ -51,22 +52,12 @@ export async function resolveParentRef(
 
   if (parentUid !== undefined) {
     const uid = await requireUid(parseUidFlag(parentUid), '--parent-uid', exists);
-    return { kind: 'uid', uid, deprecated: false };
+    return { kind: 'uid', uid };
   }
 
   if (parent === undefined) return undefined;
 
-  const ref = classifyRef(parent);
-  switch (ref.kind) {
-    case 'uid':
-      return { kind: 'uid', uid: await requireUid(ref.uid, '--parent', exists), deprecated: true };
-    case 'ambiguous':
-      return (await exists(ref.value))
-        ? { kind: 'uid', uid: ref.value, deprecated: true }
-        : { kind: 'heading', text: ref.value };
-    case 'text':
-      return { kind: 'heading', text: ref.value };
-  }
+  return { kind: 'heading', text: parent };
 }
 
 export async function resolvePageRef(page: string, exists: UidExists): Promise<PageTarget> {

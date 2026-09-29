@@ -231,8 +231,8 @@ Options:
   -p, --page <ref>         Target page by title (creates if missing), or by UID as ((uid))
                            (must exist). Default: daily page
   --parent <text>          Nest under the block with this text on the target page (creates
-                           if missing). Use # prefix for heading level: "## Section".
-                           Passing a UID here is deprecated: use --parent-uid
+                           if missing). Always text: "((uid))" means a block containing
+                           that reference. Use # prefix for heading level: "## Section"
   --parent-uid <uid>       Nest under the block with this UID (must exist).
                            Accepts uid or ((uid))
   -c, --categories <tags>  Comma-separated tags appended to first block
@@ -254,6 +254,7 @@ roam save --todo "Buy groceries"                # TODO item
 # Save under heading (creates if missing)
 roam save --parent "## Notes" "My note"         # Under H2 "Notes" heading
 roam save --parent-uid blockUid9 "Child"        # Under specific block, by UID
+roam save --parent "((blockUid9))" "Child"      # Under a block that references it
 
 # Target specific page
 roam save -p "Project X" "Status update"        # By title (creates if missing)

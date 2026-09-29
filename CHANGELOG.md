@@ -1,5 +1,18 @@
 # Changelog
 
+### v5.0.0 (2026-09-29)
+
+**In one line:** `roam save --parent` is now always the text of the parent block and never a UID; use `--parent-uid` to nest under a block by UID.
+
+**Why a major.** A call that used to do one thing now does another, and it does not fail. `roam save --parent "((uid))"` and `roam save --parent <uid>` nested under that block through 4.1.0. In 5.0 they find or create a block whose content is that text, on the daily page unless `-p` is given, and nest under that, with exit code 0. **If a script passes a UID to `--parent`, change the flag to `--parent-uid` before upgrading.** Only the CLI changes. The MCP tools take `parent-uid` as a typed field and are unaffected, so if you use the server through an AI assistant, nothing is required of you.
+
+- **`--parent` is text, always.** No graph lookup, no shape test. `--parent "((uid))"` is a block containing that reference, which makes reference blocks usable as parents for every UID. Before 4.1.0 that happened only by accident, for UIDs with no digit.
+- **`--parent-uid` is unchanged from 4.1.0.** It accepts `uid` or `((uid))`, must name an existing block or page, and errors with nothing written otherwise.
+- **The deprecation warning is gone**, along with the lookup behind it. `--parent` no longer makes an extra query for 9-character values.
+- **How to tell if you are affected.** A misrouted save prints two UIDs on stdout where it used to print one, and a line on stderr naming the block it created, for example `Created parent block "((uid))" (uid: ...)`. 4.1.0 printed a deprecation warning for every call that 5.0 changes.
+- **`--page` is unchanged from 4.1.0.** `-p "((uid))"` is a UID and must exist; a bare 9-character value is a UID only if the graph has it.
+- **A short deprecation window.** 4.1.0, which introduced the warning, was published the same day. If you would rather migrate first, pin `roam-research-mcp@4`.
+
 ### v4.1.0 (2026-09-29)
 
 **In one line:** `roam save --parent "((uid))"` silently misrouted about one save in five; there is now a `--parent-uid` flag that always means a UID, and `--parent` no longer guesses.
