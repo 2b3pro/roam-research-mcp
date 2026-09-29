@@ -1,6 +1,6 @@
 # Changelog
 
-### v4.1.0 (unreleased)
+### v4.1.0 (2026-09-29)
 
 **In one line:** `roam save --parent "((uid))"` silently misrouted about one save in five; there is now a `--parent-uid` flag that always means a UID, and `--parent` no longer guesses.
 
