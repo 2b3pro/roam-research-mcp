@@ -12,6 +12,7 @@
 - **Creating a parent block is no longer invisible.** When `--parent "<text>"` matches nothing and a block is created, stderr says so and names its UID.
 - **⚠️ A stale bare UID is now text.** A bare 9-character `--parent` or `-p` value that contains a digit but names nothing in your graph used to fail with "Parent page(s) do not exist" and write nothing. It is now treated as text and found or created, because a bare value cannot be told apart from a title such as `Sprint_23`. If a script passes bare UIDs that may have been deleted, switch it to `--parent-uid` or `((uid))`, both of which error instead of writing.
 - **Other behaviour you may notice.** If you relied on a digit-free `--parent "((uid))"` creating a reference block, it now nests under the referenced block; that meaning returns, for every UID, in 5.0. A cron job that treats any stderr output as failure will see the new warning and notice lines.
+- **The publish guard now runs.** 4.0.1 added a `prepublishOnly` check that refuses to publish a cheatsheet carrying a private layer. `package.json` already had a second `prepublishOnly` entry further down, and with a duplicated key the later one wins, so the check was never executed. The two are now a single script: clean, build, then check. Builds made by CI were never at risk, since CI has no private prefix set; this closes the hand-publish path the guard was written for.
 
 ### v4.0.1 (2026-09-06)
 

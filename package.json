@@ -31,11 +31,10 @@
   "scripts": {
     "build": "echo \"Using custom instructions: .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md\" && tsc && cat Roam_Markdown_Cheatsheet.md .roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md > build/Roam_Markdown_Cheatsheet.md && chmod 755 build/index.js build/cli/roam.js",
     "clean": "rm -rf build",
-    "prepublishOnly": "node scripts/check-bundled-cheatsheet.mjs",
+    "prepublishOnly": "npm run clean && npm run build && node scripts/check-bundled-cheatsheet.mjs",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
     "start": "node build/index.js",
-    "prepublishOnly": "npm run clean && npm run build",
     "release": "standard-version",
     "release:patch": "standard-version --release-as patch",
     "release:minor": "standard-version --release-as minor",
