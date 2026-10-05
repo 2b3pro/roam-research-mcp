@@ -29,6 +29,9 @@ const PAGES = {
   // Digit-free on purpose, like roughly one real UID in five. `roam save` used
   // to decide "is this a UID" by looking for a digit.
   'Save Fixture': 'savePgAbc',
+  // Two pages so a page-scoped status search has something to leave out.
+  'Status Fixture': 'statusPg1',
+  'Status Other': 'statusPg2',
 };
 
 /**
@@ -92,6 +95,21 @@ const BLOCKS = {
     // A block whose content is a reference to another block, which is what
     // `roam save --parent "((uid))"` finds or creates.
     ['exRefAbcd', '((exHeadAbc))', 2, 'savePgAbc'],
+  ],
+  // Status markers in both spellings. `{{[[TODO]]}}` is what Roam's checkbox
+  // writes and does not contain `{{TODO`, which is how roam_search_by_status
+  // went years returning only the rare bare form.
+  statusPg1: [
+    ['stBrkTodo', '{{[[TODO]]}} bracketed task', 0, 'statusPg1'],
+    ['stBareTod', '{{TODO}} bare task', 1, 'statusPg1'],
+    ['stBrkDone', '{{[[DONE]]}} bracketed finished', 2, 'statusPg1'],
+    ['stBareDon', '{{DONE}} bare finished', 3, 'statusPg1'],
+    ['stHidTodo', '{{[[TODO]]}} withheld task #.rm-hide', 4, 'statusPg1'],
+    // The word alone is not a marker, in either spelling.
+    ['stPlain01', 'mentions TODO and DONE in prose, not a task', 5, 'statusPg1'],
+  ],
+  statusPg2: [
+    ['stOthTodo', '{{[[TODO]]}} task on another page', 0, 'statusPg2'],
   ],
 };
 
@@ -270,6 +288,32 @@ function answer(query, args) {
     return match ? [[match[1]]] : [];
   }
 
+  // roam_search_by_status (src/search/status-search.ts). Unlike the branches
+  // above this one EVALUATES the query rather than recognising it: it reads
+  // which `:in` variables the `includes?` clauses actually test `?block-str`
+  // against, and matches only on those. Markers passed as inputs but never
+  // used in a clause match nothing, so a query that binds both spellings and
+  // tests one fails here the way it would against Roam. Text and tag search
+  // share the find-vars but inline their terms, bind none, and fall through.
+  if (query.includes(':find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time')) {
+    const inVars = (query.match(/:in \$([^:]*):where/)?.[1] ?? '').match(/\?[\w-]+/g) ?? [];
+    const bound = Object.fromEntries(inVars.map((name, i) => [name, args?.[i]]));
+    const tested = [...query.matchAll(/\[\(clojure\.string\/includes\? \?block-str (\?[\w-]+)\)\]/g)]
+      .map((m) => bound[m[1]])
+      .filter((marker) => typeof marker === 'string');
+    if (tested.length > 0) {
+      const titleOf = Object.fromEntries(Object.entries(PAGES).map(([title, uid]) => [uid, title]));
+      const scope = bound['?page-uid'];
+      return Object.entries(BLOCKS)
+        .filter(([pageUid]) => scope === undefined || pageUid === scope)
+        .flatMap(([pageUid, blocks]) =>
+          blocks
+            .filter(([, str]) => tested.some((marker) => str.includes(marker)))
+            .map(([uid, str]) => [uid, str, titleOf[pageUid], 0, 0])
+        );
+    }
+  }
+
   // fetchReferringBlocks: backlinks to a page, via `:block/refs`. Distinctive
   // find-vars combo (`?block-uid ?block-str ?page-title ?page-uid`) so this is
   // checked BEFORE the generic `:node/title` branch below -- the query also
@@ -280,6 +324,15 @@ function answer(query, args) {
   if (query.includes(':find ?block-uid ?block-str ?page-title ?page-uid')) {
     const targetTitle = args?.[0];
     return REFERRING_BLOCKS[targetTitle] ?? [];
+  }
+
+  // `SearchUtils.findPageByTitleOrUid`'s last resort, once the title lookups
+  // have missed: is this value the UID of anything? The UID is inlined in the
+  // query text rather than bound.
+  const inlinedUid = query.match(/:find \?uid :where \[\?e :block\/uid "([^"]*)"\]/)?.[1];
+  if (inlinedUid !== undefined) {
+    const known = [...Object.values(PAGES), ...allBlocks().map(([uid]) => uid)];
+    return known.includes(inlinedUid) ? [[inlinedUid]] : [];
   }
 
   // Page lookup by title. `:find ?uid .` is a scalar find — return the bare uid.
