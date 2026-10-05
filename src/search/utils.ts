@@ -207,4 +207,13 @@ export class SearchUtils {
     const clauses = variations.map(t => `[${variable} :node/title "${t}"]`);
     return `(or ${clauses.join(' ')})`;
   }
+
+  /**
+   * The two spellings of a status marker: `{{[[TODO]]}}` (what Roam's checkbox
+   * writes) and the bare `{{TODO}}`. Neither contains the other, so a search
+   * must test for both.
+   */
+  static statusMarkers(status: 'TODO' | 'DONE'): [string, string] {
+    return [`{{[[${status}]]}}`, `{{${status}`];
+  }
 }
