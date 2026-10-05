@@ -1,5 +1,16 @@
 # Changelog
 
+### v5.0.1 (2026-10-05)
+
+**In one line:** `roam_search_by_status` was missing almost every task, because it never matched `{{[[TODO]]}}`, the form Roam's own checkbox writes; it now finds both spellings.
+
+**Why a patch.** No parameter, default, or result shape changes. The tool does what its description always said. It searched for the text `{{TODO` on the belief that this matched both `{{[[TODO]]}}` and `{{TODO}}`, but the bracketed form has `[[` where that needs `TODO`, so only the rare bare form was ever returned. On one real graph that was 5 tasks out of 291; on another, 1 out of 4,223. `DONE` had the same fault. The CLI's `roam get --todo` and `--done` go through the same search and are fixed with it.
+
+- **Expect far more results.** This is the fix working, but it is a large change in volume: an unscoped `status: "TODO"` search can now return thousands of blocks in one response where it used to return a handful. Narrow it with `page_title_uid` or `include` if that is more than you want. The tool has no limit parameter yet.
+- **Hidden blocks stay hidden.** Tasks tagged `#.rm-hide` or `#.rm-private`, and anything nested under them, are still withheld, and this is now pinned by a test.
+- **Tested at the wire.** New tests drive the real server and check what a client receives, for both spellings, for `DONE`, and for a search scoped to a page by title or by UID. The fake backend they run against matches only on the inputs the query really tests, so a query that binds both spellings and uses one fails.
+- **Thanks** to [@drenaud0214](https://github.com/drenaud0214) for finding this, tracing it to the exact clause, and sending the fix ([#22](https://github.com/2b3pro/roam-research-mcp/pull/22)).
+
 ### v5.0.0 (2026-09-29)
 
 **In one line:** `roam save --parent` is now always the text of the parent block and never a UID; use `--parent-uid` to nest under a block by UID.
