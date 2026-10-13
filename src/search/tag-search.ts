@@ -2,6 +2,7 @@ import { q } from '@roam-research/roam-api-sdk';
 import type { Graph } from '@roam-research/roam-api-sdk';
 import { BaseSearchHandler, TagSearchParams, SearchResult } from './types.js';
 import { SearchUtils } from './utils.js';
+import { ednString } from '../shared/datalog.js';
 
 export class TagSearchHandler extends BaseSearchHandler {
   constructor(
@@ -67,13 +68,13 @@ export class TagSearchHandler extends BaseSearchHandler {
     if (nearTagUid) {
       queryWhereClauses += `
                       [?b :block/refs ?near-tag-page]
-                      [?near-tag-page :block/uid "${nearTagUid}"]`;
+                      [?near-tag-page :block/uid ${ednString(nearTagUid)}]`;
     }
 
     if (excludeTagUid) {
       queryWhereClauses += `
                       (not [?b :block/refs ?exclude-tag-page])
-                      [?exclude-tag-page :block/uid "${excludeTagUid}"]`;
+                      [?exclude-tag-page :block/uid ${ednString(excludeTagUid)}]`;
     }
 
     if (targetPageUid) {

@@ -31,6 +31,7 @@ import {
   type DiffStats,
   type RoamApiBlock,
 } from '../../diff/index.js';
+import { ednString } from '../../shared/datalog.js';
 
 // Content item types for createPage
 export interface TextContentItem {
@@ -173,7 +174,7 @@ export class PageOperations {
           const dailyPageTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
 
           // Get or create daily page UID
-          const dailyPageQuery = `[:find ?uid . :where [?e :node/title "${dailyPageTitle}"] [?e :block/uid ?uid]]`;
+          const dailyPageQuery = `[:find ?uid . :where [?e :node/title ${ednString(dailyPageTitle)}] [?e :block/uid ?uid]]`;
           let dailyPageUid = await q(this.graph, dailyPageQuery, []) as unknown as string | null;
 
           if (!dailyPageUid) {
@@ -224,7 +225,7 @@ export class PageOperations {
         // Idempotency check: If page already has content, skip adding more
         // This prevents duplicate content when the tool is called twice
         const existingBlocksQuery = `[:find (count ?b) .
-                                      :where [?p :block/uid "${pageUid}"]
+                                      :where [?p :block/uid ${ednString(pageUid)}]
                                              [?p :block/children ?b]]`;
         const existingBlockCountResult = await q(this.graph, existingBlocksQuery, []);
         const existingBlockCount = typeof existingBlockCountResult === 'number' ? existingBlockCountResult : 0;
@@ -447,7 +448,7 @@ export class PageOperations {
     }
 
     // First get the page title
-    const titleQuery = `[:find ?title . :where [?e :block/uid "${uid}"] [?e :node/title ?title]]`;
+    const titleQuery = `[:find ?title . :where [?e :block/uid ${ednString(uid)}] [?e :node/title ?title]]`;
     const title = await q(this.graph, titleQuery, []) as unknown as string | null;
 
     if (!title) {
@@ -865,7 +866,7 @@ export class PageOperations {
                             :block/heading
                             {:block/children ...}
                           ]) .
-                          :where [?page :block/uid "${pageUid}"]]`;
+                          :where [?page :block/uid ${ednString(pageUid)}]]`;
 
     const pageData = await q(this.graph, blocksQuery, []) as unknown as RoamApiBlock | null;
 

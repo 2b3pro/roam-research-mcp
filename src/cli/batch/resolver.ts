@@ -7,6 +7,7 @@ import { capitalizeWords } from '../../tools/helpers/text.js';
 import { formatRoamDate } from '../../utils/helpers.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import type { BatchCommand, ResolutionContext } from './types.js';
+import { ednString } from '../../shared/datalog.js';
 
 /**
  * Resolve a page title to its UID, trying multiple case variations
@@ -25,7 +26,7 @@ export async function resolvePageUid(graph: Graph, title: string): Promise<strin
     title.toLowerCase()
   ];
 
-  const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
+  const orClause = variations.map(v => `[?e :node/title ${ednString(v)}]`).join(' ');
   const searchQuery = `[:find ?uid .
                         :where [?e :block/uid ?uid]
                                (or ${orClause})]`;

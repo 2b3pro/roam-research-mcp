@@ -1,5 +1,6 @@
 import { Graph, q, moveBlock as moveRoamBlock } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { ednString } from '../../shared/datalog.js';
 
 export class BlockOperations {
   constructor(private graph: Graph) {}
@@ -18,7 +19,7 @@ export class BlockOperations {
 
     // Verify the block exists
     const blockQuery = `[:find ?uid .
-                        :where [?b :block/uid "${block_uid}"]
+                        :where [?b :block/uid ${ednString(block_uid)}]
                                [?b :block/uid ?uid]]`;
     const blockExists = await q(this.graph, blockQuery, []);
     if (!blockExists) {

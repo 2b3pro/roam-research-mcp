@@ -4,6 +4,7 @@ import { RoamBlock, RoamAncestor, RoamBlockWithAncestors } from '../../types/roa
 import { resolveBlockRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import { pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
+import { ednString } from '../../shared/datalog.js';
 
 export class BlockRetrievalOperations {
   constructor(private graph: Graph) { }
@@ -49,7 +50,7 @@ export class BlockRetrievalOperations {
       if (include_ancestors) {
         const ancestorQuery = `[:find (pull ?b [:block/uid :block/string
                                                 {:block/parents [:block/uid :block/string :node/title]}])
-                                :where [?b :block/uid "${block_uid}"]]`;
+                                :where [?b :block/uid ${ednString(block_uid)}]]`;
         const ancestorResults = await q(this.graph, ancestorQuery, []) as any[];
 
         if (ancestorResults && ancestorResults.length > 0) {

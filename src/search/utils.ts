@@ -3,6 +3,7 @@ import { q } from '@roam-research/roam-api-sdk';
 import type { Graph } from '@roam-research/roam-api-sdk';
 import type { SearchResult } from './types.js';
 import { normalizeToRoamDate } from '../utils/helpers.js';
+import { ednString } from '../shared/datalog.js';
 
 export class SearchUtils {
   /**
@@ -28,7 +29,7 @@ export class SearchUtils {
     }
 
     // Try as UID
-    const uidQuery = `[:find ?uid :where [?e :block/uid "${titleOrUid}"] [?e :block/uid ?uid]]`;
+    const uidQuery = `[:find ?uid :where [?e :block/uid ${ednString(titleOrUid)}] [?e :block/uid ?uid]]`;
     const uidResults = await q(graph, uidQuery, []) as [string][];
 
     if (!uidResults || uidResults.length === 0) {
@@ -143,7 +144,7 @@ export class SearchUtils {
     }
 
     // Build OR clause for all UIDs
-    const uidClauses = blockUids.map(uid => `[?b :block/uid "${uid}"]`).join(' ');
+    const uidClauses = blockUids.map(uid => `[?b :block/uid ${ednString(uid)}]`).join(' ');
 
     const queryStr = `[:find ?block-uid ?tag-title
                       :where
@@ -191,7 +192,7 @@ export class SearchUtils {
    */
   static buildTextSearchClause(text: string, variable: string, caseSensitive: boolean = false): string {
     const variations = this.getCaseVariations(text, caseSensitive);
-    const clauses = variations.map(term => `[(clojure.string/includes? ${variable} "${term}")]`);
+    const clauses = variations.map(term => `[(clojure.string/includes? ${variable} ${ednString(term)})]`);
     return `(or ${clauses.join(' ')})`;
   }
 
@@ -204,7 +205,7 @@ export class SearchUtils {
    */
   static buildTagMatchClause(tag: string, variable: string, caseSensitive: boolean = false): string {
     const variations = this.getCaseVariations(tag, caseSensitive);
-    const clauses = variations.map(t => `[${variable} :node/title "${t}"]`);
+    const clauses = variations.map(t => `[${variable} :node/title ${ednString(t)}]`);
     return `(or ${clauses.join(' ')})`;
   }
 

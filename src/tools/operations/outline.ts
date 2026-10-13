@@ -16,6 +16,7 @@ import {
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
 import type { OutlineItem, NestedBlock } from '../types/index.js';
+import { ednString } from '../../shared/datalog.js';
 
 // Threshold for skipping child fetch during verification
 const VERIFICATION_THRESHOLD = 5;
@@ -45,9 +46,9 @@ export class OutlineOperations {
   private async findBlockWithRetry(pageUid: string, blockString: string, maxRetries = 2, initialDelay = 1000): Promise<string> {
     // Use only the most reliable query strategy (direct page and string match)
     const query = `[:find ?b-uid ?order
-        :where [?p :block/uid "${pageUid}"]
+        :where [?p :block/uid ${ednString(pageUid)}]
                [?b :block/page ?p]
-               [?b :block/string "${blockString}"]
+               [?b :block/string ${ednString(blockString)}]
                [?b :block/order ?order]
                [?b :block/uid ?b-uid]]`;
 
@@ -269,7 +270,7 @@ export class OutlineOperations {
         if (this.isValidUid(block_text_uid)) {
           // First try to find block by UID
           const uidQuery = `[:find ?uid
-                           :where [?e :block/uid "${block_text_uid}"]
+                           :where [?e :block/uid ${ednString(block_text_uid)}]
                                   [?e :block/uid ?uid]]`;
           const uidResult = await q(this.graph, uidQuery, []) as [string][];
 
@@ -429,7 +430,7 @@ export class OutlineOperations {
 
     // If page_uid is provided, verify it exists
     if (page_uid) {
-      const verifyQuery = `[:find ?uid :where [?e :block/uid "${page_uid}"] [?e :block/uid ?uid]]`;
+      const verifyQuery = `[:find ?uid :where [?e :block/uid ${ednString(page_uid)}] [?e :block/uid ?uid]]`;
       const verifyResult = await q(this.graph, verifyQuery, []) as [string][];
       if (!verifyResult || verifyResult.length === 0) {
         throw new McpError(

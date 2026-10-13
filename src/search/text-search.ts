@@ -2,6 +2,7 @@ import { q } from '@roam-research/roam-api-sdk';
 import type { Graph } from '@roam-research/roam-api-sdk';
 import { BaseSearchHandler, SearchResult, TextSearchParams } from './types.js';
 import { SearchUtils } from './utils.js';
+import { ednString } from '../shared/datalog.js';
 
 export class TextSearchHandler extends BaseSearchHandler {
   constructor(
@@ -110,7 +111,7 @@ export class TextSearchHandler extends BaseSearchHandler {
                       :where
                       [?e :node/title ?title]
                       [?e :block/uid ?uid]
-                      [(clojure.string/starts-with? ?title "${namespace}")]]`;
+                      [(clojure.string/starts-with? ?title ${ednString(namespace)})]]`;
 
     const rawResults = await q(this.graph, queryStr, []) as [string, string][];
 
@@ -119,7 +120,7 @@ export class TextSearchHandler extends BaseSearchHandler {
                            :in $
                            :where
                            [?e :node/title ?title]
-                           [(clojure.string/starts-with? ?title "${namespace}")]]`;
+                           [(clojure.string/starts-with? ?title ${ednString(namespace)})]]`;
     const totalCountResults = await q(this.graph, countQueryStr, []) as number[][];
     const totalCount = totalCountResults[0] ? totalCountResults[0][0] : 0;
 

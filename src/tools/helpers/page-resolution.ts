@@ -6,6 +6,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { formatRoamDate, normalizeToRoamDate } from '../../utils/helpers.js';
 import { pageUidCache } from '../../cache/page-uid-cache.js';
 import { capitalizeWords } from './text.js';
+import { ednString } from '../../shared/datalog.js';
 
 /**
  * Find a page UID by title with case variation matching and caching.
@@ -36,7 +37,7 @@ export async function getPageUid(graph: Graph, title: string): Promise<string | 
   }
 
   // Query database with OR clause for all variations
-  const orClause = variations.map(v => `[?e :node/title "${v}"]`).join(' ');
+  const orClause = variations.map(v => `[?e :node/title ${ednString(v)}]`).join(' ');
   const searchQuery = `[:find ?uid .
                       :where [?e :block/uid ?uid]
                              (or ${orClause})]`;
@@ -144,7 +145,7 @@ export async function findOrCreatePage(
 
     // If not found as title, try as UID
     const uidQuery = `[:find ?uid
-                      :where [?e :block/uid "${titleOrUid}"]
+                      :where [?e :block/uid ${ednString(titleOrUid)}]
                              [?e :block/uid ?uid]]`;
     const uidResult = await q(graph, uidQuery, []);
     if (uidResult && uidResult.length > 0) {

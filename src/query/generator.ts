@@ -5,6 +5,7 @@
  */
 
 import type { QueryNode, DatalogClauses } from './types.js';
+import { ednString } from '../shared/datalog.js';
 
 export class DatalogGenerator {
   private refCounter: number = 0;
@@ -148,7 +149,7 @@ export class DatalogGenerator {
 
     // A tag reference means the block has :block/refs pointing to a page with that title
     const where = [
-      `[${refVar} :node/title "${this.escapeString(tagName)}"]`,
+      `[${refVar} :node/title ${ednString(tagName)}]`,
       `[${blockVar} :block/refs ${refVar}]`
     ];
 
@@ -161,7 +162,7 @@ export class DatalogGenerator {
     const refVar = `?block-ref-${this.refCounter++}`;
 
     const where = [
-      `[${refVar} :block/uid "${this.escapeString(uid)}"]`,
+      `[${refVar} :block/uid ${ednString(uid)}]`,
       `[${blockVar} :block/refs ${refVar}]`
     ];
 
@@ -171,7 +172,7 @@ export class DatalogGenerator {
   private generateSearch(text: string, blockVar: string): DatalogClauses {
     // Search uses clojure.string/includes? to find text in block content
     const where = [
-      `[(clojure.string/includes? ?block-str "${this.escapeString(text)}")]`
+      `[(clojure.string/includes? ?block-str ${ednString(text)})]`
     ];
 
     return { where, inputs: [], inputValues: [] };
@@ -192,13 +193,12 @@ export class DatalogGenerator {
   private generateBy(user: string, blockVar: string): DatalogClauses {
     // "by" matches blocks created OR edited by the user
     // Uses or-join to match either condition
-    const escapedUser = this.escapeString(user);
     const where = [
       `(or-join [${blockVar}]
         (and [${blockVar} :create/user ?by-creator]
-             [?by-creator :user/display-name "${escapedUser}"])
+             [?by-creator :user/display-name ${ednString(user)}])
         (and [${blockVar} :edit/user ?by-editor]
-             [?by-editor :user/display-name "${escapedUser}"]))`
+             [?by-editor :user/display-name ${ednString(user)}]))`
     ];
 
     return { where, inputs: [], inputValues: [] };
@@ -212,7 +212,7 @@ export class DatalogGenerator {
   ): DatalogClauses {
     const where = [
       `[${blockVar} ${attribute} ?${varName}]`,
-      `[?${varName} :user/display-name "${this.escapeString(user)}"]`
+      `[?${varName} :user/display-name ${ednString(user)}]`
     ];
     return { where, inputs: [], inputValues: [] };
   }
@@ -346,10 +346,6 @@ export class DatalogGenerator {
       default:
         return date.getTime();
     }
-  }
-
-  private escapeString(str: string): string {
-    return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   }
 }
 
