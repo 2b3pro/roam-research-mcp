@@ -1,5 +1,15 @@
 # Changelog
 
+### v5.0.2 (2026-10-13)
+
+**In one line:** pages, blocks and search terms containing `"` or `\` now work. Through 5.0.1 they made Roam reject the query, so a page like `Alex "Sandy" Pentland` could not be fetched by title.
+
+**Why a patch.** No parameter, default, or result shape changes. Values were written into Datalog string literals without escaping. A `"` ended the literal early and Roam answered `IndexOutOfBoundsException`. A `\` was read as an escape, so a title like `C:\newdir Notes` was looked up with a newline in it and silently not found. Every such value is now escaped.
+
+- **What was broken:** fetching or targeting a page by a title containing `"` (83 pages on one real graph), creating such a page through `roam_create_outline`, `roam_search_by_text` for a quoted phrase, and the CLI's batch page lookups. `roam_create_outline` also returned an empty `created_blocks` for any block whose text contained `"`, without reporting an error.
+- **Tested at the wire.** New tests drive the real server with quoted and backslashed titles, block text and search terms. The fake backend now reads query strings the way Roam does and refuses a malformed one with the same error, so an unescaped value fails there too.
+- **Thanks** to [@notlakshitha](https://github.com/notlakshitha) for the report and for tracing it to the interpolation sites ([#23](https://github.com/2b3pro/roam-research-mcp/issues/23)).
+
 ### v5.0.1 (2026-10-05)
 
 **In one line:** `roam_search_by_status` was missing almost every task, because it never matched `{{[[TODO]]}}`, the form Roam's own checkbox writes; it now finds both spellings.
