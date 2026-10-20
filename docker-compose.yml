@@ -6,9 +6,13 @@ services:
     build: .
     container_name: roam-mcp
     ports:
-      - "8048:8088"
+      - "127.0.0.1:8048:8088"
     env_file:
       - .env
+    environment:
+      HTTP_STREAM_HOST: "0.0.0.0"
+      HTTP_AUTH_TOKEN: "${HTTP_AUTH_TOKEN:?Set HTTP_AUTH_TOKEN in .env}"
+    command: ["--server"]
     networks:
       - n8n-net
 
