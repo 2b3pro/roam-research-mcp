@@ -307,7 +307,7 @@ ROAM_SYSTEM_WRITE_KEY=your-secret-key
 | `protected` | No | If `true`, writes require `ROAM_SYSTEM_WRITE_KEY` confirmation — **except on the default graph**, see below |
 | `memoriesTag` | No | Tag for `roam_remember`/`roam_recall` (overrides global default) |
 
-**Two kinds of access control (and how they differ)**
+<a id="two-kinds-of-access-control-and-how-they-differ"></a>**Two kinds of access control (and how they differ)**
 
 The server has two independent locks. They're easy to mix up because both are "keys" — here's the plain version (both are **optional and off by default**):
 
@@ -382,7 +382,7 @@ Point MCP clients at it with an HTTP transport config:
 
 Env vars (tokens, graphs) live with the **server** process, not the client config.
 
-**Securing an exposed server (two layers):**
+<a id="securing-an-exposed-server-two-layers"></a>**Securing an exposed server (two layers):**
 If you bind beyond loopback (`-H 0.0.0.0`), add the perimeter lock:
 
 ```bash
@@ -418,12 +418,15 @@ curl -s http://127.0.0.1:8088/health   # verify
 **3. Docker**
 
 ```bash
-docker run -p 127.0.0.1:8088:8088 \
-  -e HTTP_STREAM_HOST=0.0.0.0 \
+docker build -t roam-research-mcp .
+docker run --init -p 127.0.0.1:8088:8088 \
+  -e HTTP_STREAM_HOST=0.0.0.0 -e HTTP_STREAM_PORT=8088 \
   --env-file .env roam-research-mcp --server
 ```
 
 Set `HTTP_AUTH_TOKEN` to a random secret in `.env` before running; MCP requests must include `Authorization: Bearer <token>`. The published port is loopback-only by default. For remote access, follow [Securing an exposed server](#securing-an-exposed-server-two-layers) and intentionally publish on the required host address.
+
+The `-e` values win over `--env-file`, so the server listens on the published port whatever `.env` says. `--init` lets `docker stop` end the server straight away instead of killing it after 10 seconds.
 
 ### Configuring in LLMs
 

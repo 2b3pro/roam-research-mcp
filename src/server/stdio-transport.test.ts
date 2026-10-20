@@ -27,8 +27,8 @@ const SERVER_ENTRY = 'build/index.js';
 
 // See session-404.test.ts: HTTP_AUTH_TOKEN would gate requests the test expects
 // to be open, and ROAM_GRAPHS would override the fake single-graph credentials
-// and point a spawned server at a real graph.
-const { HTTP_AUTH_TOKEN: _auth, ROAM_GRAPHS: _graphs, ...parentEnv } = process.env;
+// and point a spawned server at a real graph. Both are blanked, not omitted.
+const parentEnv = { ...process.env, HTTP_AUTH_TOKEN: '', ROAM_GRAPHS: '' };
 
 /** First non-internal IPv4 address, i.e. one reachable from the LAN. */
 function lanAddress(): string | undefined {

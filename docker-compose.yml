@@ -11,8 +11,10 @@ services:
       - .env
     environment:
       HTTP_STREAM_HOST: "0.0.0.0"
+      HTTP_STREAM_PORT: "8088"
       HTTP_AUTH_TOKEN: "${HTTP_AUTH_TOKEN:?Set HTTP_AUTH_TOKEN in .env}"
     command: ["--server"]
+    init: true
     networks:
       - n8n-net
 
