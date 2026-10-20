@@ -320,7 +320,7 @@ The server has two independent locks. They're easy to mix up because both are "k
 | When you need it | Only if the server is reachable beyond your own machine (e.g. `-H 0.0.0.0`) | Whenever you want a guard against accidental edits to important graphs |
 | How it's sent | HTTP header: `Authorization: Bearer <token>` | A `write_key` argument on write tools / CLI commands |
 
-Think of a house: the **bearer token locks the front door** (keeps strangers out entirely), and the **write key locks a safe inside** (even someone already in the house needs it to change what's in the safe). On your own machine bound to `127.0.0.1`, the front door faces a wall — you don't need the bearer token there. The write key is still handy locally as an "are you sure?" guard, because **Roam has no undo**.
+Think of a house: the **bearer token locks the front door** (keeps strangers out entirely), and the **write key locks a safe inside** (even someone already in the house needs it to change what's in the safe). On your own machine bound to `127.0.0.1`, the front door faces a wall, and a server without a token also turns away web pages that try to reach it by DNS rebinding (see `HTTP_ALLOWED_HOSTS` below), so you don't need the bearer token there. The write key is still handy locally as an "are you sure?" guard, because **Roam has no undo**.
 
 So: to mark a graph as needing the write key, set `protected: true` on it and configure `ROAM_SYSTEM_WRITE_KEY`; callers then pass a matching `write_key` for any write to that graph.
 
@@ -330,7 +330,9 @@ So: to mark a graph as needing the write key, set `protected: true` on it and co
 - `ROAM_MEMORIES_TAG`: Default tag for `roam_remember`/`roam_recall` (fallback when per-graph `memoriesTag` not set).
 - `HTTP_STREAM_PORT`: Port for the HTTP Stream transport (defaults to 8088). **`--server` mode only** — stdio mode opens no socket, so this is ignored there.
 - `HTTP_STREAM_HOST`: Host to bind the HTTP transport to (defaults to `127.0.0.1`, loopback-only). **`--server` mode only.** Set to `0.0.0.0` to expose on the LAN, and set `HTTP_AUTH_TOKEN` when you do.
-- `HTTP_AUTH_TOKEN`: Optional bearer token that locks the **whole** HTTP endpoint. Unset = open (fine for loopback). When set, every MCP request must send `Authorization: Bearer <token>` (`GET /health` stays open). Use it whenever you bind beyond `127.0.0.1`. Different from `ROAM_SYSTEM_WRITE_KEY` — see [Two kinds of access control](#two-kinds-of-access-control-and-how-they-differ).
+- `HTTP_AUTH_TOKEN`: Optional bearer token that locks the **whole** HTTP endpoint. Unset = no token: the server then answers only requests addressed to `localhost`, an IP address, or a name in `HTTP_ALLOWED_HOSTS`, and only browser requests from an origin in `CORS_ORIGIN`. When set, every MCP request must send `Authorization: Bearer <token>` (`GET /health` stays open). Use it whenever you bind beyond `127.0.0.1`. Different from `ROAM_SYSTEM_WRITE_KEY` — see [Two kinds of access control](#two-kinds-of-access-control-and-how-they-differ).
+- `HTTP_ALLOWED_HOSTS`: Hostnames a server **without** `HTTP_AUTH_TOKEN` answers to, beyond `localhost` and IP addresses (comma-separated; ports are ignored), e.g. `roam-mcp` for a Docker service name or `mybox.local`. A request addressed to any other name gets a 403. That is what stops a web page from reaching the server by pointing its own hostname at `127.0.0.1` (DNS rebinding). Ignored when `HTTP_AUTH_TOKEN` is set.
+- `CORS_ORIGIN`: Browser origins allowed to call the HTTP server (comma-separated; defaults to `http://localhost:5678,https://roamresearch.com`; `*` allows any). Without `HTTP_AUTH_TOKEN`, a request from any other origin gets a 403.
 
 ### Running the Server
 

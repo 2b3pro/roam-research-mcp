@@ -14,6 +14,7 @@ import {
 import { type Graph } from '@roam-research/roam-api-sdk';
 import { HTTP_STREAM_PORT, HTTP_STREAM_HOST, HTTP_AUTH_TOKEN, validateEnvironment } from '../config/environment.js';
 import { isBearerAuthorized } from '../utils/auth.js';
+import { rebindingRefusal } from '../utils/host-validation.js';
 import { RoamError, toErrorResult } from '../shared/errors.js';
 import { createRegistryFromEnv, GraphRegistry, isWriteOperation } from '../config/graph-registry.js';
 import { toolSchemas } from '../tools/schemas.js';
@@ -24,7 +25,7 @@ import { join, dirname } from 'node:path';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { isPortInUse } from '../utils/net.js';
-import { CORS_ORIGINS } from '../config/environment.js';
+import { CORS_ORIGINS, HTTP_ALLOWED_HOSTS } from '../config/environment.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -543,6 +544,22 @@ export class RoamServer {
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID');
         res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+        // Without a token, refuse what a DNS-rebinding web page sends: a Host
+        // this server doesn't answer to, or an Origin CORS_ORIGIN doesn't allow.
+        // Checked before /health, which lists the graph names.
+        if (!HTTP_AUTH_TOKEN) {
+          const refusal = rebindingRefusal(req, HTTP_ALLOWED_HOSTS, CORS_ORIGINS);
+          if (refusal) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32001, message: `Forbidden: ${refusal}` },
+              id: null,
+            }));
+            return;
+          }
+        }
 
         // Handle preflight OPTIONS requests
         if (req.method === 'OPTIONS') {

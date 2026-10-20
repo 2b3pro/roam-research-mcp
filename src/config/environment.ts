@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
+import { hostnameOf } from '../utils/host-validation.js';
 
 // Get the project root from the script path
 const scriptPath = process.argv[1];  // Full path to the running script
@@ -20,12 +21,20 @@ const HTTP_STREAM_PORT = process.env.HTTP_STREAM_PORT || '8088';
 const HTTP_STREAM_HOST = process.env.HTTP_STREAM_HOST || '127.0.0.1';
 // Optional transport-level bearer token (authentication). When set, every HTTP
 // MCP request must send `Authorization: Bearer <token>` (the /health probe stays
-// open). Unset = open, i.e. unchanged. This is the perimeter lock; it is separate
+// open). Unset = no token, and the server refuses DNS-rebinding requests instead
+// (see utils/host-validation.ts). This is the perimeter lock; it is separate
 // from ROAM_SYSTEM_WRITE_KEY, which is per-graph write authorization.
 const HTTP_AUTH_TOKEN = process.env.HTTP_AUTH_TOKEN;
 const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:5678,https://roamresearch.com')
   .split(',')
   .map(origin => origin.trim());
+// Hostnames, beyond `localhost` and IP addresses, that a server without a token
+// answers to (comma-separated, ports ignored), e.g. a Docker service name.
+// Ignored when HTTP_AUTH_TOKEN is set.
+const HTTP_ALLOWED_HOSTS = (process.env.HTTP_ALLOWED_HOSTS || '')
+  .split(',')
+  .map(host => hostnameOf(host))
+  .filter(Boolean);
 
 // Re-export for backwards compatibility with single-graph mode
 // These are still used by CLI commands and for validation
@@ -99,4 +108,4 @@ export function validateEnvironment(): void {
   }
 }
 
-export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, HTTP_STREAM_HOST, HTTP_AUTH_TOKEN, CORS_ORIGINS, ROAM_GRAPHS, ROAM_DEFAULT_GRAPH };
+export { API_TOKEN, GRAPH_NAME, HTTP_STREAM_PORT, HTTP_STREAM_HOST, HTTP_AUTH_TOKEN, CORS_ORIGINS, HTTP_ALLOWED_HOSTS, ROAM_GRAPHS, ROAM_DEFAULT_GRAPH };

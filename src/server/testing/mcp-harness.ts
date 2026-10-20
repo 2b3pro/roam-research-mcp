@@ -24,7 +24,7 @@ const SERVER_ENTRY = 'build/index.js';
  * outlive the runs that spawned them, so a hardcoded port is a test that fails
  * for reasons having nothing to do with the code under test.
  */
-async function freePort(): Promise<number> {
+export async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const probe = createServer();
     probe.once('error', reject);
