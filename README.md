@@ -418,8 +418,12 @@ curl -s http://127.0.0.1:8088/health   # verify
 **3. Docker**
 
 ```bash
-docker run -p 8088:8088 --env-file .env roam-research-mcp --server
+docker run -p 127.0.0.1:8088:8088 \
+  -e HTTP_STREAM_HOST=0.0.0.0 \
+  --env-file .env roam-research-mcp --server
 ```
+
+Set `HTTP_AUTH_TOKEN` to a random secret in `.env` before running; MCP requests must include `Authorization: Bearer <token>`. The published port is loopback-only by default. For remote access, follow [Securing an exposed server](#securing-an-exposed-server-two-layers) and intentionally publish on the required host address.
 
 ### Configuring in LLMs
 
