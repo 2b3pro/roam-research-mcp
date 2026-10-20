@@ -1,5 +1,18 @@
 # Changelog
 
+### v5.1.0 (2026-10-20)
+
+**In one line:** a server running without `HTTP_AUTH_TOKEN` now refuses requests from web pages that reach it by DNS rebinding. Through 5.0.2, such a page could call every tool on it.
+
+**Why a minor.** It changes what the HTTP transport accepts. Without a token the server now answers only requests addressed to `localhost`, an IP address, or a name in the new `HTTP_ALLOWED_HOSTS`, and refuses browser requests from an origin outside `CORS_ORIGIN`. With a token set nothing changes, and stdio mode is not affected: it opens no socket.
+
+- **What was open.** A web page can point its own hostname at `127.0.0.1` after it loads. The browser then treats the server as same-origin, so CORS never applies, and the page could read every graph and write to any graph not marked `protected`. Advisory: [GHSA-xr34-mh43-4cqm](https://github.com/2b3pro/roam-research-mcp/security/advisories/GHSA-xr34-mh43-4cqm).
+- **If you reach a token-less server by name.** A Docker service name, `mybox.local`, or any name other than `localhost` now gets a 403 that says which setting to change. Add the name to `HTTP_ALLOWED_HOSTS`, or set `HTTP_AUTH_TOKEN`, the better fix for anything beyond your own machine. Connecting by IP address works as before.
+- **If a browser page calls the server.** Its origin must be in `CORS_ORIGIN`, as it already had to be for the page to read the responses.
+- **Docker works.** The `docker run` example and Compose file could never be reached; they now bind the container's interface, publish on host loopback only, pin the port, and run with an init process. Compose refuses to start without `HTTP_AUTH_TOKEN`.
+- **Tested at the wire.** New tests drive the real server with forged `Host` and `Origin` headers, with and without a token. The refusal tests fail against 5.0.2, which answers 200.
+- **Thanks** to [@dajiaohuang](https://github.com/dajiaohuang) for making the Docker setup reachable ([#24](https://github.com/2b3pro/roam-research-mcp/pull/24)).
+
 ### v5.0.2 (2026-10-13)
 
 **In one line:** pages, blocks and search terms containing `"` or `\` now work. Through 5.0.1 they made Roam reject the query, so a page like `Alex "Sandy" Pentland` could not be fetched by title.
