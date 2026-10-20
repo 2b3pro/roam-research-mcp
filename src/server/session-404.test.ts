@@ -13,14 +13,17 @@ const PORT = 8478;
 const URL_MCP = `http://127.0.0.1:${PORT}/mcp`;
 const SERVER_ENTRY = 'build/index.js';
 
-// Inherit the parent env, minus the vars that would silently invalidate this
-// test's assumptions:
+// Inherit the parent env, with the vars that would silently invalidate this
+// test's assumptions blanked:
 //   HTTP_AUTH_TOKEN — a shared daemon is often run with bearer auth set, and
 //     inheriting it 401s every request here, failing both cases confusingly.
 //   ROAM_GRAPHS     — takes precedence over ROAM_API_TOKEN/ROAM_GRAPH_NAME, so
 //     inheriting it would quietly point the server at a real graph despite the
 //     fake credentials below.
-const { HTTP_AUTH_TOKEN: _auth, ROAM_GRAPHS: _graphs, ...parentEnv } = process.env;
+// Blanked, not omitted: the server loads the repo-root .env, and dotenv fills in
+// any var that is unset, so an omitted one comes straight back from that file.
+// The server reads an empty value as unset.
+const parentEnv = { ...process.env, HTTP_AUTH_TOKEN: '', ROAM_GRAPHS: '' };
 
 let child: ChildProcess;
 

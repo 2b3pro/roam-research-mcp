@@ -20,8 +20,8 @@ const PORT = 8479;
 const URL_MCP = `http://127.0.0.1:${PORT}/mcp`;
 const SERVER_ENTRY = 'build/index.js';
 
-// See session-404.test.ts for why these two are stripped from the parent env.
-const { HTTP_AUTH_TOKEN: _auth, ROAM_GRAPHS: _graphs, ...parentEnv } = process.env;
+// See session-404.test.ts for why these two are blanked in the parent env.
+const parentEnv = { ...process.env, HTTP_AUTH_TOKEN: '', ROAM_GRAPHS: '' };
 
 let child: ChildProcess;
 

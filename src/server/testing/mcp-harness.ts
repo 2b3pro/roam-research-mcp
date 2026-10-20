@@ -80,10 +80,14 @@ export class McpHarness {
     //   ROAM_*           — likewise for the single-graph vars, the default-graph
     //     key, the write key, and the tag/page overrides.
     const parentEnv: Record<string, string | undefined> = { ...process.env };
-    delete parentEnv.HTTP_AUTH_TOKEN;
     for (const key of Object.keys(parentEnv)) {
       if (key.startsWith('ROAM_')) delete parentEnv[key];
     }
+    // The first two are blanked, not deleted: the server loads the repo-root
+    // .env, and dotenv fills in any var that is unset, so a deleted one comes
+    // straight back from that file. The server reads an empty value as unset.
+    parentEnv.HTTP_AUTH_TOKEN = '';
+    parentEnv.ROAM_GRAPHS = '';
 
     const args = this.options.preload
       ? ['--import', this.options.preload, SERVER_ENTRY, '--server']
