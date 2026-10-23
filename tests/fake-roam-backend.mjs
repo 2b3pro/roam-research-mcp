@@ -37,6 +37,9 @@ const PAGES = {
   // silently misses rather than failing.
   'Alex "Sandy" Pentland': 'quotePg01',
   'C:\\newdir Notes': 'bslashPg1',
+  'Search Fixture': 'searchPg1',
+  aPiTag: 'mixedTag1',
+  aPiTagExtra: 'mixedTag2',
 };
 
 /**
@@ -122,7 +125,35 @@ const BLOCKS = {
   bslashPg1: [
     ['bslashBk1', 'Notes kept under a Windows path', 0, 'bslashPg1'],
   ],
+  searchPg1: [
+    ['caseMix01', 'An aPi client', 0, 'searchPg1'],
+    ['caseLow01', 'An api client', 1, 'searchPg1'],
+    ['caseUni01', 'An ÄpI client', 2, 'searchPg1'],
+    ['caseLit01', 'a.B[0] "Quoted" C:\\newdir', 3, 'searchPg1'],
+    ['caseDec01', 'axb0 Quoted C:newdir', 4, 'searchPg1'],
+    ['caseDate1', '2026-10-01', 5, 'searchPg1'],
+    ['caseTag01', 'Tagged [[aPiTag]]', 6, 'searchPg1'],
+    ['caseTag02', 'Tagged [[aPiTagExtra]]', 7, 'searchPg1'],
+  ],
 };
+
+// Independent datoms for search tests. Their dates deliberately disagree with
+// block text, and a missing attribute stays missing (it is never "now").
+const TIMES = {
+  page00001: { create: Date.parse('2026-10-01T06:00:00-07:00'), edit: Date.parse('2026-10-02T06:00:00-07:00') },
+  bslashPg1: { create: Date.parse('2026-09-01T12:00:00-07:00'), edit: Date.parse('2026-10-01T12:00:00-07:00') },
+  vis000001: { create: Date.parse('2026-10-01T12:00:00-07:00'), edit: Date.parse('2026-10-02T12:00:00-07:00') },
+  vis000002: { create: Date.parse('2026-09-01T12:00:00-07:00'), edit: Date.parse('2026-10-01T12:00:00-07:00') },
+  long00001: { create: Date.parse('2026-10-01T23:59:59.999-07:00') },
+  soft00001: { create: Date.parse('2026-10-02T00:00:00-07:00') },
+  near00001: { create: Date.parse('2026-10-01T09:00:00-07:00'), edit: Date.parse('2026-10-01T10:00:00-07:00') },
+  hid000001: { create: Date.parse('2026-10-01T12:00:00-07:00') },
+  hidchild1: { create: Date.parse('2026-10-01T12:00:00-07:00') },
+  caseDate1: { create: Date.parse('2026-09-01T12:00:00-07:00') },
+  caseMix01: { create: Date.parse('2026-03-08T23:59:59.999-07:00') },
+  caseLow01: { create: Date.parse('2026-03-09T00:00:00-07:00') },
+};
+const BLOCK_TAGS = { caseTag01: ['aPiTag'], caseTag02: ['aPiTagExtra'] };
 
 /**
  * Referring blocks (backlinks) to a page, as
@@ -287,6 +318,22 @@ function literalsAfter(query, prefix) {
   return values;
 }
 
+// Interpret the regex predicates the query actually uses, rather than assume
+// that a bound pattern was applied. Java's (?iu) flags map to JS's /iu here.
+function regexPredicate(query, variable) {
+  for (const match of query.matchAll(/\[\(re-pattern /g)) {
+    const { value, end } = readEdnString(query, match.index + match[0].length);
+    const patternVar = query.slice(end).match(/^\)\s+(\?[\w-]+)\]/)?.[1];
+    if (!patternVar) continue;
+    const whole = query.includes(`[(re-matches ${patternVar} ${variable})]`);
+    if (!whole && !query.includes(`[(re-find ${patternVar} ${variable})]`)) continue;
+    const flags = value.startsWith('(?iu)') ? 'iu' : value.startsWith('(?i)') ? 'i' : '';
+    const source = value.replace(/^\(\?iu?\)/, '');
+    const regex = new RegExp(whole ? `^(?:${source})$` : source, flags);
+    return (text) => regex.test(text);
+  }
+}
+
 function answer(query, args) {
   assertWellFormed(query);
 
@@ -372,16 +419,41 @@ function answer(query, args) {
     return match ? [[match[1]]] : [];
   }
 
+  // Timestamp search: evaluate the requested attributes and range against
+  // fixture datoms. Pages have titles; blocks have strings and a page link.
+  if (query.includes(':find ?uid ?content ?page-title ?time')) {
+    const inputVars = (query.match(/:in \$([^:]*)/)?.[1] ?? '').match(/\?[\w-]+/g) ?? [];
+    const bound = Object.fromEntries(inputVars.map((name, i) => [name, args?.[i]]));
+    const attributes = [...query.matchAll(/\[\?e :(create|edit)\/time \?time\]/g)].map(m => m[1]);
+    const comparisons = [...query.matchAll(/\[\((>=|>|<=|<) \?time (\?[\w-]+)\)\]/g)];
+    const entities = query.includes('[?e :block/string ?content]')
+      ? Object.entries(BLOCKS).flatMap(([pageUid, blocks]) => blocks.map(([uid, content]) =>
+          [uid, content, Object.keys(PAGES).find(title => PAGES[title] === pageUid)]))
+      : Object.entries(PAGES).map(([title, uid]) => [uid, title, title]);
+    return entities.flatMap(([uid, content, title]) => attributes.flatMap(attribute => {
+      const time = TIMES[uid]?.[attribute];
+      const inRange = comparisons.every(([, op, variable]) => {
+        const value = bound[variable];
+        if (op === '>=') return time >= value;
+        if (op === '>') return time > value;
+        if (op === '<=') return time <= value;
+        return time < value;
+      });
+      return typeof time === 'number' && inRange
+        ? [[uid, content, title, time]] : [];
+    }));
+  }
+
   // roam_search_by_status (src/search/status-search.ts). Unlike the branches
   // above this one EVALUATES the query rather than recognising it: it reads
   // which `:in` variables the `includes?` clauses actually test `?block-str`
   // against, and matches only on those. Markers passed as inputs but never
   // used in a clause match nothing, so a query that binds both spellings and
-  // tests one fails here the way it would against Roam. roam_search_by_text
-  // shares the find-vars but inlines its term, so that literal is read and
-  // matched too. Tag search inlines no `includes?` term and falls through.
-  if (query.includes(':find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time')) {
-    const inVars = (query.match(/:in \$([^:]*):where/)?.[1] ?? '').match(/\?[\w-]+/g) ?? [];
+  // tests one fails here the way it would against Roam. Text and tag searches
+  // share the find-vars; evaluate their literal or regex predicates as well.
+  if (query.includes(':find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time') ||
+      (query.includes(':find (count ?b)') && query.includes('?block-str'))) {
+    const inVars = (query.match(/:in \$([^:]*)/)?.[1] ?? '').match(/\?[\w-]+/g) ?? [];
     const bound = Object.fromEntries(inVars.map((name, i) => [name, args?.[i]]));
     const tested = [
       ...[...query.matchAll(/\[\(clojure\.string\/includes\? \?block-str (\?[\w-]+)\)\]/g)]
@@ -390,16 +462,23 @@ function answer(query, args) {
       // roam_search_by_text inlines its term, once per case variation.
       ...literalsAfter(query, '[(clojure.string/includes? ?block-str '),
     ];
-    if (tested.length > 0) {
+    const textPredicate = regexPredicate(query, '?block-str');
+    const tagPredicate = regexPredicate(query, '?ref-page-title');
+    const exactTags = literalsAfter(query, '[?ref-page :node/title ');
+    if (tested.length > 0 || textPredicate || tagPredicate || exactTags.length > 0) {
       const titleOf = Object.fromEntries(Object.entries(PAGES).map(([title, uid]) => [uid, title]));
-      const scope = bound['?page-uid'];
-      return Object.entries(BLOCKS)
+      const scope = bound['?page-uid'] ?? bound['?target-page-uid'];
+      const rows = Object.entries(BLOCKS)
         .filter(([pageUid]) => scope === undefined || pageUid === scope)
         .flatMap(([pageUid, blocks]) =>
           blocks
-            .filter(([, str]) => tested.some((marker) => str.includes(marker)))
-            .map(([uid, str]) => [uid, str, titleOf[pageUid], 0, 0])
+            .filter(([uid, str]) => textPredicate ? textPredicate(str) :
+              tagPredicate ? (BLOCK_TAGS[uid] ?? []).some(tagPredicate) :
+              exactTags.length > 0 ? (BLOCK_TAGS[uid] ?? []).some(tag => exactTags.includes(tag)) :
+              tested.some((marker) => str.includes(marker)))
+            .map(([uid, str]) => [uid, str, titleOf[pageUid], TIMES[uid]?.create ?? 0, TIMES[uid]?.edit ?? 0])
         );
+      return query.includes(':find (count ?b)') ? [[rows.length]] : rows;
     }
   }
 

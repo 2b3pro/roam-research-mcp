@@ -168,45 +168,29 @@ export class SearchUtils {
   }
 
   /**
-   * Generate case variations for case-insensitive search.
-   * Returns: [original, capitalized first letter, ALL CAPS, all lowercase]
+   * Quote literal search text for Roam's Java regex engine. (?iu) enables
+   * Unicode-aware case-insensitivity; metacharacters retain their literal meaning.
+   * Roam's backend supports re-pattern/re-find, but not clojure.string/lower-case.
    */
-  static getCaseVariations(text: string, caseSensitive: boolean = false): string[] {
-    if (caseSensitive) {
-      return [text];
-    }
-    return [
-      text,
-      text.charAt(0).toUpperCase() + text.slice(1),
-      text.toUpperCase(),
-      text.toLowerCase()
-    ];
+  private static caseInsensitivePattern(text: string): string {
+    return ednString(`(?iu)${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
   }
 
-  /**
-   * Build OR where clause for case-insensitive text search.
-   * @param text - The search text
-   * @param variable - The Datomic variable name (e.g., "?block-str")
-   * @param caseSensitive - Whether to use case-sensitive matching
-   * @returns Datomic OR clause string
-   */
+  /** Match a literal substring, optionally ignoring capitalization. */
   static buildTextSearchClause(text: string, variable: string, caseSensitive: boolean = false): string {
-    const variations = this.getCaseVariations(text, caseSensitive);
-    const clauses = variations.map(term => `[(clojure.string/includes? ${variable} ${ednString(term)})]`);
-    return `(or ${clauses.join(' ')})`;
+    if (caseSensitive) {
+      return `[(clojure.string/includes? ${variable} ${ednString(text)})]`;
+    }
+    return `[(re-pattern ${this.caseInsensitivePattern(text)}) ${variable}-pattern]
+            [(re-find ${variable}-pattern ${variable})]`;
   }
 
-  /**
-   * Build OR where clause for case-insensitive tag/page title matching.
-   * @param tag - The tag/page title to match
-   * @param variable - The Datomic variable name (e.g., "?ref-page")
-   * @param caseSensitive - Whether to use case-sensitive matching
-   * @returns Datomic OR clause string
-   */
+  /** Match a whole referenced page title, optionally ignoring capitalization. */
   static buildTagMatchClause(tag: string, variable: string, caseSensitive: boolean = false): string {
-    const variations = this.getCaseVariations(tag, caseSensitive);
-    const clauses = variations.map(t => `[${variable} :node/title ${ednString(t)}]`);
-    return `(or ${clauses.join(' ')})`;
+    if (caseSensitive) return `[${variable} :node/title ${ednString(tag)}]`;
+    return `[${variable} :node/title ${variable}-title]
+            [(re-pattern ${this.caseInsensitivePattern(tag)}) ${variable}-pattern]
+            [(re-matches ${variable}-pattern ${variable}-title)]`;
   }
 
   /**
