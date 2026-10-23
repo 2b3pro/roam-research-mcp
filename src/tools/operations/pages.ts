@@ -14,7 +14,7 @@ import {
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
 import { escapeBlockString, unescapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER, SOFT_BREAK_SENTINEL } from '../../shared/block-escaping.js';
-import { pageUidCache } from '../../cache/page-uid-cache.js';
+import { getPageUidCache } from '../../cache/page-uid-cache.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
 import {
@@ -149,7 +149,7 @@ export class PageOperations {
     let pageUid: string | undefined;
 
     // Check cache first to avoid unnecessary query
-    const cachedUid = pageUidCache.get(pageTitle);
+    const cachedUid = getPageUidCache(this.graph).get(pageTitle);
     if (cachedUid) {
       pageUid = cachedUid;
     } else {
@@ -161,7 +161,7 @@ export class PageOperations {
       if (findResults && findResults.length > 0) {
         // Page exists, use its UID and cache it
         pageUid = findResults[0][0];
-        pageUidCache.set(pageTitle, pageUid);
+        getPageUidCache(this.graph).set(pageTitle, pageUid);
       } else {
         // Create new page by adding a page reference to today's daily page
         // This leverages Roam's native behavior: [[Page Title]] creates the page instantly
@@ -206,7 +206,7 @@ export class PageOperations {
           }
           pageUid = results[0][0];
           // Cache the newly created page
-          pageUidCache.onPageCreated(pageTitle, pageUid);
+          getPageUidCache(this.graph).onPageCreated(pageTitle, pageUid);
           // Small delay for new page to be fully available as parent in Roam
           // (fixes "Parent entity doesn't exist" error when adding content immediately)
           await new Promise(resolve => setTimeout(resolve, 400));
@@ -1070,6 +1070,9 @@ export class PageOperations {
       });
 
       if (success) {
+        // Titles (including case-variation aliases) are no longer valid after
+        // a rename. Invalidate this connection only; other graphs stay warm.
+        getPageUidCache(this.graph).clear();
         const identifier = uid ? `((${uid}))` : `"${old_title}"`;
         return {
           success: true,

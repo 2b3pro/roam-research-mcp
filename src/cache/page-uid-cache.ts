@@ -1,3 +1,5 @@
+import type { Graph } from '@roam-research/roam-api-sdk';
+
 /**
  * Simple in-memory cache for page title -> UID mappings and UID existence tracking.
  * Pages are stable entities that rarely get deleted, making them safe to cache.
@@ -7,7 +9,7 @@
  * 1. Title -> UID mappings (for getPageUid lookups)
  * 2. Known existing UIDs (for existence validation before batch operations)
  */
-class PageUidCache {
+export class PageUidCache {
   private cache = new Map<string, string>(); // title (lowercase) -> UID
   private knownUids = new Set<string>(); // UIDs confirmed to exist
 
@@ -98,5 +100,15 @@ class PageUidCache {
   }
 }
 
-// Singleton instance - shared across all operations
-export const pageUidCache = new PageUidCache();
+// Cache by connection, not graph name: two credentials or endpoints must never
+// share lookup/existence evidence. Weak keys let retired connections be collected.
+const caches = new WeakMap<Graph, PageUidCache>();
+
+export function getPageUidCache(graph: Graph): PageUidCache {
+  let cache = caches.get(graph);
+  if (!cache) {
+    cache = new PageUidCache();
+    caches.set(graph, cache);
+  }
+  return cache;
+}

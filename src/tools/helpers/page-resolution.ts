@@ -4,7 +4,7 @@
 import { Graph, q, createPage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { formatRoamDate, normalizeToRoamDate } from '../../utils/helpers.js';
-import { pageUidCache } from '../../cache/page-uid-cache.js';
+import { getPageUidCache } from '../../cache/page-uid-cache.js';
 import { capitalizeWords } from './text.js';
 import { ednString } from '../../shared/datalog.js';
 
@@ -30,7 +30,7 @@ export async function getPageUid(graph: Graph, title: string): Promise<string | 
 
   // Check cache first for any variation
   for (const variation of variations) {
-    const cachedUid = pageUidCache.get(variation);
+    const cachedUid = getPageUidCache(graph).get(variation);
     if (cachedUid) {
       return cachedUid;
     }
@@ -46,7 +46,7 @@ export async function getPageUid(graph: Graph, title: string): Promise<string | 
   const uid = (result === null || result === undefined) ? null : String(result);
 
   if (uid) {
-    pageUidCache.set(title, uid);
+    getPageUidCache(graph).set(title, uid);
   }
 
   return uid;
@@ -60,7 +60,7 @@ export async function getOrCreateTodayPage(graph: Graph): Promise<string> {
   const dateStr = formatRoamDate(new Date());
 
   // Check cache first
-  const cachedUid = pageUidCache.get(dateStr);
+  const cachedUid = getPageUidCache(graph).get(dateStr);
   if (cachedUid) {
     return cachedUid;
   }
@@ -71,7 +71,7 @@ export async function getOrCreateTodayPage(graph: Graph): Promise<string> {
 
   if (findResults && findResults.length > 0) {
     const uid = findResults[0][0];
-    pageUidCache.set(dateStr, uid);
+    getPageUidCache(graph).set(dateStr, uid);
     return uid;
   }
 
@@ -91,7 +91,7 @@ export async function getOrCreateTodayPage(graph: Graph): Promise<string> {
   }
 
   const uid = results[0][0];
-  pageUidCache.onPageCreated(dateStr, uid);
+  getPageUidCache(graph).onPageCreated(dateStr, uid);
   return uid;
 }
 
@@ -124,7 +124,7 @@ export async function findOrCreatePage(
 
   // Check cache first for any variation
   for (const variation of variations) {
-    const cachedUid = pageUidCache.get(variation);
+    const cachedUid = getPageUidCache(graph).get(variation);
     if (cachedUid) {
       return cachedUid;
     }
@@ -138,7 +138,7 @@ export async function findOrCreatePage(
       const findResults = await q(graph, titleQuery, [variation]) as [string][];
       if (findResults && findResults.length > 0) {
         const uid = findResults[0][0];
-        pageUidCache.set(titleOrUid, uid);
+        getPageUidCache(graph).set(titleOrUid, uid);
         return uid;
       }
     }
@@ -172,7 +172,7 @@ export async function findOrCreatePage(
     const findResults = await q(graph, titleQuery, [variation]) as [string][];
     if (findResults && findResults.length > 0) {
       const uid = findResults[0][0];
-      pageUidCache.onPageCreated(titleOrUid, uid);
+      getPageUidCache(graph).onPageCreated(titleOrUid, uid);
       return uid;
     }
   }

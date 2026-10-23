@@ -4,7 +4,9 @@ import {
   dailyUidToTitle,
   extractParentUids
 } from './page-validator.js';
-import { pageUidCache } from '../cache/page-uid-cache.js';
+import { PageUidCache } from '../cache/page-uid-cache.js';
+
+const pageUidCache = new PageUidCache();
 
 describe('page-validator', () => {
   beforeEach(() => {
