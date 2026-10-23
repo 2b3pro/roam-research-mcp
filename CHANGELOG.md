@@ -1,11 +1,544 @@
 # Changelog
 
-### [5.1.1](https://github.com/2b3pro/roam-research-mcp/compare/v5.1.0...v5.1.1) (2026-10-23)
+### v5.1.1 (2026-10-23)
 
+Date searches now use Roam's stored timestamps, and case-insensitive searches find arbitrary mixed capitalization, including Unicode. Fixes [#26](https://github.com/2b3pro/roam-research-mcp/pull/26).
 
-### FIXED
+- **Date search:** honors block, page, and combined scopes; includes the complete end date in the server's local timezone, including daylight-saving transitions; and rejects invalid or reversed date ranges. When searching both creation and edit times, each entity appears once with its latest matching timestamp.
+- **Case-insensitive matching:** uses escaped literal patterns rather than a few capitalization variants. Tag titles match in full, and an explicit `case_sensitive` choice now reaches the tag handler.
+- **Regression coverage:** 20 new MCP tests cover these corrections, date boundaries, literal metacharacters, and hidden-subtree filtering. All 539 tests pass.
 
-* **search:** correct date filtering and case-insensitive matching ([#26](https://github.com/2b3pro/roam-research-mcp/issues/26)) ([813e81b](https://github.com/2b3pro/roam-research-mcp/commit/813e81bd29ac41b7664f4e35af9be2b2735a9974))
+### v5.1.0 (2026-10-20)
+
+**In one line:** a server running without `HTTP_AUTH_TOKEN` now refuses requests from web pages that reach it by DNS rebinding. Through 5.0.2, such a page could call every tool on it.
+
+**Why a minor.** It changes what the HTTP transport accepts. Without a token the server now answers only requests addressed to `localhost`, an IP address, or a name in the new `HTTP_ALLOWED_HOSTS`, and refuses browser requests from an origin outside `CORS_ORIGIN`. With a token set nothing changes, and stdio mode is not affected: it opens no socket.
+
+- **What was open.** A web page can point its own hostname at `127.0.0.1` after it loads. The browser then treats the server as same-origin, so CORS never applies, and the page could read every graph and write to any graph not marked `protected`. Advisory: [GHSA-xr34-mh43-4cqm](https://github.com/2b3pro/roam-research-mcp/security/advisories/GHSA-xr34-mh43-4cqm).
+- **If you reach a token-less server by name.** A Docker service name, `mybox.local`, or any name other than `localhost` now gets a 403 that says which setting to change. Add the name to `HTTP_ALLOWED_HOSTS`, or set `HTTP_AUTH_TOKEN`, the better fix for anything beyond your own machine. Connecting by IP address works as before.
+- **If a browser page calls the server.** Its origin must be in `CORS_ORIGIN`, as it already had to be for the page to read the responses.
+- **Docker works.** The `docker run` example and Compose file could never be reached; they now bind the container's interface, publish on host loopback only, pin the port, and run with an init process. Compose refuses to start without `HTTP_AUTH_TOKEN`.
+- **Tested at the wire.** New tests drive the real server with forged `Host` and `Origin` headers, with and without a token. The refusal tests fail against 5.0.2, which answers 200.
+- **Thanks** to [@dajiaohuang](https://github.com/dajiaohuang) for making the Docker setup reachable ([#24](https://github.com/2b3pro/roam-research-mcp/pull/24)).
+
+### v5.0.2 (2026-10-13)
+
+**In one line:** pages, blocks and search terms containing `"` or `\` now work. Through 5.0.1 they made Roam reject the query, so a page like `Alex "Sandy" Pentland` could not be fetched by title.
+
+**Why a patch.** No parameter, default, or result shape changes. Values were written into Datalog string literals without escaping. A `"` ended the literal early and Roam answered `IndexOutOfBoundsException`. A `\` was read as an escape, so a title like `C:\newdir Notes` was looked up with a newline in it and silently not found. Every such value is now escaped.
+
+- **What was broken:** fetching or targeting a page by a title containing `"` (83 pages on one real graph), creating such a page through `roam_create_outline`, `roam_search_by_text` for a quoted phrase, and the CLI's batch page lookups. `roam_create_outline` also returned an empty `created_blocks` for any block whose text contained `"`, without reporting an error.
+- **Tested at the wire.** New tests drive the real server with quoted and backslashed titles, block text and search terms. The fake backend now reads query strings the way Roam does and refuses a malformed one with the same error, so an unescaped value fails there too.
+- **Thanks** to [@notlakshitha](https://github.com/notlakshitha) for the report and for tracing it to the interpolation sites ([#23](https://github.com/2b3pro/roam-research-mcp/issues/23)).
+
+### v5.0.1 (2026-10-05)
+
+**In one line:** `roam_search_by_status` was missing almost every task, because it never matched `{{[[TODO]]}}`, the form Roam's own checkbox writes; it now finds both spellings.
+
+**Why a patch.** No parameter, default, or result shape changes. The tool does what its description always said. It searched for the text `{{TODO` on the belief that this matched both `{{[[TODO]]}}` and `{{TODO}}`, but the bracketed form has `[[` where that needs `TODO`, so only the rare bare form was ever returned. On one real graph that was 5 tasks out of 291; on another, 1 out of 4,223. `DONE` had the same fault. The CLI's `roam get --todo` and `--done` go through the same search and are fixed with it.
+
+- **Expect far more results.** This is the fix working, but it is a large change in volume: an unscoped `status: "TODO"` search can now return thousands of blocks in one response where it used to return a handful. Narrow it with `page_title_uid` or `include` if that is more than you want. The tool has no limit parameter yet.
+- **Hidden blocks stay hidden.** Tasks tagged `#.rm-hide` or `#.rm-private`, and anything nested under them, are still withheld, and this is now pinned by a test.
+- **Tested at the wire.** New tests drive the real server and check what a client receives, for both spellings, for `DONE`, and for a search scoped to a page by title or by UID. The fake backend they run against matches only on the inputs the query really tests, so a query that binds both spellings and uses one fails.
+- **Thanks** to [@drenaud0214](https://github.com/drenaud0214) for finding this, tracing it to the exact clause, and sending the fix ([#22](https://github.com/2b3pro/roam-research-mcp/pull/22)).
+
+### v5.0.0 (2026-09-29)
+
+**In one line:** `roam save --parent` is now always the text of the parent block and never a UID; use `--parent-uid` to nest under a block by UID.
+
+**Why a major.** A call that used to do one thing now does another, and it does not fail. `roam save --parent "((uid))"` and `roam save --parent <uid>` nested under that block through 4.1.0. In 5.0 they find or create a block whose content is that text, on the daily page unless `-p` is given, and nest under that, with exit code 0. **If a script passes a UID to `--parent`, change the flag to `--parent-uid` before upgrading.** Only the CLI changes. The MCP tools take `parent-uid` as a typed field and are unaffected, so if you use the server through an AI assistant, nothing is required of you.
+
+- **`--parent` is text, always.** No graph lookup, no shape test. `--parent "((uid))"` is a block containing that reference, which makes reference blocks usable as parents for every UID. Before 4.1.0 that happened only by accident, for UIDs with no digit.
+- **`--parent-uid` is unchanged from 4.1.0.** It accepts `uid` or `((uid))`, must name an existing block or page, and errors with nothing written otherwise.
+- **The deprecation warning is gone**, along with the lookup behind it. `--parent` no longer makes an extra query for 9-character values.
+- **The CLI tells you when this may have happened.** When `--parent` is given something UID-shaped and creates a block, stderr carries two lines: `Created parent block "((uid))" (uid: ...)`, then `Note: --parent is always text ... use: --parent-uid <uid>`. The note is built from the value's shape, with no lookup, so it also appears for a 9-character heading such as `Learnings` the first time that heading is created. It appears only on creation: once the block exists, later saves reuse it silently.
+- **How to tell if you are affected.** Besides the note above, a misrouted save prints two UIDs on stdout where it used to print one. 4.1.0 printed a deprecation warning for every call that 5.0 changes.
+- **Help leads with the choice.** `roam save --help` has a "Choosing a parent block" section above the examples, and the option descriptions say outright that `--parent` is never a UID.
+- **`--page` is unchanged from 4.1.0.** `-p "((uid))"` is a UID and must exist; a bare 9-character value is a UID only if the graph has it.
+- **A short deprecation window.** 4.1.0, which introduced the warning, was published the same day. If you would rather migrate first, pin `roam-research-mcp@4`.
+
+### v4.1.0 (2026-09-29)
+
+**In one line:** `roam save --parent "((uid))"` silently misrouted about one save in five; there is now a `--parent-uid` flag that always means a UID, and `--parent` no longer guesses.
+
+**Why a minor.** A new flag, and the existing one stops guessing. `--parent` decided whether its value was a UID by looking for a digit in it. Roam UIDs are random over 64 symbols, so about one in five has no digit (45,176 of 209,452 blocks, 21.6%, measured on a real graph). For those, `--parent "((uid))"` was read as heading text: the CLI created a block containing the literal `((uid))` on the daily page and nested your content under that, with exit code 0 and no warning. The only tell was two UIDs on stdout where one was expected. Stdout is unchanged in this release; the new messages go to stderr.
+
+- **New: `--parent-uid <uid>`.** The block your content goes under. Accepts `uid` or `((uid))`, never text. If no block or page with that UID exists the command exits non-zero and writes nothing. It cannot be combined with `--parent`.
+- **`--parent` with a UID is deprecated, and consistent until it goes.** `--parent "((uid))"` is a UID whether or not it contains a digit, and must exist. A bare 9-character value is a UID only if the graph has an entity with that UID; otherwise it is text. Each time `--parent` resolves to a UID, stderr carries a deprecation warning. **In 5.0 `--parent` will always mean the text of the parent block**, so `--parent "((uid))"` will find or create a block whose content is that reference. Move scripts to `--parent-uid` now.
+- **`--page` follows the same rules.** `-p "((uid))"` is a UID regardless of digits and must exist, where a digit-free one used to create a page titled `((uid))`. A bare 9-character `-p` value is a UID only if the graph has it, otherwise a title. `-p Learnings` still resolves by title, as it has since 2.15.1, and is now pinned by a regression test.
+- **Creating a parent block is no longer invisible.** When `--parent "<text>"` matches nothing and a block is created, stderr says so and names its UID.
+- **⚠️ A stale bare UID is now text.** A bare 9-character `--parent` or `-p` value that contains a digit but names nothing in your graph used to fail with "Parent page(s) do not exist" and write nothing. It is now treated as text and found or created, because a bare value cannot be told apart from a title such as `Sprint_23`. If a script passes bare UIDs that may have been deleted, switch it to `--parent-uid` or `((uid))`, both of which error instead of writing.
+- **Other behaviour you may notice.** If you relied on a digit-free `--parent "((uid))"` creating a reference block, it now nests under the referenced block; that meaning returns, for every UID, in 5.0. A cron job that treats any stderr output as failure will see the new warning and notice lines.
+- **The publish guard now runs.** 4.0.1 added a `prepublishOnly` check that refuses to publish a cheatsheet carrying a private layer. `package.json` already had a second `prepublishOnly` entry further down, and with a duplicated key the later one wins, so the check was never executed. The two are now a single script: clean, build, then check. Builds made by CI were never at risk, since CI has no private prefix set; this closes the hand-publish path the guard was written for.
+
+### v4.0.1 (2026-09-06)
+
+**In one line:** the 4.0.0 tarball on npm carried the author's private Roam conventions appended to the bundled cheatsheet; 4.0.1 is the same code with a clean cheatsheet and a guard so it cannot happen again.
+
+**Why a patch.** No code changed. The build concatenates `Roam_Markdown_Cheatsheet.md` with `.roam/${CUSTOM_INSTRUCTIONS_PREFIX}custom-instructions.md`. 4.0.0 was published from a shell where that prefix selected a private, untracked file, so every user's `roam_markdown_cheatsheet` resource ended with one person's tagging philosophy, definition format, and page templates, presented as if they were that user's own personalization layer. An agent following them would tag and format a stranger's graph by the author's rules. 4.0.1 is built with the prefix unset, appending the empty template the repository actually ships. If you installed any affected version, re-run `npx -y roam-research-mcp` and you get 4.0.1.
+
+- **The guard.** A `prepublishOnly` script now refuses to publish unless the bundled cheatsheet ends with exactly the tracked default template. It checks the artifact, not the environment, so a stale build or any private layer fails loudly before the tarball leaves the machine. CI passes it unchanged.
+- **Were you affected?** Every version published by hand carried the layer, not just 4.0.0: **2.22.0**, **3.1.0**, **3.2.0** and **4.0.0**, so it has been public since 2026-06-13. Versions built by CI are clean; 3.0.0 was checked directly. Nothing in the layer is a credential. It is conventions, and the harm is behavioural: an agent that loaded the cheatsheet from one of those versions may have applied the author's tagging and formatting rules to your graph.
+
+### v4.0.0 (2026-09-06)
+
+**In one line:** a block containing a soft line break (Shift+Enter) now survives `roam_update_page_markdown` — read a page, write it back, and nothing moves — via a `⏎` sentinel that never collides with content you author.
+
+**Why a major.** `roam_fetch_page_by_title` (`format: "markdown"`), `roam_fetch_page_full_view`, `roam_get_subpages` and `roam get` all return different bytes than 3.x for any page containing a multi-line block: the newline renders as `⏎`, and round-trippable payloads gain a leading `<!-- roam:escaped-newlines -->` marker line. Pages without a multi-line block render byte-identical to 3.2.0. If you use the server through an AI assistant, nothing is required of you; a script parsing markdown output of multi-line pages sees the new encoding. **If you pinned `roam-research-mcp@3`** (as the 3.1.0 notes suggested), you keep 3.2.0's fixes and its documented multi-line limitation until you re-pin.
+
+- **⚠️ Data loss: one soft line break flattened a page.** A Roam block may
+  contain a newline — a Shift+Enter soft break, which callout bodies require
+  and fenced code blocks are full of. The markdown renderer emitted one `- `
+  line per block, so that newline spilled onto a second physical line at
+  **column 0**, which reset the parser's indentation baseline. Every block
+  after it collapsed toward the root and was reparented under the wrong
+  ancestor; `roam_update_page_markdown` then generated the moves to make the
+  real page match. Reading a page and writing back a revision — the documented
+  purpose of the tool — was enough to trigger it.
+  - **The fix encodes with a sentinel, not an escape.** A soft line break now
+    renders as a single `⏎` character (U+23CE) rather than a `\n` escape, and
+    a page containing one is marked with a leading
+    `<!-- roam:escaped-newlines -->` comment. Pages with no multi-line block
+    render exactly as before — byte-identical, no marker, no encoding.
+  - **Backslash escaping does not exist, anywhere.** The earlier `\n` design
+    needed backslash-doubling to tell a real escape from a literal
+    backslash-n, and that rule still corrupted authored content: `\n` is a
+    common PREFIX (`\nabla`, `\neq`, `C:\new…`), not just an escape sequence.
+    `⏎` essentially never occurs in authored text, so it needs no such rule —
+    `$$\nabla f$$` and `C:\newdir` are written exactly as typed everywhere,
+    including inside a marked payload.
+  - **Detection tolerates the leading title header.** `roam_fetch_page_by_title`
+    prepends `# Title` before the marker; the old check only looked at line 1
+    and never decoded a payload submitted verbatim. Detection now accepts the
+    marker on the line after a leading header, so a verbatim submit — and
+    `roam get` → `roam save --update` — round-trip cleanly.
+  - **Display-only outputs carry no marker.** `roam_fetch_page_full_view` and
+    sub-pages use the `⏎` sentinel unconditionally, with no
+    `<!-- roam:escaped-newlines -->` marker — nothing decodes them, so there
+    is nothing to preserve on write-back.
+  - **The accepted corner:** a block genuinely containing a literal `⏎`
+    round-trips it into a newline. Content-level, vanishingly rare, and
+    pinned by a test so it stays a documented choice rather than an accident.
+  - **Sizing:** decided as a **major** — see the header note. Two commits in
+    this work are themselves marked breaking, and output bytes changed on four
+    read surfaces for multi-line pages.
+  - **Verified against the prior state.** `src/server/multiline-roundtrip.test.ts`
+    asserts a read → write-back is a no-op *and* that every parent/child
+    relationship survives; it fails against the unfixed code. The case that
+    would have caught this — `C3: renderer output submitted VERBATIM, header
+    included, is a no-op` — is exactly the one Revision 2's tests skipped by
+    stripping the header themselves before submitting it back.
+
+- **⚠️ Data loss: a page rewrite could delete every block on the page.** A
+  payload whose first block is a bare, unterminated fence opener (the
+  renderer's own shape for a block that starts with a fence, and a pasted
+  snippet's shape too) parsed to zero blocks for non-empty input. Diffing zero
+  new blocks against N existing ones silently queued N deletes.
+  - **The fix:** `roam_update_page_markdown` refuses the write, `dry_run`
+    included, when non-empty markdown parses to nothing and the page has
+    existing blocks. Genuinely empty markdown still clears a page, as
+    documented.
+
+- **⚠️ Data loss: a hand-authored H1 echoing the page title was deleted on
+  update.** The title-header strip, added so renderer output round-trips,
+  fired on text match alone with no check that the payload came from the
+  renderer. A page whose real first block is a genuine heading repeating its
+  own title, a plausible pattern for imported documents, lost that block on an
+  ordinary update with no marker anywhere.
+  - **The fix:** the strip is gated on provenance: the
+    `<!-- roam:escaped-newlines -->` marker, or a `⏎` sentinel in the body,
+    which survives even when an agent rebuilt the output and dropped the
+    marker. The two wrong calls are not symmetric. Keeping a header that
+    should have been stripped leaves a harmless visible stray; stripping one
+    that should have stayed destroys content with no undo. With no provenance
+    signal, the gate takes the harmless direction. A test pins the scenario.
+
+- **Linked references are encoded too.** `roam_fetch_page_full_view` never
+  escaped the block and breadcrumb strings of referring blocks, so a soft
+  line break in one spilled onto a bare physical line. The test fixture had
+  misrouted the referring-blocks query (it contains `:node/title`, so it fell
+  into the page-title branch), which is why no test could reach them. Both
+  fixed.
+
+- **Browser clients failed CORS preflight.** Since protocol revision
+  2025-06-18 a client MUST send `MCP-Protocol-Version` on every request after
+  initialization, and SSE resumption sends `Last-Event-ID`. Neither was in
+  `Access-Control-Allow-Headers`, so a browser-based client's preflight failed
+  and the real request was never issued, with nothing logged server-side.
+  Non-browser clients skip preflight, which is how it stayed invisible.
+  - **Verified against the prior state.** `src/server/cors-preflight.test.ts`
+    sends a real OPTIONS request to the built server and asserts every
+    required header is allowed; it fails on the old allowlist.
+
+- **The MCP SDK is pinned to 1.25.1.** The range `^1.13.2` resolved to
+  whatever 1.x npm served at install time, and only `build/` ships to npm, so
+  the lockfile never reached users. Pinned to the version the suite runs
+  against.
+
+### v3.2.0 (2026-08-09)
+
+**In one line:** two ways `roam_update_page_markdown` could silently delete your blocks are fixed — one where the `#.rm-hide` tag caused the deletion it exists to prevent, and one where a block merely *mentioning* a ``` fence swallowed every block after it.
+
+**Why a minor.** The changes add keys to what two tools return, and §4 of [`docs/architecture.md`](docs/architecture.md) counts a change to the shape of a tool result — including keys inside the JSON a read tool serialises into its text channel — as at least a minor. All are purely additive: no field was renamed, removed, or given a new meaning, and no default changed.
+
+**What is NOT in this release.** A block can hold a soft line break (Shift+Enter), and such a block still does not survive `roam_update_page_markdown` — it splits, and the page's hierarchy below it flattens. That work was built, failed review twice on its own design, and was held back rather than shipped half-trusted. The cheatsheet now tells you plainly not to run a page rewrite on a page containing a callout, a fenced code block or a Shift+Enter, and to use `roam_process_batch_actions` for those pages instead. That is honest harm reduction, not a fix; the fix is still owed.
+
+- **⚠️ Data loss: a block that mentioned a code fence swallowed the rest of the page.** `parseMarkdown` splices a line at a mid-line ``` so its fence state machine can gather the following lines. It did that for *any* line containing a fence anywhere — including a block whose text merely mentions one. That opened a fenced region which never closes, and the parser consumed everything after it:
+
+  ```
+  - wrap it in ``` to make code       parses to ONE block, "wrap it in"
+  - second block                      the other three vanish, and
+  - third block                       roam_update_page_markdown then issues
+  - fourth block                      delete-block for each of them
+  ```
+
+  - **Were you affected?** If any block in a page you rewrote contained ``` — discussing code formatting is enough — then yes. Technical graphs are the likely victims. Roam has no undo for API writes.
+  - **The fix:** split only for the exact "bullet followed by nothing but a fence opener" shape, which is the sole case the splice was ever meant to serve. Verified against a hand-written opener with and without a language tag, an indented opener, prose mentioning a fence mid-sentence, prose ending with a fence, and balanced prose — plus that a fenced block nested under a parent still attaches to the right parent.
+  - A spurious `-` block that used to appear ahead of every code block is gone with it: under the new rule the spliced-off remainder is always just the bullet marker, so it is no longer emitted as its own block.
+
+- **⚠️ Data loss: a page rewrite deleted hidden blocks.** `roam_update_page_markdown` fetched the **whole** page as its diff baseline and deleted every block the submitted markdown did not account for. But every read path withholds `#.rm-hide` / `#.rm-private` subtrees, so an agent composing replacement markdown had no way to include content it was never shown. The result inverted the tag's purpose: marking a block "hide from the AI" is what made the AI delete it, through an API with no undo.
+  - **Were you affected?** Only if you use both the hide tags and whole-page rewrites — `roam_update_page_markdown`, or `roam save --update` on the CLI, which shares the method. If you have never tagged a block `#.rm-hide` or `#.rm-private`, nothing changed for you. Note the trigger did not require an agent to do anything wrong: reading a page and writing back a revision is exactly the documented use.
+  - **The fix:** the diff baseline is now pruned by the same filter the reads use. The rule it enforces — worth stating plainly, because the bug was the gap between two reasonable behaviours — is that **the baseline a diff deletes from must be the same page the caller was allowed to read.** A hidden subtree is excluded from the baseline, so it is never an unmatched block, so it is never a deletion candidate.
+  - **What is preserved and what is not:** content, always. Position, not necessarily. A surviving hidden block keeps its original order while new blocks are numbered from the markdown, so it can end up sharing an order with a visible sibling and settle either side of it. Reserving slots for blocks the caller cannot see would let hidden content dictate visible layout, which is the worse trade.
+  - **It now tells you:** `preserved_hidden` on the result (present only when non-zero) and a sentence appended to `summary`, so a caller told "3 deleted, 5 created" can explain the blocks still on the page. It is a count, never content — consistent with these tags being documented as "keep it out of the AI's way", not a secrecy boundary.
+  - **Verified against the prior state.** `src/server/data-safety.test.ts` drives the real tool over the real transport with `dry_run` and asserts no `delete-block` targets a hidden uid; it fails against the unfixed code and passes after, and a companion test asserts visible blocks are *still* deleted, so it cannot pass on a diff that stopped deleting anything. The fake backend gained a handler for the diff's `(pull ...)` query — without it the baseline is empty and the whole assertion is vacuous.
+  - The tool description now also leads with the fact that this tool **replaces** a page rather than appending to it, which was accurate before but buried.
+
+- **`roam_get_guidelines` now returns `roamSyntax`.** A ~800-token, damage-ranked list of the ways a write loses work with this server: `roam_update_page_markdown` deleting every block the submitted markdown omits; `structure` previews written back as though they were content; block references retyped as plain text, which turns a live link into a stale copy. Then a caution that reads are silently incomplete where `#.rm-hide` subtrees exist — no longer a *destructive* case, since the diff fix above, but still a reason not to claim a page holds only what you were shown. Then the smaller stuff: the italics/bold inversion, `{{[[TODO]]}}` needing to lead its block, `#` minting pages, attribute bolding, and backticking syntax you are documenting rather than using.
+  - **Why on this tool.** Every write tool's description already says to load the cheatsheet, but that is a second, voluntary call and a model under budget pressure skips it. The guidelines call is the one we successfully insist on, so anything that must reach *every* client has to ride on it.
+  - **Returned on all four paths** — page found, no page created, disabled for the graph, lookup failed. Conventions are the user's to supply and are often absent; the safety rules are the server's and never are. A graph with no guidelines page is exactly where an agent has least context.
+  - **The layering is explicit, in the blob and in `nextSteps`:** the graph's own conventions win on style and placement; `roamSyntax` wins on data integrity. No convention can make a truncated preview complete or bring back a deleted block.
+  - It does **not** replace `roam_markdown_cheatsheet`, which remains the full reference. `src/tools/roam-syntax.test.ts` caps the blob's size, pins the destructive-first ordering and the closing checklist, and asserts it does not contradict the cheatsheet on the facts they share — the two drifting apart is the failure mode that makes both untrustworthy.
+
+- **`format: "structure"` now marks truncated entries.** It has always cut `text` at 80 characters, with `...` as the only signal, while the tool description advertised the output as "optimized for surgical updates" — an invitation to feed those entries straight back into `roam_process_batch_actions`, which would replace each long block with its own opening fragment. A cut entry now carries `truncated: true` and `full_length`; the payload carries a `truncated_count` and a one-line `warning` naming `roam_fetch_block` as the way to get the real text. **The warning appears only when something was actually cut** — a warning present on every response is one that gets skimmed.
+  - The 80-character cut itself is unchanged. Widening or removing it would change what an unchanged call returns; marking it does not.
+  - The tool description now says the same thing, since a client may never look at the payload.
+
+- **Cheatsheet v2.4.0: callouts, and the `{{query}}` rules that were missing.** Two genuine gaps, not polish.
+  - **Callouts** had no coverage at all. `[[>]] [[!TYPE]] Title` with the twelve types and the `+`/`-` fold suffix, plus the two things that go wrong: the body is a soft line break **inside the same block**, not a child (a child renders as a nested bullet instead), and `[[>]]`/`[[!TIP]]` are real page refs, so every callout backlinks to them — which is correct and should not be "cleaned up."
+  - **`{{query}}` page-ref inheritance**, which is the non-obvious one: **a block inherits its parent's page refs for matching**, so a `{{[[TODO]]}}` nested under a block referencing `[[Project Alpha]]` matches `{and: [[TODO]] [[Project Alpha]]}` while containing no such reference. It changes how you write queries (don't re-tag children) *and* how you read results (a returned block may not visibly contain what you searched for — don't report it as wrong or "fix" it by adding the tag).
+  - Also documented: queries match **references, not text**, so `{and: TODO}` and `{and: "project alpha"}` silently match nothing; `{search:}` is only valid nested inside `{and:}`/`{or:}`; and `{between:}` works on Daily Notes pages only — previously shown as an example with no such caveat, which was mildly misleading. Five new rows in the anti-patterns table.
+  - These stayed **out** of `roamSyntax`, which is the layering working as intended: getting a query wrong returns nothing, it does not destroy anything, so it belongs in the reference rather than the blob that rides on every guidelines call.
+  - Sourced from Roam's own current documentation of their product rather than tested against a live graph here — worth knowing if a detail ever looks off.
+
+- **Credit.** These changes are ideas taken from **Roam Research's own MCP server**, [`@roam-research/roam-mcp`](https://github.com/Roam-Research/roam-tools) — specifically its 0.10.0, which added a `roamSyntax` field to `get_graph_guidelines`, established the damage-ranked-with-closing-checksum structure, and shipped a `truncated="N"` marker on search results for exactly the partial-overwrite hazard described above. The design is theirs and it is a good one.
+  - **Nothing was copied.** That repository publishes no licence — no `LICENSE` file, no `license` field in any of its five package manifests — so its text is all-rights-reserved by default. Every line here is written from scratch, against this server's tools and this server's failure modes, which are not the same ones: it talks to Roam's backend REST API rather than Roam Desktop, and has no `<roam/>` wire format to teach. The provenance is recorded in the header of `src/tools/roam-syntax.ts` as well.
+
+### v3.1.0 (2026-08-09)
+
+**In one line:** stdio mode was also opening an HTTP listener, on every network interface, with no authentication — it now opens no socket at all, and the two transport modes are mutually exclusive.
+
+- **⚠️ Security: every stdio-spawned instance was reachable from the network.** Stdio mode — the default when Claude Desktop or a CLI client spawns the server — also opened an HTTP Stream transport. That listener was created with no host argument, which binds all interfaces. `HTTP_AUTH_TOKEN` is normally unset in stdio mode precisely because loopback *was* the perimeter, so anyone on the same network could list your graphs, read them, and write the unprotected ones **without a Roam API token**. With several graphs configured you got one wildcard listener per instance; the reporter observed nine, on ports 8088–8106.
+  - **Were you affected?** If you ran this server through an MCP client on a machine sharing a network with anyone you don't fully trust — a café, an office, a coworking space, a flatshare — then yes, until you upgrade. On a machine that never left a trusted LAN the exposure existed but the audience was small.
+  - **`--server` mode was never affected.** It has bound `HTTP_STREAM_HOST` (loopback by default) since 2.22.0.
+
+- **⚠️ Breaking: stdio mode no longer opens any HTTP listener.** Binding loopback instead of the wildcard was the minimum fix, and it isn't the right one: nothing about MCP over stdio needs a socket, and a listener nobody configured is a security surface nobody audits. Each mode now opens exactly one transport — **stdio speaks stdin/stdout and binds nothing; `--server` speaks HTTP and reads no stdin.**
+  - **Do you need to do anything?** Almost certainly not. If your MCP client spawns the server, that is stdio, and it keeps working exactly as before.
+  - **If you were pointing anything at a stdio instance's port** — a second client, a health check, a script — that endpoint is gone, and there is no flag to bring it back. **Run a `--server` daemon instead**; a shared daemon on a stable URL is what that mode is for, and it is a better fit for every use the old listener was serving. `HTTP_STREAM_PORT` and `HTTP_STREAM_HOST` are now `--server`-only.
+  - **`/health` no longer reports `mode: "stdio+http"`.** The field remains and now always reads `server`, since only `--server` serves HTTP. A response still saying `stdio+http` means you are talking to a pre-3.1.0 build — useful for auditing whether an exposed instance is still out there.
+
+- **Fix: the `--server` port probe checks the host it is about to bind.** It probed the wildcard address while binding `HTTP_STREAM_HOST`. A wildcard probe and a host-specific bind disagree in both directions, so the check could call a taken port free, or a free port taken. Probe host and bind host are now the same value. `findAvailablePort` is gone with the auto-port drift it served — `--server` binds the exact configured port and fails loudly, because a shared daemon must keep a stable URL.
+
+- **Why a minor, when §4 of `docs/architecture.md` says this costs a major.** 3.0.0 told everyone to pin `roam-research-mcp@3`. A 4.0.0 would route this fix around every user who took that advice two days earlier, leaving precisely the exposed population exposed for as long as the pin lives. A security fix that the freshly-documented pin blocks is worse than an understated version number. It also helps that the removed behaviour was never documented: the README described this bind as loopback-only while the code bound everything.
+
+- **Internal: the transport boundary is now asserted against a spawned server and real sockets.** `src/server/stdio-transport.test.ts` starts the server in stdio mode, completes a handshake over stdin/stdout to prove it is alive and serving tools, then asserts nothing is listening — on loopback, on a LAN interface, and via `lsof` on the process itself. No unit test could have caught this; the defect was in what the server passed to `listen()`. Verified against both prior states: three of its assertions fail against 3.0.0, and two still fail against a build with only the loopback fix.
+
+- **Credit:** reported and fixed by [@drenaud0214](https://github.com/drenaud0214) in [#17](https://github.com/2b3pro/roam-research-mcp/pull/17), whose commits are preserved in this history. The stdio listener had been the default since v0.26.0 in June 2025, through every release since.
+
+### v3.0.0 (2026-08-03)
+
+**In one line:** write tools now return machine-readable `structuredContent` alongside their text, and three output fields were renamed to stop the schemas freezing bad names into a permanent contract.
+
+- **⚠️ Breaking: three write-result field names changed.** They are renamed, not removed, and nothing else about the results moved.
+
+  | Tool | Was | Now |
+  |---|---|---|
+  | `roam_create_page` | `uid` | `page_uid` |
+  | `roam_create_outline`, `roam_import_markdown` | `created_uids` | `created_blocks` |
+  | `roam_update_page_markdown` | `preservedUids` | `preserved_uids` |
+
+  - **Do you need to do anything?** Only if you have code reading those field names — a script, a wrapper, a CLI pipeline. If you use this server through an AI assistant, no: the model reads whatever field is there. The CLI was updated in the same commits, and its own output shape is unchanged.
+  - **`roam_create_page` returned a bare `uid`** while `roam_create_outline` and `roam_import_markdown` returned `page_uid` for the same thing. A bare `uid` also does not say what it identifies. All three now agree.
+  - **`created_uids` never contained UIDs.** It holds `NestedBlock` objects — `{uid, text, level, order, children}`. Anything trusting the name and iterating it as strings was already getting objects. `created_blocks` says what it has always been.
+  - **`preservedUids` was the only camelCase field crossing the tool boundary.** It inherited the casing from the internal `DiffResult.preservedUids`, which stays camelCase along with the rest of `src/diff/`. Only the field that leaves the process was renamed.
+  - **Why now, in one go.** Both fields were free to change right up until they were declared in an `outputSchema` below. After that, a rename is a change to a published promise that clients may validate against a cached tool list. This was the last version in which they cost nothing to fix.
+
+- **Write tools now declare `outputSchema` and return `structuredContent`.** All ten of them; no read tool does.
+  - **What it buys you.** Write results arrive as a validated object rather than JSON that a client has to find and parse inside a text blob. Chaining gets more reliable — `roam_process_batch_actions` returning `uid_map`, `roam_create_page` returning `uid` — because the shape is declared up front rather than inferred from a string.
+  - **Nothing is taken away.** The text channel is unchanged, so any client that ignores `structuredContent` sees exactly what it saw in 2.25.0.
+  - **Reads deliberately have neither.** They already serialise their whole result into the text channel, so a schema would double the payload, and read shapes are still moving.
+  - Every schema is `additionalProperties: true`, and `required` lists come from the compiler — a field is required only where the handler's return type declares it non-optional. Batch-style tools report failure in band rather than throwing, so only `success` is required there.
+  - Going forward these fields are **additive-only**: a client can validate a live response against a cached tool list, so renaming or removing one breaks the tool for as long as that cache lives.
+
+- **Fix: `roam_process_batch_actions` and the staged-batch writers now share one rate-limit retry.** `BatchOperations` had kept a private copy, which is exactly why `executeStagedBatch` was written with none — the logic was unreachable, so the next write path went without it and a multi-level page could die half-written with no undo to reverse it. The duplicate is gone.
+  - The backoff hint in a `RATE_LIMIT` error now comes from the caller's own config rather than from a field stapled to an error object. Same value in every shipped configuration; more honest source.
+
+- **Docs: how to pin the version.** `npx -y roam-research-mcp` fetches the latest release every time your client starts the server, so this major arrives on the next restart whether or not you were ready for it. The README now shows how to pin — `roam-research-mcp@3` keeps you on 3.x and makes the next breaking change something you opt into.
+
+- **Docs: `protected: true` does nothing on your default graph.** Writes to whichever graph `ROAM_DEFAULT_GRAPH` names are always allowed, before `protected` is consulted. The README promised otherwise. The behaviour is deliberate — the flag guards graphs you have to ask for by name — so this documents it rather than changing it. **If you want a graph write-guarded, it must not be your default.**
+
+- **Internal: tools are now tested through the MCP boundary, not just as units.** Two features shipped broken on the same day in 2.23.0 with green suites behind them — a hide filter no tool called, and annotations nothing proved the server declared. Both are structurally invisible to a unit test. The new suite spawns the real server, fixtures only the Roam wire, and asserts on what a client actually receives. Every assertion was verified against a deliberately broken build rather than trusted because it passed.
+
+### v2.25.0 (2026-08-03)
+
+- **Reverts the 2.24.0 opt-in change.** `roam_get_guidelines` reads `[[roam/agent guidelines]]` again with **no configuration required** — just create the page. Precedence is per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → `roam/agent guidelines`, and **only an explicit `guidelinesPage: false` disables it**.
+  - If you added `ROAM_GUIDELINES_PAGE` or a `guidelinesPage` key to satisfy 2.24.0, you can leave it — it still works, it is simply no longer necessary.
+  - 2.24.0 made the page opt-in on the reasoning that a graph might contain a similarly-titled page and start feeding it to agents unasked. That was wrong on four counts: `roam/agent guidelines` is a specific namespaced title nobody creates by accident, so creating it *is* the opt-in; nothing reads the graph unprompted, because the lookup only runs when an agent explicitly calls the tool, which is already consent; `guidelinesPage: false` already covered the per-graph opt-out; and it broke the reason the feature exists, since Roam's own server reads the page unconditionally and a shared convention that needs private configuration is not a shared convention.
+  - The failure modes were not symmetric. Reading by default, the worst case is reading a page someone created with that exact title for exactly this purpose. Opt-in's worst case is a feature that silently does nothing and looks broken — which is what happened on this project's own daemon, where an approved page sat unread until the config was checked.
+
+### v2.24.0 (2026-08-03)
+
+- **⚠️ Breaking:** `guidelinesPage` is now **opt-in**. In 2.23.0 an unset `guidelinesPage` fell back to the literal title `roam/agent guidelines`, so any graph that happened to contain a similarly-titled page would start feeding it to agents without anyone asking. Resolution is now **per-graph `guidelinesPage` → `ROAM_GUIDELINES_PAGE` → disabled**.
+  - **If you set up a guidelines page for 2.23.0, it goes quiet until you name it.** Set `"guidelinesPage": "roam/agent guidelines"` on the graph in `ROAM_GRAPHS`, or `ROAM_GUIDELINES_PAGE` as a fallback for graphs that name none.
+  - `guidelinesPage: false` still disables one graph even when the env fallback is set. Each graph may point at a different page.
+  - When disabled the tool reports it and never touches the graph.
+
+- **Fix:** `#.rm-hide` / `#.rm-private` now actually apply on the page and block read paths. 2.23.0 wired the filter into `fetchPageByUid` — a function the tools do not call. `roam_fetch_page_by_title` builds its own tree inline rather than reusing it, so the primary page read shipped unfiltered, and `roam_fetch_block` was never wired at all. **If you relied on 2.23.0 to withhold tagged blocks, it did not.**
+  - `fetchPageByTitle` prunes before any of its three formats render. Blocks are collected from the pruned tree rather than by filtering the original list — pruning copies any node with children, so the originals are no longer the objects rendered, and the markdown branch mutates them in place while resolving references.
+  - `roam_fetch_block` withholds a tagged block outright and prunes its subtree.
+  - `roam_fetch_page_full_view` filtered its own page content already but not its **backlinks**, which come from other pages. Referring blocks are now filtered against the hidden-UID closure — a text check alone misses a block nested under a tagged parent elsewhere — and their children pruned. Filtered before the `max_references` cap, so truncation counts what the caller can actually see.
+  - `roam_recall` has two halves; the tag half already went through filtered search, the page scan did not. Its query now selects the block UID so it can filter by closure rather than by text alone.
+  - `roam_get_subpages` needed no change — it renders through the already-filtered path.
+  - Verified through live tool calls against a running daemon rather than through the underlying functions, which is how the 2.23.0 gap went unnoticed.
+
+- **Docs:** The README now explains [how this project differs from Roam's official MCP server](README.md#how-this-differs-from-roams-official-mcp-server) — they talk to different Roam APIs, and everything else follows from that. Says plainly when to reach for theirs, and documents that the two interoperate: both read `[[roam/agent guidelines]]` and both honour `#.rm-hide` / `#.rm-private`.
+
+### v2.23.0 (2026-08-03)
+
+- **Security fix:** Denying a write to a protected graph no longer discloses `ROAM_SYSTEM_WRITE_KEY`. The error read `Provide write_key: "<the actual key>" to proceed` — so the key that *is* the gate was handed to whoever had just been refused, who could immediately retry and succeed. It fired both when no key was supplied and when a **wrong** key was guessed, turning a failed guess into a working one. The same pattern existed in the CLI path, where it is worse: CLI output lands in scrollback, logs and session transcripts, so the key outlived the moment it was printed. Both now name the environment variable, never its value. **If you have run this server with a protected graph, treat your write key as exposed and rotate it.**
+
+- **Feature:** MCP tool annotations on all 25 tools. Per the MCP spec an *omitted* annotation defaults to destructive + open-world, so until now every read tool we shipped — `roam_search_by_text`, `roam_fetch_page_by_title`, `roam_recall` — advertised itself to clients as capable of irreversible damage. Clients gate tools on these hints.
+  - Four classifications: **read** (read-only, idempotent), **append** (adds content only; repeating adds again, so not idempotent), **edit** (overwrites or relocates, so destructive, but same args → same end state), and **destructive** (`roam_process_batch_actions`, whose action enum includes `delete-block`).
+  - `roam_update_page_markdown` is an *edit* rather than an append because its smart diff emits delete operations.
+  - `openWorldHint` is false throughout — every tool acts only on your own graph.
+  - A test pins the classification and enforces an invariant spanning two files: `readOnlyHint === false` must hold for **exactly** the tools in `WRITE_OPERATIONS`, since that list drives write-key enforcement while the annotations drive client-side gating. The same property, and they must not drift.
+
+- **Feature:** Roam's `#.rm-hide` / `#.rm-private` tags are now honoured. A block carrying either — and everything nested under it — is withheld from the content these tools return. This matches Roam's official MCP server, so a block tagged for one is hidden from both.
+  - All three reference forms match (`#.rm-hide`, `#[[.rm-hide]]`, `[[.rm-hide]]`), case-insensitively — over-hiding is the safe direction for a privacy filter. `#.rm-hidden` and `#.rm-highlight` are deliberately left alone.
+  - Page trees prune at the single point where a page's tree is assembled, so markdown/raw/structure all inherit it. Flat search results carry no ancestry, so they filter against a UID closure (tagged blocks plus descendants) built from Roam's materialised `:block/parents`, cached 30s per graph.
+  - **`roam_datomic_query` is deliberately NOT filtered.** Raw Datalog reads the database directly and stays raw — which is exactly why these tags are a convenience filter and **not a security guarantee**. Treat them as "keep it out of the AI's way," not "keep it secret."
+
+- **Feature:** `roam_get_guidelines` — per-graph agent conventions, read from a page **inside** the graph (`[[roam/agent guidelines]]` by default). These are your own rules: how you tag, how you namespace pages, what an agent should never do. Roam's official MCP server reads the same page title, so one page serves both.
+  - Complements `CUSTOM_INSTRUCTIONS_PATH` rather than replacing it. That file is server-wide, cached until restart, and covers Roam *syntax*; guidelines are **per-graph**, live-edited from inside Roam, and cover *conventions*.
+  - Configure with a `guidelinesPage` key in `ROAM_GRAPHS` or the `ROAM_GUIDELINES_PAGE` env var; `false` disables it. Same precedence as the existing `memoriesTag`.
+  - Fails open: no page returns `exists: false` and a lookup error returns a note, so a guidelines miss can never break the tool you actually wanted. Cached 30s, so editing the page takes effect without a restart.
+  - Read through the normal page path, so `#.rm-hide` / `#.rm-private` are honoured inside guidelines too.
+  - Every other tool's description now points at it, once per graph per session, **including reads** — conventions change how results should be interpreted and presented, not just how content is written. A starter template ships at `.roam/agent-guidelines.template.md`.
+
+- **Feature:** Structured error envelope. Tool failures returned a prose sentence an agent could read but rarely act on. Failures now carry a machine-readable `code` plus recovery context spread into the body:
+
+  ```json
+  { "error": { "code": "UNKNOWN_GRAPH",
+               "message": "Unknown graph: \"typoo\".",
+               "requested_graph": "typoo",
+               "available_graphs": ["personal", "work"] } }
+  ```
+
+  Returned with `isError` rather than thrown — MCP treats a throw as a *protocol* failure, while `isError` with content is a *tool* failure the model can read and act on. Codes accept values outside the known union and are never validated against it, since Roam and future transports emit codes this codebase has not heard of. Graph resolution is converted first; remaining sites keep working unchanged and migrate incrementally.
+
+- **Fix:** A rate-limited batch no longer leaves a half-written page. `executeStagedBatch` called the Roam API with no rate-limit handling, so the first `Too many requests` abandoned every level that had not yet run — and levels commit as they succeed, in a store with no undo. Hit for real creating a 119-block page: it died at level 3 with 111 of 119 blocks written. Three tools sit on this path — `roam_create_page`, `roam_update_page_markdown` and `roam_create_outline` — and the middle one is the worst to fail midway, since its smart diff emits deletes as well as creates. Retry logic already existed but was private to `BatchOperations`, which is why the second write path was built without it; it now lives in `src/shared/retry.ts` where a third path can find it.
+
+- **Fix:** The HTTP server returns `404` for an unrecognised `Mcp-Session-Id` instead of `400`. Per the MCP streamable-HTTP spec a server must answer 404 for a terminated or unknown session, and clients treat 404 — not 400 — as the signal to re-initialise. In practice: restart a long-lived daemon and every connected client wedged permanently on its dead session, each tool call failing with an opaque multi-minute timeout while the daemon looked perfectly healthy. Also closes a leak, since the old fall-through built a fresh transport and MCP server per stale request and never released them. Thanks to **@jurebordon** for the report and fix (#18).
+
+- **Docs:** The cheatsheet now says what to do when you need a literal `#N`. It warned against a bare `#1` in two places but never gave a correct alternative, so an agent that genuinely needed the literal form had no option but to emit one and silently create a numbered page. Quote it: `"#1"`.
+
+### v2.22.1 (2026-07-07)
+- **Fix:** `convertToRoamMarkdown` no longer mangles intra-word underscores. The single-underscore-to-italic rule now respects CommonMark's word-boundary requirement, so `snake_case` filenames and URLs like `/wiki/Ning_Li_(physicist)` survive `roam_import_markdown` instead of becoming `__Li__`. Genuine `_italic_` at word boundaries still converts, and backtick-wrapped inline code stays literal.
+
+### v2.22.0 (2026-06-13)
+- **Feature:** Optional transport-level bearer token (`HTTP_AUTH_TOKEN`) for the HTTP MCP endpoint — the perimeter lock for when the server is bound beyond loopback (e.g. `-H 0.0.0.0`).
+  - **Unset = open (default, unchanged)** — loopback deployments need nothing.
+  - **Set →** every HTTP MCP request must send `Authorization: Bearer <token>`; otherwise `401` with `WWW-Authenticate: Bearer`. Constant-time comparison (`crypto.timingSafeEqual`) avoids token recovery via timing.
+  - `GET /health` stays open (so `roam server status`, launchd, and monitors work tokenlessly) and reports `auth: "required" | "none"`. `roam server status` shows the auth state.
+  - This is **authentication** (who may connect) and is separate from `ROAM_SYSTEM_WRITE_KEY`, which is per-graph write **authorization**. Layered, not redundant: the bearer token also protects *reads*, which `write_key` does not. See README → Running the Server.
+
+### v2.21.0 (2026-06-13)
+- **Feature:** `roam server` CLI command group to run and manage the shared HTTP daemon, so the server is discoverable from `roam --help` (previously `--server` only existed on the `roam-research-mcp` server binary, invisible to the CLI).
+  - `roam server start [-p <port>] [-H <host>] [-f]` — starts the HTTP-only daemon (background by default, `-f` for foreground); refuses to double-start if one is already serving the address.
+  - `roam server status [--json]` — launch-agnostic: probes `GET /health`, so it reports a daemon started by a LaunchAgent/systemd unit too (version, mode, graphs, default graph, active sessions); also shows whether it's CLI-managed.
+  - `roam server stop` — stops a CLI-started daemon (pidfile-tracked); if the running daemon is service-managed, it says so instead of pretending to stop it.
+  - `roam server logs [-f] [-n <n>]` — tails the CLI-managed log.
+  - State (pidfile + log) lives in `~/.roam/`, overridable via `ROAM_HOME`.
+
+### v2.20.0 (2026-06-13)
+- **Feature:** `--server` flag runs a long-lived, HTTP-only MCP daemon meant to be kept running (e.g. by a LaunchAgent) and **shared by multiple clients** — instead of every session spawning its own stdio subprocess (each of which also opened a drifting HTTP port). Saves memory and gives clients a stable URL.
+  - HTTP-only: skips the stdio transport (no client reads it in a daemon)
+  - Binds the **exact** `HTTP_STREAM_PORT` on the new `HTTP_STREAM_HOST` (default `127.0.0.1`, loopback-only) and **exits non-zero if the port is in use** — a shared daemon must never silently drift off its URL
+  - Without the flag, behavior is unchanged (stdio + auto-discovered HTTP port) — fully backward compatible
+- **Feature:** `GET /health` endpoint → `{"status":"ok","version":...,"mode":...,"graphs":[...],"defaultGraph":...,"activeSessions":N}`. A cheap liveness probe (a bare GET on the MCP endpoint returns `406`); available in both modes.
+- **Config:** new `HTTP_STREAM_HOST` env var (bind host for `--server` mode).
+- Point clients at the daemon with an HTTP transport config: `{"type":"http","url":"http://127.0.0.1:8088/mcp"}`. See README → Running the Server → Shared Server Mode for the LaunchAgent recipe.
+
+### v2.19.1 (2026-06-05)
+- **Fix:** `roam update <uid> --done` (and `--todo` / `--clear-status`) no longer erases block text when run from a subprocess
+  - A non-interactive caller (stdin = `/dev/null`, e.g. `Bun.spawn(['roam','update',uid,'--done'])`) is non-TTY but has empty stdin. The old heuristic read that empty stdin and stored `''` as the new content, skipping the "fetch existing block text" path, so `applyStatus` prepended the marker to an empty string — replacing the block with a bare `{{[[DONE]]}} `
+  - New `resolveUpdateContent()` maps empty/whitespace stdin to "no new text", so status-only updates fetch the existing text and find-replace the `{{[[TODO]]}}`/`{{[[DONE]]}}` marker in place
+  - Added `update.test.ts` (14 cases) covering stdin resolution and `applyStatus` text preservation; verified end-to-end on a live block
+
+### v2.19.0 (2026-05-30)
+- **Feature:** `roam_import_markdown` now nests content by markdown heading level
+  - A heading (`##`) becomes a parent block; following content and deeper headings (`###`) nest under it until a heading of equal-or-higher level closes the section
+  - Fixes flush-left, heading-structured markdown (e.g. report skeletons) that previously imported as a flat list of root-level siblings
+  - Backward-compatible: indentation-only markdown and heading-free flat lists are unchanged — only heading-structured input nests differently
+  - New `nestUnderHeadings()` transform in `markdown-utils.ts`, applied in the import path
+- **Fix:** `roam_import_markdown` returns the created block UIDs in `created_uids`
+  - Previously returned `[]` for imports over 5 blocks (a verification short-circuit), and otherwise re-queried the graph (fragile, exposed to write→read consistency races)
+  - Roam's write API does not echo back transacted UIDs, so the tool now reports the UIDs it mints client-side via `convertToRoamActionsWithBlocks()` — no post-write re-query
+- **Internal:** removed the now-dead `fetchNestedStructure()` re-query; added unit + end-to-end tests for both changes
+
+### v2.18.2 (2026-03-21)
+- **Feature:** Automatic date normalization across all tools and CLI commands
+  - Date-like inputs are automatically converted to Roam's daily page format (`March 21st, 2026`)
+  - Supports: ISO (`2026-03-21`), US (`03/21/2026`), named (`March 21, 2026` / `Mar 21`), EU day-first named (`21 March 2026` / `21-Mar-2026`), and EU numeric when unambiguous (`14/03/2025` where first > 12 must be day)
+  - Works in `roam get`, `roam_fetch_page_by_title`, all search tools (`page_title_uid` param), and page resolution helpers
+  - `resolveRelativeDate()` now normalizes date formats as fallback (in addition to `today`/`yesterday`/`tomorrow`)
+  - New `normalizeToRoamDate()` utility exported from `helpers.ts` — validates dates, rejects impossible dates (Feb 30, etc.)
+  - No-year inputs (`March 21`, `Mar 21`) assume current year
+
+### v2.18.1 (2026-03-20)
+- **Fix:** `roam batch` with `parent: "Page Title"` now resolves page titles to UIDs instead of passing raw strings to the API
+  - Titles in the `parent` field are resolved just like the `page` field
+  - If the page doesn't exist, it is auto-created before batch execution
+  - `resolveParentRef()` no longer silently passes unresolvable strings as UIDs
+
+### v2.18.0 (2026-03-17)
+- **Feature:** Add `--order` flag to `roam save` CLI — control insertion position of top-level blocks
+  - `--order first` prepends to top of page/parent
+  - `--order last` appends (default, backwards-compatible)
+  - `--order N` inserts at specific 0-indexed position
+  - Applies to all save modes: text, file, stdin, `--todo`, `--json`, `--lines`
+  - Children maintain relative order underneath their parent
+- **Feature:** Add `order` parameter to `roam_create_outline` MCP tool
+  - Accepts `"first"`, `"last"`, or integer for insertion position
+  - Controls position of first level-1 block relative to existing page children
+
+### v2.17.0 (2026-03-17)
+- **Feature:** Add `roam_fetch_page_full_view` tool + CLI `roam get full` — full page view with content + linked references (#15)
+  - Page's own content (blocks + heading structure)
+  - All linked references grouped by source page with breadcrumb context
+  - Children of each referring block expanded to configurable depth (default 4)
+  - `max_references` safety valve (default 200) prevents timeouts on heavily-referenced pages
+  - CLI: `roam get full "Page Title" [-d depth] [-n max-refs]`
+- **Feature:** Add `roam_get_subpages` tool + CLI `roam get subpages` — namespace-based sub-page listing
+  - Lists pages under a prefix (e.g. "Project/", "Framework/")
+  - Optional `filter_tag` to filter sub-pages containing a specific tag
+  - Optional `include_content` to include full block content
+  - CLI: `roam get subpages "Prefix" [--filter-tag tag] [--content]`
+- **Refactor:** Extract `fetchChildrenByDepth` into shared helper (`src/tools/helpers/fetch-children.ts`)
+- **Fix:** `convertToRoamActions` now correctly passes through `'first'`/`'last'` order strings instead of replacing with index
+- **Fix:** CLI `roam save <file.md> -p <page>` ignored `-p` flag and created a page from the filename
+- **Fix:** Typo in `roam_add_content` schema description
+
+### v2.16.0 (2026-03-16)
+- **Feature:** Renamed `roam_fetch_block_with_children` → `roam_fetch_block` with bidirectional traversal
+  - New `include_ancestors` parameter (default: false) returns the ancestor chain from the block up to the page root
+  - Each ancestor includes UID, content string (or title for page root), and depth
+  - Uses Datomic `:block/parents` pull pattern — single API call, no recursion
+  - Existing `depth` parameter (children) unchanged — fully backward compatible
+  - `depth: 0` + `include_ancestors: true` fetches ancestors only (lightweight alternative to fetching entire page)
+  - CLI: `roam get -a` / `--ancestors` flag for ancestor traversal from the command line
+  - Deprecated `fetchBlockWithChildren()` method kept as backward-compatible alias
+
+### v2.15.3 (2026-03-15)
+- **Fix:** Cheatsheet path resolution for npx/installed environments (#14)
+  - `getCheatsheetPath()` now resolves relative to `__dirname` instead of `process.cwd()`, fixing "file not found" errors when the server is invoked via `npx` or from a global install
+
+### v2.15.2 (2026-02-28)
+- **Fix:** Sanitize category/tag inputs to prevent double-hash formatting
+  - Categories passed with `#` prefix or `[[]]` wrappers are now cleaned before the tool prepends its own Roam tag formatting, preventing `##Tag` or `#[[#Tag]]`
+  - Affects: `roam_remember`, CLI `roam save`, CLI `roam batch` translator
+  - Added `sanitizeTagInput()` utility in `src/utils/helpers.ts` with tests
+- **Fix:** Docker build — copy `.roam/` directory and cheatsheet into builder and release stages
+
+### v2.15.1 (2026-02-10)
+- **Fix:** CLI `roam save -p` failed for page titles that are exactly 9 letters (e.g., "Learnings")
+  - `isBlockUid()` now requires at least one digit, preventing all-letter titles from being misidentified as Roam block UIDs
+
+### v2.15.0 (2026-02-06)
+- **Feature:** Cheatsheet v2.2.0 — added Advanced Components section with hidden/undocumented Roam features
+  - Dropdowns (`{{or:}}`), tooltips (`{{=:}}`), template buttons, daily templates
+  - Advanced Datalog queries (`{{datalog-block-query:}}`, `:q` sortable tables)
+  - Document mode (`:document`), utility components (`{{orphans}}`, `{{iframe}}`, `{{chart}}`)
+  - CSS tags (`#.classname`) and native Roam style tags (`#.rm-E`, `#.rm-hide`, etc.)
+
+### v2.14.0 (2026-02-05)
+- **Feature:** `--lines` flag for CLI `roam save` — treats each non-empty line as a separate block, bypassing markdown parsing
+  - Useful for piped stdin where each line should be its own block
+  - Note: requires real newlines (`jq -r`, not `jq`, for JSON string fields)
+- **Feature:** Enhanced `--debug` output for `roam save` — shows numbered preview of all parsed blocks with indentation and heading tags
+- **Feature:** Numbered list `children-view-type` now threads through CLI save path
+  - Previously only worked via MCP `roam_create_page`; now `roam save` (both page and block modes) sets `children-view-type: "numbered"` on parent blocks when numbered items are detected
+  - Affects: `flattenNodes`, `ContentBlock`, `TextContentItem`, `buildActionsFromNodes`
+
+### v2.13.0 (2026-01-25)
+- **Feature:** Markdown parser now handles numbered lists and horizontal rules
+  - Numbered list prefixes (`1.`, `2.`, etc.) are stripped from content
+  - Parent blocks of numbered items get `children-view-type: "numbered"`
+  - Horizontal rules (`---`, `***`, `___`) converted to Roam `---` format
+  - Affects: `roam_import_markdown`, `roam_create_outline`, CLI `roam save`
+- **Feature:** Page existence validation before batch operations
+  - New `PageValidator` with batched existence checking (1 API call for N UIDs)
+  - Auto-creates daily pages when `MM-DD-YYYY` format UIDs are missing
+  - Session-scoped UID cache reduces redundant API calls
+  - Clear error messages for missing non-daily pages
+
+### v2.12.0 (2026-01-18)
+- **Refactor:** Consolidated redundant code patterns across codebase (~365 lines reduced)
+  - Centralized ancestor rule in `src/search/ancestor-rule.ts`
+  - Shared page UID resolution utilities in `src/tools/helpers/page-resolution.ts`
+  - Added `resolveBlockRefs` method to `BaseSearchHandler` for consistent block ref resolution
+  - Shared case-insensitive search utilities in `SearchUtils` class
+  - Batch error handling utilities in `src/tools/helpers/batch-utils.ts`
+
+### v2.10.3 (2026-01-18)
+- **New:** `roam_process_batch_actions` now parses markdown heading syntax (`#`, `##`, `###`)
+  - `"### Description"` automatically becomes heading level 3 with text "Description"
+  - Explicit `heading` parameter still takes precedence over markdown syntax
+- **Cleanup:** Removed dead code from `BlockOperations` class
+  - Removed unused `createBlock`, `updateBlock`, `updateBlocks` methods
+  - Removed unused `BlockUpdate`, `BlockUpdateResult` types
+
+### v2.10.2 (2026-01-18)
+- **Fixed:** `roam_import_markdown` failing on existing pages with "Parent entity doesn't exist"
+  - Added verification when `page_uid` is provided directly (was used without validation)
+  - Added 400ms delay after creating today's page for Roam eventual consistency
+  - Invalid UIDs now return clear error: `Page/block with UID "..." not found`
+
+### v2.10.1 (2026-01-18)
+- **Fixed:** `roam_create_page` with content array failing with "Parent entity doesn't exist"
+  - Added 400ms delay after new page creation for Roam eventual consistency
+  - Added retry logic in `BatchOperations.processBatch()` for parent entity errors
+  - Applies to MCP tool, CLI `--title` mode, and CLI `--page` mode
+- **New:** `PARENT_ENTITY_NOT_FOUND` error code for structured error handling
+
+### v2.9.1 (2026-01-10)
+- **New:** `roam get page` subcommand for explicit page retrieval
+  - Fetch pages by UID: `roam get page abc123def`
+  - Fetch pages by Roam URL: `roam get page "https://roamresearch.com/#/app/my-graph/page/abc123def"`
+  - Fetch pages by title: `roam get page "Project Notes"`
+  - Added `parseRoamUrl()` and `isRoamUid()` helper utilities
+  - Added `fetchPageByUid()` method to PageOperations
+
+### v2.9.0 (2026-01-10)
+- **New:** `roam save` now infers heading hierarchy from markdown
+  - Headings (`#`, `##`, `###`) automatically create nested structure
+  - Use `--flatten` to disable hierarchy inference
+- **Fixed:** `roam_search_by_text` page filter now works correctly
+
+### v2.8.2 (2026-01-09)
+- **Fixed:** `roam_search_by_text` now works with `page_title_uid` parameter — count query was missing `:in $ ?page-uid` clause
+
+### v2.8.0 (2026-01-08)
+- **New:** Per-graph `memoriesTag` configuration in `ROAM_GRAPHS` JSON
+- **Changed:** Renamed env var `MEMORIES_TAG` → `ROAM_MEMORIES_TAG` for consistency
+- **Changed:** Fallback priority: per-graph config > `ROAM_MEMORIES_TAG` env > `"Memories"`
+
+### v2.7.0 (2026-01-08)
+- **New:** `--sort <field>` option for `roam get` — sort by `created`, `modified`, or `page`
+- **New:** `--asc` / `--desc` flags to control sort direction
+- **New:** `--group-by <field>` option — group results by `page` or `tag` (subtag clustering)
+- **Changed:** Output format now uses `[uid] content` prefix instead of `content (uid)` suffix
+- **Changed:** JSON output for tag/text queries now includes `created`, `modified`, `tags` fields
 
 ### [2.6.0](https://github.com/2b3pro/roam-research-mcp/compare/v2.5.1...v2.6.0) (2026-01-08)
 
