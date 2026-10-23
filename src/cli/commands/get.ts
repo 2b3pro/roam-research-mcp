@@ -16,7 +16,7 @@ import {
 } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 import { readStdin } from '../utils/input.js';
-import { resolveRefs } from '../../tools/helpers/refs.js';
+import { resolveRefsInTrees } from '../../tools/helpers/refs.js';
 import { resolveRelativeDate, parseRoamUrl, isRoamUid } from '../../utils/helpers.js';
 import { SearchUtils } from '../../search/utils.js';
 import {
@@ -64,25 +64,14 @@ interface GetOptions extends GraphOptions {
  * Recursively resolve block references in a RoamBlock tree
  */
 async function resolveBlockRefsInTree(graph: Graph, block: RoamBlock, maxDepth: number): Promise<RoamBlock> {
-  // Only resolve if string is valid
-  const resolvedString = typeof block.string === 'string'
-    ? await resolveRefs(graph, block.string, 0, maxDepth)
-    : block.string || '';
-  const resolvedChildren = await Promise.all(
-    (block.children || []).map(child => resolveBlockRefsInTree(graph, child, maxDepth))
-  );
-  return {
-    ...block,
-    string: resolvedString,
-    children: resolvedChildren
-  };
+  return (await resolveRefsInTrees(graph, [block], maxDepth))[0];
 }
 
 /**
  * Resolve refs in an array of blocks
  */
 async function resolveBlocksRefsInTree(graph: Graph, blocks: RoamBlock[], maxDepth: number): Promise<RoamBlock[]> {
-  return Promise.all(blocks.map(block => resolveBlockRefsInTree(graph, block, maxDepth)));
+  return resolveRefsInTrees(graph, blocks, maxDepth);
 }
 
 /**
@@ -658,16 +647,10 @@ Note: For flat results with UIDs, use 'roam search' instead.
           }
 
           // Standard output: fetch full blocks with children
-          const blocks: RoamBlock[] = [];
-          for (const match of limitedMatches) {
-            let block = await blockOps.fetchBlock(match.block_uid, depth, ancestors);
-            if (block) {
-              // Resolve refs if requested (default: enabled for tag/text search)
-              const effectiveRefsDepth = refsDepth > 0 ? refsDepth : 1;
-              block = await resolveBlockRefsInTree(graph, block, effectiveRefsDepth);
-              blocks.push(block);
-            }
-          }
+          const fetched = await blockOps.fetchBlocks(limitedMatches.map(match => match.block_uid), depth, ancestors);
+          const visible = fetched.filter((block): block is NonNullable<typeof block> => block !== null);
+          const effectiveRefsDepth = refsDepth > 0 ? refsDepth : 1;
+          const blocks = await resolveBlocksRefsInTree(graph, visible, effectiveRefsDepth);
 
           // Output
           if (options.json) {

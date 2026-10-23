@@ -1,5 +1,6 @@
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { RoamBlock } from '../../types/roam.js';
+import { isHiddenBlockString } from './hidden.js';
 
 const childrenQuery = `[:find ?parentUid ?childUid ?childString ?childOrder ?childHeading
                         :in $ [?parentUid ...]
@@ -18,17 +19,19 @@ export async function fetchChildrenByDepth(
   graph: Graph,
   parentUids: string[],
   maxDepth: number,
-  currentDepth: number = 0
+  currentDepth: number = 0,
+  hidden: ReadonlySet<string> = new Set(),
 ): Promise<Record<string, RoamBlock[]>> {
   if (currentDepth >= maxDepth || parentUids.length === 0) return {};
 
-  const results = await q(graph, childrenQuery, [parentUids]) as [string, string, string, number, number | null][];
+  const results = await q(graph, childrenQuery, [[...new Set(parentUids)]]) as [string, string, string, number, number | null][];
   if (!results || results.length === 0) return {};
 
   const childrenByParent: Record<string, RoamBlock[]> = {};
   const allChildUids: string[] = [];
 
   for (const [parentUid, childUid, childString, childOrder, childHeading] of results) {
+    if (hidden.has(childUid) || isHiddenBlockString(childString)) continue;
     if (!childrenByParent[parentUid]) childrenByParent[parentUid] = [];
     childrenByParent[parentUid].push({
       uid: childUid,
@@ -40,13 +43,13 @@ export async function fetchChildrenByDepth(
     allChildUids.push(childUid);
   }
 
-  const grandChildren = await fetchChildrenByDepth(graph, allChildUids, maxDepth, currentDepth + 1);
+  const grandChildren = await fetchChildrenByDepth(graph, allChildUids, maxDepth, currentDepth + 1, hidden);
 
   for (const parentUid in childrenByParent) {
     for (const child of childrenByParent[parentUid]) {
       child.children = grandChildren[child.uid] || [];
     }
-    childrenByParent[parentUid].sort((a, b) => a.order - b.order);
+    childrenByParent[parentUid].sort((a, b) => a.order - b.order || a.uid.localeCompare(b.uid));
   }
 
   return childrenByParent;

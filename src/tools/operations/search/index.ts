@@ -18,7 +18,7 @@ import {
 } from './handlers.js';
 import type { DatomicSearchParams } from './types.js';
 import { collectHiddenUids, filterHiddenMatches } from '../../helpers/hidden.js';
-import { resolveRefs } from '../../helpers/refs.js';
+import { resolveRefsMany } from '../../helpers/refs.js';
 
 export interface SearchPageOptions {
   limit?: number;
@@ -125,9 +125,8 @@ export class SearchOperations {
       : a.block_uid.localeCompare(b.block_uid));
     const { limit = -1, offset = 0 } = options;
     const selected = filtered.slice(offset, limit === -1 ? undefined : offset + limit);
-    const matches = pageTitles ? selected : await Promise.all(selected.map(async match => ({
-      ...match, content: await resolveRefs(this.graph, match.content),
-    })));
+    const contents = pageTitles ? [] : await resolveRefsMany(this.graph, selected.map(match => match.content));
+    const matches = pageTitles ? selected : selected.map((match, index) => ({ ...match, content: contents[index] }));
     return { ...result, matches, total_count: filtered.length,
       message: `Found ${filtered.length} matching result(s); returning ${matches.length}.` };
   }
@@ -246,12 +245,13 @@ export class SearchOperations {
       // latest timestamp that actually falls inside the requested range.
       if (!previous || match.time > previous.time) matchesByUid.set(match.block_uid, match);
     }
-    const matches = await Promise.all([...matchesByUid.values()]
-      .map(async ({ block_uid, content, ...match }) => ({
-        uid: block_uid,
-        ...match,
-        ...(params.include_content !== false && { content: await resolveRefs(this.graph, content) }),
-      })));
+    const selected = [...matchesByUid.values()];
+    const contents = params.include_content === false ? []
+      : await resolveRefsMany(this.graph, selected.map(match => match.content));
+    const matches = selected.map(({ block_uid, content, ...match }, index) => ({
+      uid: block_uid, ...match,
+      ...(params.include_content !== false && { content: contents[index] }),
+    }));
     const sortedMatches = matches.sort((a, b) => b.time - a.time || a.uid.localeCompare(b.uid));
 
     return {

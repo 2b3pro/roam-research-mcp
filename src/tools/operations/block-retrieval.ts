@@ -3,11 +3,72 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { RoamBlock, RoamAncestor, RoamBlockWithAncestors } from '../../types/roam.js';
 import { resolveBlockRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
-import { pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
+import { collectHiddenUids, pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
 import { ednString } from '../../shared/datalog.js';
 
 export class BlockRetrievalOperations {
   constructor(private graph: Graph) { }
+
+  /** Read a set of roots together, preserving requested order and missing slots. */
+  async fetchBlocks(uids: string[], depth: number = 4, includeAncestors: boolean = false): Promise<Array<RoamBlockWithAncestors | null>> {
+    if (!uids.length) return [];
+    if (!Number.isSafeInteger(depth) || depth < 0 || uids.some(uid => !uid)) {
+      throw new McpError(ErrorCode.InvalidParams, 'Block UIDs are required and depth must be a non-negative integer.');
+    }
+    const requested = uids.map(uid => uid.replace(/^\(\((.*)\)\)$/, '$1'));
+    const unique = [...new Set(requested)];
+    const rows = await q(this.graph, `[:find ?uid ?string ?order ?heading
+      :in $ [?uid ...]
+      :where [?b :block/uid ?uid] [?b :block/string ?string]
+             [?b :block/order ?order]
+             [(get-else $ ?b :block/heading 0) ?heading]]`, [unique]) as [string, string, number, number][];
+    const hidden = await collectHiddenUids(this.graph);
+    const visibleRows = rows.filter(([uid, string]) => !hidden.has(uid) && !isHiddenBlockString(string));
+    const children = await fetchChildrenByDepth(this.graph, visibleRows.map(([uid]) => uid), depth, 0, hidden);
+    const roots = new Map<string, RoamBlockWithAncestors>(visibleRows.map(([uid, string, order, heading]) => [uid, {
+      uid, string, order, heading: heading || undefined, children: pruneHiddenBlocks(children[uid] ?? []),
+    }]));
+
+    if (includeAncestors && roots.size > 0) {
+      const ancestors = await q(this.graph, `[:find ?rootUid ?uid ?string ?title
+        :in $ [?rootUid ...]
+        :where [?root :block/uid ?rootUid] [?root :block/parents ?parent]
+               [?parent :block/uid ?uid]
+               [(get-else $ ?parent :block/string "") ?string]
+               [(get-else $ ?parent :node/title "") ?title]]`, [[...roots.keys()]]) as [string, string, string, string][];
+      const byRoot = new Map<string, Map<string, RoamAncestor>>();
+      for (const [rootUid, uid, string, title] of ancestors) {
+        if (!byRoot.has(rootUid)) byRoot.set(rootUid, new Map());
+        byRoot.get(rootUid)!.set(uid, { uid, ...(title ? { title, is_page: true } : { string }), depth: 0 });
+      }
+      const links = await q(this.graph, `[:find ?childUid ?parentUid
+        :in $ [?childUid ...]
+        :where [?child :block/uid ?childUid] [?parent :block/children ?child]
+               [?parent :block/uid ?parentUid]]`, [[...new Set([...roots.keys(), ...ancestors.map(row => row[1])])]]) as [string, string][];
+      const parents = new Map(links);
+      for (const [uid, root] of roots) {
+        const ordered: RoamAncestor[] = [];
+        const seen = new Set([uid]);
+        let current = parents.get(uid);
+        while (current && !seen.has(current)) {
+          seen.add(current);
+          const ancestor = byRoot.get(uid)?.get(current);
+          if (!ancestor) break;
+          ordered.push({ ...ancestor });
+          current = parents.get(current);
+        }
+        ordered.forEach((ancestor, index) => { ancestor.depth = ancestor.is_page ? 0 : ordered.length - index; });
+        root.ancestors = ordered;
+        root.page_title = ordered.find(ancestor => ancestor.is_page)?.title;
+      }
+    }
+
+    const allBlocks: RoamBlock[] = [];
+    const visit = (block: RoamBlock) => { allBlocks.push(block); block.children.forEach(visit); };
+    roots.forEach(visit);
+    await resolveBlockRefs(this.graph, allBlocks, 2, hidden);
+    return requested.map(uid => roots.get(uid) ?? null);
+  }
 
   async fetchBlock(block_uid_raw: string, depth: number = 4, include_ancestors: boolean = false): Promise<RoamBlockWithAncestors | null> {
     if (!block_uid_raw) {
