@@ -1,5 +1,6 @@
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { RoamBlock } from '../../types/roam.js';
+import { collectHiddenUids } from './hidden.js';
 
 // Roam block UIDs are 9 alphanumeric characters (with _ and -)
 const REF_PATTERN = /\(\(([a-zA-Z0-9_-]{9})\)\)/g;
@@ -40,7 +41,10 @@ export async function resolveRefs(
   if (refs.size === 0) return text;
 
   // Filter out already-seen refs to prevent circular resolution
-  const newRefs = Array.from(refs).filter(uid => !seen.has(uid));
+  // Paging happens before expansion. Do not re-introduce withheld content
+  // through a visible block that references a hidden block or descendant.
+  const hidden = await collectHiddenUids(graph);
+  const newRefs = Array.from(refs).filter(uid => !seen.has(uid) && !hidden.has(uid));
   if (newRefs.length === 0) return text;
 
   // Track these refs as seen

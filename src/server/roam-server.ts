@@ -313,11 +313,13 @@ export class RoamServer {
           }
 
           case 'roam_search_for_tag': {
-            const { primary_tag, page_title_uid, near_tag, case_sensitive } = cleanedArgs as {
+            const { primary_tag, page_title_uid, near_tag, case_sensitive, limit, offset } = cleanedArgs as {
               primary_tag: string;
               page_title_uid?: string;
               near_tag?: string;
               case_sensitive?: boolean;
+              limit?: number;
+              offset?: number;
             };
             if (!primary_tag) {
               throw new McpError(
@@ -325,7 +327,7 @@ export class RoamServer {
                 'Missing required parameter: primary_tag (the tag to search for). Use page_title_uid to limit search to a specific page.'
               );
             }
-            const result = await toolHandlers.searchForTag(primary_tag, page_title_uid, near_tag, case_sensitive);
+            const result = await toolHandlers.searchForTag(primary_tag, page_title_uid, near_tag, case_sensitive, limit, offset);
             return toolResult(request.params.name, result);
           }
 

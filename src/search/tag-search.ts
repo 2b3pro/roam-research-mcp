@@ -13,7 +13,7 @@ export class TagSearchHandler extends BaseSearchHandler {
   }
 
   async execute(): Promise<SearchResult> {
-    const { primary_tag, page_title_uid, near_tag, exclude_tag, case_sensitive = false, limit = -1, offset = 0 } = this.params;
+    const { primary_tag, page_title_uid, near_tag, exclude_tag, case_sensitive = false } = this.params;
 
     let nearTagUid: string | undefined;
     if (near_tag) {
@@ -50,10 +50,6 @@ export class TagSearchHandler extends BaseSearchHandler {
     const tagMatchClause = SearchUtils.buildTagMatchClause(primary_tag, '?ref-page', case_sensitive);
 
     let inClause = `:in $`;
-    let queryLimit = limit === -1 ? '' : `:limit ${limit}`;
-    let queryOffset = offset === 0 ? '' : `:offset ${offset}`;
-    let queryOrder = `:order ?page-edit-time asc ?block-uid asc`; // Sort by page edit time, then block UID
-
     let queryWhereClauses = `
                       ${tagMatchClause}
                       [?b :block/refs ?ref-page]
@@ -61,9 +57,8 @@ export class TagSearchHandler extends BaseSearchHandler {
                       [?b :block/uid ?block-uid]
                       [?b :block/page ?p]
                       [?p :node/title ?page-title]
-                      [?p :edit/time ?page-edit-time]
                       [(get-else $ ?b :create/time 0) ?block-create-time]
-                      [(get-else $ ?b :edit/time 0) ?block-edit-time]`; // Fetch page edit time for sorting, block timestamps for sort/group
+                      [(get-else $ ?b :edit/time 0) ?block-edit-time]`; // Block timestamps for CLI sort/group
 
     if (nearTagUid) {
       queryWhereClauses += `
@@ -84,7 +79,7 @@ export class TagSearchHandler extends BaseSearchHandler {
     }
 
     const queryStr = `[:find ?block-uid ?block-str ?page-title ?block-create-time ?block-edit-time
-                      ${inClause} ${queryLimit} ${queryOffset} ${queryOrder}
+                      ${inClause}
                       :where
                       ${queryWhereClauses}]`;
 
@@ -95,21 +90,7 @@ export class TagSearchHandler extends BaseSearchHandler {
 
     const rawResults = await q(this.graph, queryStr, queryArgs) as [string, string, string?, number?, number?][];
 
-    // Query to get total count without limit
-    const countQueryStr = `[:find (count ?b)
-                            ${inClause}
-                            :where
-                            ${queryWhereClauses.replace(/\[\?p :edit\/time \?page-edit-time\]/, '')}]`; // Remove edit time for count query
-
-    const totalCountResults = await q(this.graph, countQueryStr, queryArgs) as number[][];
-    const totalCount = totalCountResults[0] ? totalCountResults[0][0] : 0;
-
-    // Resolve block references in content
-    const resolvedResults = await this.resolveBlockRefs(rawResults);
-
-    const searchDescription = `referencing "${primary_tag}"`;
-    const formattedResults = SearchUtils.formatSearchResults(resolvedResults, searchDescription, !targetPageUid);
-    formattedResults.total_count = totalCount;
+    const formattedResults = SearchUtils.formatSearchResults(rawResults, `referencing "${primary_tag}"`, !targetPageUid);
     return formattedResults;
   }
 }

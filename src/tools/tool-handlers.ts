@@ -98,9 +98,11 @@ export class ToolHandlers {
     primary_tag: string,
     page_title_uid?: string,
     near_tag?: string,
-    case_sensitive?: boolean
+    case_sensitive?: boolean,
+    limit: number = 50,
+    offset: number = 0,
   ) {
-    return this.searchOps.searchForTag(primary_tag, page_title_uid, near_tag, case_sensitive);
+    return this.searchOps.searchForTag(primary_tag, page_title_uid, near_tag, case_sensitive, { limit, offset });
   }
 
   async searchBlockRefs(params: { block_uid?: string; title?: string; page_title_uid?: string }) {
@@ -121,8 +123,10 @@ export class ToolHandlers {
     page_title_uid?: string;
     scope?: 'blocks' | 'page_titles';
     case_sensitive?: boolean;
+    limit?: number;
+    offset?: number;
   }) {
-    return this.searchOps.searchByText(params);
+    return this.searchOps.searchByText({ limit: 50, offset: 0, ...params });
   }
 
   async searchByDate(params: {
