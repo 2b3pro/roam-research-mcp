@@ -444,7 +444,7 @@ export const toolSchemas = {
   roam_search_for_tag: {
     name: 'roam_search_for_tag',
     annotations: READ,
-    description: 'Search for blocks containing a specific tag. Use `primary_tag` for the tag to find, and optionally `page_title_uid` to limit search to a specific page. Supports pagination via `limit` and `offset`. Use this tool to search for memories tagged with the ROAM_MEMORIES_TAG.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
+    description: 'Search for blocks containing a specific tag. Use `primary_tag` for the tag to find, and optionally `page_title_uid` to limit search to a specific page. Supports pagination via `limit` and `offset`, applied after hidden-block filtering in UID order. Use this tool to search for memories tagged with the ROAM_MEMORIES_TAG.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({
@@ -587,7 +587,7 @@ export const toolSchemas = {
   roam_search_by_text: {
     name: 'roam_search_by_text',
     annotations: READ,
-    description: 'Search for blocks containing specific text across all pages or within a specific page. Use `scope: "page_titles"` to search for pages by namespace prefix (e.g., "Convention/" finds all pages starting with that prefix). This tool supports pagination via the `limit` and `offset` parameters.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
+    description: 'Search for blocks containing specific text across all pages or within a specific page. Use `scope: "page_titles"` to search for pages by namespace prefix (e.g., "Convention/" finds all pages starting with that prefix). This tool supports pagination via the `limit` and `offset` parameters. Pagination follows hidden-block filtering; block results use UID order and namespace results use title order.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({

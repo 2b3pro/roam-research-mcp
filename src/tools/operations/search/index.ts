@@ -20,6 +20,19 @@ import type { DatomicSearchParams } from './types.js';
 import { collectHiddenUids, filterHiddenMatches } from '../../helpers/hidden.js';
 import { resolveRefs } from '../../helpers/refs.js';
 
+export interface SearchPageOptions {
+  limit?: number;
+  offset?: number;
+  /** Internal CLI filters, evaluated on original content before paging. */
+  filter?: (match: SearchResult) => boolean;
+}
+
+export function validateSearchPage({ limit = -1, offset = 0 }: SearchPageOptions): void {
+  if (!Number.isSafeInteger(limit) || limit < -1 || !Number.isSafeInteger(offset) || offset < 0) {
+    throw new McpError(ErrorCode.InvalidParams, 'limit must be -1 or a non-negative integer; offset must be a non-negative integer.');
+  }
+}
+
 export class SearchOperations {
   constructor(private graph: Graph) {}
 
@@ -102,19 +115,42 @@ export class SearchOperations {
     };
   }
 
+  private async pageResults(result: SearchHandlerResult, options: SearchPageOptions, pageTitles = false): Promise<SearchHandlerResult> {
+    if (!result.success) return result;
+    const visible = await this.withoutHidden(result);
+    const filtered = visible.matches.filter(options.filter ?? (() => true));
+    // A stable tie-breaker is required: backend relation rows have no order.
+    filtered.sort((a, b) => pageTitles
+      ? a.content.localeCompare(b.content) || a.block_uid.localeCompare(b.block_uid)
+      : a.block_uid.localeCompare(b.block_uid));
+    const { limit = -1, offset = 0 } = options;
+    const selected = filtered.slice(offset, limit === -1 ? undefined : offset + limit);
+    const matches = pageTitles ? selected : await Promise.all(selected.map(async match => ({
+      ...match, content: await resolveRefs(this.graph, match.content),
+    })));
+    return { ...result, matches, total_count: filtered.length,
+      message: `Found ${filtered.length} matching result(s); returning ${matches.length}.` };
+  }
+
   async searchForTag(
     primary_tag: string,
     page_title_uid?: string,
     near_tag?: string,
-    case_sensitive?: boolean
+    case_sensitive?: boolean,
+    options: SearchPageOptions = {},
   ): Promise<SearchHandlerResult> {
-    const handler = new TagSearchHandlerImpl(this.graph, {
-      primary_tag,
-      page_title_uid,
-      near_tag,
-      case_sensitive,
-    });
-    return this.withoutHidden(await handler.execute());
+    validateSearchPage(options);
+    const handler = new TagSearchHandlerImpl(this.graph, { primary_tag, page_title_uid, near_tag, case_sensitive });
+    return this.pageResults(await handler.execute(), options);
+  }
+
+  /** Union all tag candidates before filtering/paging; first-tag seeding loses OR matches. */
+  async searchForTags(tags: string[], page_title_uid: string | undefined, any: boolean, options: SearchPageOptions): Promise<SearchHandlerResult> {
+    validateSearchPage(options);
+    const results = await Promise.all((any ? tags : tags.slice(0, 1)).map(primary_tag =>
+      new TagSearchHandlerImpl(this.graph, { primary_tag, page_title_uid }).execute()));
+    const matches = [...new Map(results.flatMap(result => result.matches).map(match => [match.block_uid, match])).values()];
+    return this.pageResults({ success: true, matches, message: '' }, options);
   }
 
   async searchBlockRefs(params: BlockRefSearchParams): Promise<SearchHandlerResult> {
@@ -127,9 +163,11 @@ export class SearchOperations {
     return this.withoutHidden(await handler.execute());
   }
 
-  async searchByText(params: TextSearchParams): Promise<SearchHandlerResult> {
+  async searchByText(params: TextSearchParams, options: SearchPageOptions = {}): Promise<SearchHandlerResult> {
+    const page = { ...params, ...options };
+    validateSearchPage(page);
     const handler = new TextSearchHandlerImpl(this.graph, params);
-    return this.withoutHidden(await handler.execute());
+    return this.pageResults(await handler.execute(), page, params.scope === 'page_titles');
   }
 
   async executeDatomicQuery(params: DatomicSearchParams): Promise<SearchHandlerResult> {

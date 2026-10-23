@@ -3,6 +3,8 @@ import type { SearchResult } from '../../types/index.js';
 // Base search parameters
 export interface BaseSearchParams {
   page_title_uid?: string;
+  limit?: number;
+  offset?: number;
 }
 
 // Datomic search parameters
@@ -51,4 +53,5 @@ export interface SearchHandlerResult {
   success: boolean;
   matches: SearchResult[];
   message: string;
+  total_count?: number;
 }

@@ -38,6 +38,12 @@ const PAGES = {
   'Alex "Sandy" Pentland': 'quotePg01',
   'C:\\newdir Notes': 'bslashPg1',
   'Search Fixture': 'searchPg1',
+  'Pagination Fixture': 'pagingPg1',
+  PagingTag: 'pagingTg1',
+  OtherPagingTag: 'pagingTg2',
+  'Paging/Zebra': 'pagingPgZ',
+  'Paging/Apple': 'pagingPgA',
+  'Paging/Middle': 'pagingPgM',
   aPiTag: 'mixedTag1',
   aPiTagExtra: 'mixedTag2',
 };
@@ -137,6 +143,16 @@ const BLOCKS = {
   ],
 };
 
+BLOCKS.pagingPg1 = [
+  ['pag000000', 'paging item [[PagingTag]] #.rm-hide', 0, 'pagingPg1'],
+  ...Array.from({ length: 60 }, (_, i) => [
+    `pag${String(i + 1).padStart(6, '0')}`,
+    `paging item ${i + 1} [[PagingTag]]${i % 2 === 0 ? ' [[OtherPagingTag]]' : ''}`,
+    i + 1, 'pagingPg1',
+  ]),
+  ['pag000061', 'paging item only second tag [[OtherPagingTag]]', 61, 'pagingPg1'],
+];
+
 // Independent datoms for search tests. Their dates deliberately disagree with
 // block text, and a missing attribute stays missing (it is never "now").
 const TIMES = {
@@ -153,7 +169,10 @@ const TIMES = {
   caseMix01: { create: Date.parse('2026-03-08T23:59:59.999-07:00') },
   caseLow01: { create: Date.parse('2026-03-09T00:00:00-07:00') },
 };
-const BLOCK_TAGS = { caseTag01: ['aPiTag'], caseTag02: ['aPiTagExtra'] };
+const BLOCK_TAGS = { caseTag01: ['aPiTag'], caseTag02: ['aPiTagExtra'],
+  ...Object.fromEntries(BLOCKS.pagingPg1.map(([uid, text]) => [uid,
+    ['PagingTag', 'OtherPagingTag'].filter(tag => text.includes(`[[${tag}]]`))])),
+};
 
 /**
  * Referring blocks (backlinks) to a page, as
@@ -503,6 +522,13 @@ function answer(query, args) {
   if (inlinedUid !== undefined) {
     const known = [...Object.values(PAGES), ...allBlocks().map(([uid]) => uid)];
     return known.includes(inlinedUid) ? [[inlinedUid]] : [];
+  }
+
+  // Namespace discovery returns unsorted relation rows; callers must sort
+  // before applying an offset (not page then sort that partial window).
+  if (query.includes(':find ?title ?uid') && query.includes('starts-with?')) {
+    const prefix = literalsAfter(query, '[(clojure.string/starts-with? ?title ')[0];
+    return Object.entries(PAGES).filter(([title]) => title.startsWith(prefix)).map(([title, uid]) => [title, uid]);
   }
 
   // Page lookup by title. `:find ?uid .` is a scalar find — return the bare uid.

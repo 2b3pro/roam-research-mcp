@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { SearchOperations } from '../../tools/operations/search/index.js';
+import { SearchOperations, validateSearchPage } from '../../tools/operations/search/index.js';
 import {
   formatSearchResults,
   printDebug,
@@ -21,11 +21,8 @@ function normalizeTag(tag: string): string {
  */
 function contentHasTag(content: string, tag: string): boolean {
   const normalized = normalizeTag(tag);
-  return (
-    content.includes(`[[${normalized}]]`) ||
-    content.includes(`#${normalized}`) ||
-    content.includes(`#[[${normalized}]]`)
-  );
+  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\[\\[${escaped}\\]\\]|#${escaped}(?![\\p{L}\\p{N}_/-])`, 'iu').test(content);
 }
 
 interface SearchOptions extends GraphOptions {
@@ -34,6 +31,7 @@ interface SearchOptions extends GraphOptions {
   page?: string;
   caseInsensitive?: boolean;
   limit?: string;
+  offset?: string;
   json?: boolean;
   debug?: boolean;
   query?: string;
@@ -60,7 +58,8 @@ export function createSearchCommand(): Command {
     }, [] as string[])
     .option('--page <title>', 'Scope search to a specific page')
     .option('-i, --case-insensitive', 'Case-insensitive search')
-    .option('-n, --limit <n>', 'Limit number of results (default: 20)', '20')
+    .option('-n, --limit <n>', 'Limit results; -1 returns all (default: 20)', '20')
+    .option('--offset <n>', 'Skip matching results after filtering (default: 0)', '0')
     .option('--json', 'Output as JSON')
     .option('--debug', 'Show query metadata')
     .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
@@ -103,7 +102,9 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
       try {
         const graph = resolveGraph(options, false);
 
-        const limit = parseInt(options.limit || '20', 10);
+        const limit = Number(options.limit ?? '20');
+        const offset = Number(options.offset ?? '0');
+        validateSearchPage({ limit, offset });
         const outputOptions: OutputOptions = {
           json: options.json,
           debug: options.debug
@@ -131,14 +132,14 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
         if (options.namespace) {
           const result = await searchOps.searchByText({
             text: options.namespace,
-            scope: 'page_titles'
+            scope: 'page_titles', limit, offset
           });
 
           if (!result.success) {
             exitWithError(result.message || 'Namespace search failed');
           }
 
-          let matches = result.matches.slice(0, limit);
+          const matches = result.matches;
 
           if (options.json) {
             // For JSON output, return page_uid and page_title
@@ -151,7 +152,7 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
             if (matches.length === 0) {
               console.log('No pages found.');
             } else {
-              console.log(`Found ${result.matches.length} page(s)${result.matches.length > limit ? ` (showing first ${limit})` : ''}:\n`);
+              console.log(`Found ${result.total_count ?? matches.length} page(s) (showing ${matches.length}, offset ${offset}):\n`);
               for (const match of matches) {
                 console.log(`- ${match.page_title} (${match.block_uid})`);
               }
@@ -187,7 +188,7 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
           }
 
           // Apply limit and format output
-          const limitedMatches = result.matches.slice(0, limit);
+          const limitedMatches = result.matches.slice(offset, limit === -1 ? undefined : offset + limit);
 
           if (options.json) {
             const parsed = limitedMatches.map(m => {
@@ -202,7 +203,7 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
             if (limitedMatches.length === 0) {
               console.log('No results found.');
             } else {
-              console.log(`Found ${result.matches.length} results${result.matches.length > limit ? ` (showing first ${limit})` : ''}:\n`);
+              console.log(`Found ${result.matches.length} results (showing ${limitedMatches.length}, offset ${offset}):\n`);
               for (const match of limitedMatches) {
                 console.log(match.content);
               }
@@ -211,78 +212,28 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
           return;
         }
 
-        // Determine search type based on options
-        const tags = options.tag || [];
+        const tags = (options.tag || []).map(normalizeTag);
+        const negTags = (options.negtag || []).map(normalizeTag);
+        const page = {
+          limit, offset,
+          filter: (match: { content: string }) =>
+            (tags.length === 0 || (options.any
+              ? tags.some(tag => contentHasTag(match.content, tag))
+              : tags.every(tag => contentHasTag(match.content, tag)))) &&
+            !negTags.some(tag => contentHasTag(match.content, tag)),
+        };
+        let result;
         if (tags.length > 0 && searchTerms.length === 0) {
-          // Tag-only search
-          const normalizedTags = tags.map(normalizeTag);
-          const useOrLogic = options.any || false;
-
-          const result = await searchOps.searchForTag(normalizedTags[0], options.page);
-          let matches = result.matches;
-
-          if (normalizedTags.length > 1) {
-            matches = matches.filter(m => {
-              if (useOrLogic) {
-                return normalizedTags.some(tag => contentHasTag(m.content, tag));
-              } else {
-                return normalizedTags.every(tag => contentHasTag(m.content, tag));
-              }
-            });
-          }
-
-          const negTags = options.negtag || [];
-          if (negTags.length > 0) {
-            const normalizedNegTags = negTags.map(normalizeTag);
-            matches = matches.filter(m =>
-              !normalizedNegTags.some(tag => contentHasTag(m.content, tag))
-            );
-          }
-
-          const limitedMatches = matches.slice(0, limit);
-          console.log(formatSearchResults(limitedMatches, outputOptions));
+          result = await searchOps.searchForTags(tags, options.page, options.any || false, page);
         } else if (searchTerms.length > 0) {
-          // Text search
-          const searchText = searchTerms.join(' ');
-          const result = await searchOps.searchByText({
-            text: searchText,
-            page_title_uid: options.page
-          });
-
-          let matches = result.matches;
-
-          if (options.caseInsensitive) {
-            const lowerSearchText = searchText.toLowerCase();
-            matches = matches.filter(m =>
-              m.content.toLowerCase().includes(lowerSearchText)
-            );
-          }
-
-          if (tags.length > 0) {
-            const normalizedTags = tags.map(normalizeTag);
-            const useOrLogic = options.any || false;
-
-            matches = matches.filter(m => {
-              if (useOrLogic) {
-                return normalizedTags.some(tag => contentHasTag(m.content, tag));
-              } else {
-                return normalizedTags.every(tag => contentHasTag(m.content, tag));
-              }
-            });
-          }
-
-          const negTags = options.negtag || [];
-          if (negTags.length > 0) {
-            const normalizedNegTags = negTags.map(normalizeTag);
-            matches = matches.filter(m =>
-              !normalizedNegTags.some(tag => contentHasTag(m.content, tag))
-            );
-          }
-
-          console.log(formatSearchResults(matches.slice(0, limit), outputOptions));
+          result = await searchOps.searchByText({
+            text: searchTerms.join(' '), page_title_uid: options.page,
+          }, page);
         } else {
           exitWithError('Please provide search terms or use --tag to search by tag');
         }
+        if (!result.success) exitWithError(result.message || 'Search failed');
+        console.log(formatSearchResults(result.matches, outputOptions));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         exitWithError(message);
