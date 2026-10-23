@@ -1,5 +1,5 @@
 import type { Graph } from '@roam-research/roam-api-sdk';
-import { resolveRefs } from '../tools/helpers/refs.js';
+import { resolveRefsMany } from '../tools/helpers/refs.js';
 
 export interface SearchMatch {
   block_uid: string;
@@ -56,12 +56,7 @@ export abstract class BaseSearchHandler implements SearchHandler {
   protected async resolveBlockRefs<T extends [string, string, ...any[]]>(
     results: T[]
   ): Promise<T[]> {
-    return Promise.all(
-      results.map(async (result) => {
-        const [uid, content, ...rest] = result;
-        const resolvedContent = await resolveRefs(this.graph, content);
-        return [uid, resolvedContent, ...rest] as T;
-      })
-    );
+    const contents = await resolveRefsMany(this.graph, results.map(result => result[1]));
+    return results.map((result, index) => [result[0], contents[index], ...result.slice(2)] as T);
   }
 }

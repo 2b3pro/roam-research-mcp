@@ -2,7 +2,7 @@ import { Graph, q, createPage as createRoamPage, updatePage } from '@roam-resear
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { ANCESTOR_RULE } from '../../search/ancestor-rule.js';
 import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
-import { resolveRefs, resolveBlockRefs } from '../helpers/refs.js';
+import { resolveRefsMany, resolveBlockRefs } from '../helpers/refs.js';
 import { executeBatch, executeBatchSafe } from '../helpers/batch-utils.js';
 import { pruneHiddenBlocks } from '../helpers/hidden.js';
 import type { RoamBlock } from '../types/index.js';
@@ -763,9 +763,9 @@ export class PageOperations {
     }
 
     // For markdown, resolve references inline
-    await Promise.all(visibleBlocks.map(async b => {
-      b.string = await resolveRefs(this.graph, b.string);
-    }));
+    const resolvedStrings = await resolveRefsMany(this.graph, visibleBlocks.map(block => block.string), 4,
+      new Map(visibleBlocks.map(block => [block.uid, block.string])));
+    visibleBlocks.forEach((block, index) => { block.string = resolvedStrings[index]; });
 
     // Collect every visible block string to decide whether this page needs the
     // encoding at all. A page with no soft line break renders exactly as it

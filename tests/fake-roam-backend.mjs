@@ -356,6 +356,19 @@ function regexPredicate(query, variable) {
 function answer(query, args) {
   assertWellFormed(query);
 
+  if (query.includes(':find ?uid ?string ?order ?heading')) {
+    const asked = new Set(args?.[0] ?? []);
+    return allBlocks().filter(([uid]) => asked.has(uid)).map(([uid, text, order]) => [uid, text, order, 0]);
+  }
+  if (query.includes(':find ?uid ?string')) {
+    const asked = new Set(args?.[0] ?? []);
+    return allBlocks().filter(([uid]) => asked.has(uid)).map(([uid, text]) => [uid, text, 0]);
+  }
+  if (query.includes(':find ?parentUid ?childUid ?childString')) {
+    const asked = new Set(args?.[0] ?? []);
+    return allBlocks().filter(([, , , parent]) => asked.has(parent)).map(([uid, text, order, parent]) => [parent, uid, text, order, 0]);
+  }
+
   // Existence check for a set of UIDs (`batchCheckExistence` in
   // src/shared/page-validator.ts): which of these are the :block/uid of any
   // entity? Pages carry :block/uid too, so they count. Every batch write asks
@@ -565,6 +578,7 @@ globalThis.fetch = async function fakeRoamFetch(input, init) {
 
   if (request.url.endsWith('/q')) {
     const { query, args } = await request.json();
+    if (process.env.FAKE_ROAM_QUERY_LOG) appendFileSync(process.env.FAKE_ROAM_QUERY_LOG, JSON.stringify({ query, args }) + '\n');
     try {
       return json({ result: answer(query, args) });
     } catch (error) {

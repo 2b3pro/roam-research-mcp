@@ -19,6 +19,50 @@ export function collectRefs(text: string): Set<string> {
 }
 
 /**
+ * Expand a collection in breadth-first waves. Each UID (including a missing
+ * target) is read once per invocation; cycle detection is per rendering path,
+ * so a shared reference still expands independently in every branch.
+ */
+export async function resolveRefsMany(
+  graph: Graph,
+  texts: string[],
+  maxDepth: number = 4,
+  known: ReadonlyMap<string, string> = new Map(),
+  seen: ReadonlySet<string> = new Set(),
+): Promise<string[]> {
+  if (maxDepth <= 0) return texts.slice();
+  let frontier = new Set(texts.flatMap(text => [...collectRefs(text)]));
+  if (frontier.size === 0) return texts.slice();
+  const hidden = await collectHiddenUids(graph);
+  const contents = new Map<string, string | undefined>(known);
+  const query = `[:find ?uid ?string
+                  :in $ [?uid ...]
+                  :where [?b :block/uid ?uid]
+                         [?b :block/string ?string]]`;
+  for (let depth = 0; depth < maxDepth && frontier.size > 0; depth++) {
+    const readable = [...frontier].filter(uid => !hidden.has(uid) && !seen.has(uid));
+    const missing = readable.filter(uid => !contents.has(uid));
+    // Bound request size without turning a large result set into a burst.
+    for (let i = 0; i < missing.length; i += 200) {
+      const chunk = missing.slice(i, i + 200);
+      const rows = await q(graph, query, [chunk]) as [string, string][];
+      chunk.forEach(uid => contents.set(uid, undefined));
+      for (const [uid, text] of rows) contents.set(uid, text);
+    }
+    frontier = new Set(readable.flatMap(uid => [...collectRefs(contents.get(uid) ?? '')]));
+  }
+  const render = (text: string, remaining: number, path: ReadonlySet<string>): string => {
+    if (remaining <= 0) return text;
+    return text.replace(REF_PATTERN, (reference, uid: string) => {
+      const content = contents.get(uid);
+      if (content === undefined || hidden.has(uid) || path.has(uid)) return reference;
+      return render(content, remaining - 1, new Set([...path, uid]));
+    });
+  };
+  return texts.map(text => render(text, maxDepth, seen));
+}
+
+/**
  * Resolve block references in text by replacing ((uid)) with block content.
  * Handles nested refs up to maxDepth, with circular reference protection.
  *
@@ -33,57 +77,33 @@ export async function resolveRefs(
   text: string,
   depth: number = 0,
   maxDepth: number = 4,
-  seen: Set<string> = new Set()
+  seen: Set<string> = new Set(),
 ): Promise<string> {
-  if (depth >= maxDepth) return text;
+  return (await resolveRefsMany(graph, [text], maxDepth - depth, new Map(), seen))[0];
+}
 
-  const refs = collectRefs(text);
-  if (refs.size === 0) return text;
-
-  // Filter out already-seen refs to prevent circular resolution
-  // Paging happens before expansion. Do not re-introduce withheld content
-  // through a visible block that references a hidden block or descendant.
-  const hidden = await collectHiddenUids(graph);
-  const newRefs = Array.from(refs).filter(uid => !seen.has(uid) && !hidden.has(uid));
-  if (newRefs.length === 0) return text;
-
-  // Track these refs as seen
-  newRefs.forEach(uid => seen.add(uid));
-
-  // Batch fetch all referenced blocks
-  const refQuery = `[:find ?uid ?string
-                    :in $ [?uid ...]
-                    :where [?b :block/uid ?uid]
-                          [?b :block/string ?string]]`;
-  const results = await q(graph, refQuery, [newRefs]) as [string, string][];
-
-  // Build lookup map
-  const refMap = new Map(results);
-
-  // Collect refs that have nested refs needing resolution
-  const nestedTexts = new Map<string, string>();
-  for (const uid of newRefs) {
-    const content = refMap.get(uid);
-    if (content && collectRefs(content).size > 0) {
-      nestedTexts.set(uid, content);
+/** Expand a whole forest together, reusing raw content already loaded in it. */
+export async function resolveRefsInTrees<T extends RoamBlock>(graph: Graph, blocks: T[], maxDepth: number): Promise<T[]> {
+  const nodes: RoamBlock[] = [];
+  const known = new Map<string, string>();
+  const rememberRefs = (refs: RoamBlock[]) => {
+    for (const ref of refs) {
+      if (known.has(ref.uid)) continue;
+      known.set(ref.uid, ref.string);
+      rememberRefs(ref.refs ?? []);
     }
-  }
-
-  // Resolve nested refs in parallel
-  if (nestedTexts.size > 0) {
-    const resolvedEntries = await Promise.all(
-      Array.from(nestedTexts.entries()).map(async ([uid, content]) => {
-        const resolved = await resolveRefs(graph, content, depth + 1, maxDepth, seen);
-        return [uid, resolved] as const;
-      })
-    );
-    resolvedEntries.forEach(([uid, resolved]) => refMap.set(uid, resolved));
-  }
-
-  // Replace all refs in a single pass
-  return text.replace(REF_PATTERN, (match, uid) => {
-    return refMap.get(uid) ?? match;
-  });
+  };
+  const clone = (block: RoamBlock): RoamBlock => {
+    const copy = { ...block, children: block.children.map(clone) };
+    nodes.push(copy);
+    known.set(copy.uid, copy.string);
+    rememberRefs(copy.refs ?? []);
+    return copy;
+  };
+  const copies = blocks.map(clone) as T[];
+  const strings = await resolveRefsMany(graph, nodes.map(block => block.string), maxDepth, known);
+  nodes.forEach((block, index) => { block.string = strings[index]; });
+  return copies;
 }
 
 /**
@@ -97,7 +117,8 @@ export async function resolveRefs(
 export async function resolveBlockRefs(
   graph: Graph, 
   blocksToScan: RoamBlock[], 
-  remainingDepth: number = 2
+  remainingDepth: number = 2,
+  hidden: ReadonlySet<string> = new Set(),
 ): Promise<void> {
   if (remainingDepth <= 0 || blocksToScan.length === 0) {
     return;
@@ -116,6 +137,7 @@ export async function resolveBlockRefs(
     const matches = block.string.matchAll(REF_PATTERN);
     for (const match of matches) {
       const refUid = match[1];
+      if (hidden.has(refUid)) continue;
       if (!refMap[refUid]) {
         refMap[refUid] = [];
       }
@@ -166,5 +188,5 @@ export async function resolveBlockRefs(
   }
 
   // Recurse for the next level of references
-  await resolveBlockRefs(graph, fetchedBlocks, remainingDepth - 1);
+  await resolveBlockRefs(graph, fetchedBlocks, remainingDepth - 1, hidden);
 }
