@@ -1,5 +1,16 @@
 # Changelog
 
+### v6.0.0 (2026-10-23)
+
+Search results now honor pagination consistently, reads share API requests, and transport failures preserve recovery details. This is a major release because enforcing search limits can reduce returned results, CLI transport errors now use JSON on stderr, and writes with uncertain outcomes are no longer automatically replayed.
+
+- **Graph-scoped caches:** isolate page UID lookups by graph connection and invalidate that connection's cache after a successful page rename. Identical titles and daily-page UIDs in different graphs cannot share lookup evidence. [#27](https://github.com/2b3pro/roam-research-mcp/pull/27).
+- **Search pagination:** enforce MCP text/tag defaults of 50 and the CLI default of 20; add CLI `--offset`; support `-1` for all remaining results and `0` for none; reject invalid windows. Apply hidden-content and CLI tag filters before slicing, then expand references only for selected results. Use stable UID ordering for blocks and title ordering for namespaces, and include candidates from every OR tag. Pagination bounds output and reference expansion; the initial query still retrieves matching candidates. [#28](https://github.com/2b3pro/roam-research-mcp/pull/28).
+- **Batched reads:** resolve unique reference UIDs together, reuse content already fetched within an operation, and batch selected CLI blocks, child frontiers, and ancestors. Preserve ordering, headings, repeated references, and hidden-subtree filtering. [#29](https://github.com/2b3pro/roam-research-mcp/pull/29).
+- **Transport errors and recovery:** preserve `http_status`, `retry_after_ms`, and `num_actions_succeeded` when available. Failed batches can return `committed.action_indices` and `committed.uids` for confirmed work. Shared retry handling honors `Retry-After` and refuses to replay writes with confirmed progress or an unknown outcome. CLI transport failures emit a JSON error envelope on stderr and exit nonzero. [#30](https://github.com/2b3pro/roam-research-mcp/pull/30).
+- **Migration:** request additional pages or use `limit: -1` / `--limit -1` if you need all search results. Update scripts that parse CLI transport error text. Inspect the graph before resubmitting any write with `outcome_unknown: true`, including throttled writes whose response does not confirm progress.
+- **Verification:** all 578 tests pass across 47 files, with regression coverage for graph isolation, pagination, batched reads, HTTP metadata, retry decisions, and partial batch progress.
+
 ### v5.1.1 (2026-10-23)
 
 Date searches now use Roam's stored timestamps, and case-insensitive searches find arbitrary mixed capitalization, including Unicode. Fixes [#26](https://github.com/2b3pro/roam-research-mcp/pull/26).
