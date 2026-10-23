@@ -7,6 +7,8 @@ import {
   type BatchAction as ValidationBatchAction
 } from '../../shared/validation.js';
 import {
+  RoamError,
+  type CommittedState,
   isRateLimitError,
   createRateLimitError,
   type StructuredError
@@ -23,6 +25,32 @@ export interface BatchResult {
   error?: string | StructuredError;
   validation_passed?: boolean;
   actions_attempted?: number;
+  committed?: CommittedState;
+}
+
+/** A transport reports a confirmed prefix, or explicitly leaves the outcome unknown. */
+function transportFailure(error: RoamError, actions: RoamBatchAction[], uidMap: Record<string, string>, fallbackWait: number): BatchResult {
+  const count = error.context?.num_actions_succeeded;
+  const valid = typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 && count <= actions.length;
+  const created = new Set(valid ? actions.slice(0, count).map(action => action.block?.uid).filter(Boolean) : []);
+  const wait = error.context?.retry_after_ms;
+  return {
+    success: false, validation_passed: true, actions_attempted: actions.length,
+    error: {
+      ...error.context,
+      ...(error.context?.endpoint === 'write' && { outcome_unknown: !valid }),
+      code: error.code, message: error.message,
+      recovery: {
+        ...(error.code === 'RATE_LIMIT' && { retry_after_ms: typeof wait === 'number' ? wait : fallbackWait }),
+        suggestion: valid && count === 0 ? 'No actions committed; correct the failure before retrying.'
+          : 'Inspect the graph and confirmed actions before retrying; do not replay the whole batch.',
+      },
+    },
+    ...(valid && count > 0 && { committed: {
+      action_indices: Array.from({ length: count }, (_, index) => index),
+      uids: Object.fromEntries(Object.entries(uidMap).filter(([, uid]) => created.has(uid))),
+    } }),
+  };
 }
 
 /**
@@ -116,11 +144,8 @@ export class BatchOperations {
    * write path could not reuse it and simply went without. A half-written page
    * and no undo was the cost.
    *
-   * On exhaustion the shared helper rethrows Roam's original error rather than
-   * a synthesised one carrying `retryAfterMs`. `processBatch` never used that
-   * field's value for anything the caller saw except the backoff hint, which
-   * now comes from this instance's own config — a more honest source than
-   * whatever happened to be stapled to an error object.
+   * The shared helper retains Retry-After and refuses to replay a request
+   * whose write outcome is partial or unknown.
    */
   private async executeWithRetry(
     batchActions: RoamBatchAction[]
@@ -129,7 +154,7 @@ export class BatchOperations {
       () => roamBatchActions(this.graph, { actions: batchActions }),
       this.rateLimitConfig,
       (attempt, waitMs) =>
-        console.log(
+        console.error(
           `[batch] Rate limited, retrying in ${waitMs}ms (attempt ${attempt}/${this.rateLimitConfig.maxRetries})`
         )
     );
@@ -167,9 +192,10 @@ export class BatchOperations {
       });
 
       if (pageValidation.created > 0) {
-        console.log(`[batch] Auto-created ${pageValidation.created} daily page(s), checked ${pageValidation.checked}, cached ${pageValidation.cached}`);
+        console.error(`[batch] Auto-created ${pageValidation.created} daily page(s), checked ${pageValidation.checked}, cached ${pageValidation.cached}`);
       }
     } catch (error) {
+      if (error instanceof RoamError) return transportFailure(error, [], {}, this.rateLimitConfig.maxDelayMs);
       // Page validation failed - return structured error
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
@@ -248,12 +274,15 @@ export class BatchOperations {
       }
       return result;
     } catch (error) {
+      if (error instanceof RoamError && !(error.context?.num_actions_succeeded === 0 && error.message.includes("Parent entity doesn't exist"))) {
+        return transportFailure(error, batchActions, uidMap, this.rateLimitConfig.maxDelayMs);
+      }
       // FAILURE: Do NOT return uid_map - blocks don't exist
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Check for parent entity error - retry once after delay (Roam eventual consistency)
       if (errorMessage.includes("Parent entity doesn't exist")) {
-        console.log('[batch] Parent entity not found, retrying after 400ms...');
+        console.error('[batch] Parent entity not found, retrying after 400ms...');
         await sleep(400);
         try {
           await this.executeWithRetry(batchActions);
@@ -268,6 +297,7 @@ export class BatchOperations {
           }
           return result;
         } catch (retryError) {
+          if (retryError instanceof RoamError) return transportFailure(retryError, batchActions, uidMap, this.rateLimitConfig.maxDelayMs);
           // Still failed after retry
           const retryErrorMessage = retryError instanceof Error ? retryError.message : String(retryError);
           return {

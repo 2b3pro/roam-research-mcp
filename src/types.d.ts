@@ -24,7 +24,7 @@ declare module '@roam-research/roam-api-sdk' {
     block: RoamBlock;
   }
 
-  export function initializeGraph(config: { token: string; graph: string }): Graph;
+  export function initializeGraph(config: { token: string; graph: string; httpClient?: { call(request: Request): Promise<Response> } }): Graph;
   
   export function q(
     graph: Graph,

@@ -1,3 +1,4 @@
+import { rethrowRoamError } from '../../shared/errors.js';
 import { Graph, q, createPage, createBlock } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { formatRoamDate } from '../../utils/helpers.js';
@@ -110,6 +111,7 @@ export class OutlineOperations {
           // Try to find the block using our improved findBlockWithRetry
           return await this.findBlockWithRetry(parentUid, content);
         } catch (error: any) {
+          rethrowRoamError(error);
           const errorMessage = error instanceof Error ? error.message : String(error);
           // console.log(`Failed to find block on attempt ${retry + 1}: ${errorMessage}`); // Removed console.log
           if (retry === maxRetries - 1) throw error;
@@ -121,6 +123,7 @@ export class OutlineOperations {
         `Failed to create and verify block "${content}" after ${maxRetries} attempts`
       );
     } catch (error) {
+      rethrowRoamError(error);
       // If this is already a retry, throw the error
       if (isRetry) throw error;
 
@@ -187,6 +190,7 @@ export class OutlineOperations {
       // The order of the root block is not available from this query, so we set it to 0
       return { uid: blockUid, text, level, order: 0, children: children.length > 0 ? children : undefined };
     } catch (error: any) {
+      rethrowRoamError(error);
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to fetch block with children for UID "${blockUid}": ${error.message}`
@@ -288,6 +292,7 @@ export class OutlineOperations {
           targetParentUid = await this.createAndVerifyBlock(block_text_uid, targetPageUid);
         }
       } catch (error: any) {
+        rethrowRoamError(error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         throw new McpError(
           ErrorCode.InternalError,
@@ -365,6 +370,7 @@ export class OutlineOperations {
         delayBetweenLevels: 100
       });
     } catch (error: any) {
+      rethrowRoamError(error);
       if (error instanceof McpError) throw error;
       throw new McpError(
         ErrorCode.InternalError,

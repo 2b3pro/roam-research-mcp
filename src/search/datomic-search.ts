@@ -1,3 +1,4 @@
+import { rethrowRoamError } from '../shared/errors.js';
 import { q } from '@roam-research/roam-api-sdk';
 import type { Graph } from '@roam-research/roam-api-sdk';
 import { BaseSearchHandler, SearchResult } from './types.js';
@@ -72,6 +73,7 @@ export class DatomicSearchHandler extends BaseSearchHandler {
         message: `Query executed successfully. Found ${results.length} results.`
       };
     } catch (error) {
+      rethrowRoamError(error);
       return {
         success: false,
         matches: [],

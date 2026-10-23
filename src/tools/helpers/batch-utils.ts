@@ -1,3 +1,4 @@
+import { rethrowRoamError } from '../../shared/errors.js';
 /**
  * Shared utilities for batch operations with consistent error handling.
  */
@@ -39,6 +40,7 @@ export async function executeBatch(
 
     return result;
   } catch (error) {
+    rethrowRoamError(error);
     if (error instanceof McpError) {
       throw error;
     }

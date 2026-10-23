@@ -1,3 +1,4 @@
+import { RoamError } from '../../shared/errors.js';
 import type { RoamBlock } from '../../types/roam.js';
 import type { GroupedResults } from './sort-group.js';
 import { escapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
@@ -221,7 +222,11 @@ export function printDebug(label: string, data: unknown): void {
 /**
  * Print error message and exit
  */
-export function exitWithError(message: string, code: number = 1): never {
-  console.error(`Error: ${message}`);
+export function exitWithError(message: unknown, code: number = 1): never {
+  if (message instanceof RoamError) {
+    console.error(JSON.stringify({ error: { ...message.context, code: message.code, message: message.message } }, null, 2));
+  } else {
+    console.error(`Error: ${message instanceof Error ? message.message : String(message)}`);
+  }
   process.exit(code);
 }

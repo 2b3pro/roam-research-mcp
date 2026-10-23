@@ -243,8 +243,7 @@ Examples:
 
         console.log(formatPageOutput(displayTitle, blocks, outputOptions));
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }
@@ -285,8 +284,7 @@ Examples:
         const result = await fullViewOps.fetchPageFullView(resolvedTitle, depth, maxRefs);
         console.log(result);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }
@@ -323,8 +321,7 @@ Examples:
         const result = await fullViewOps.fetchSubPages(prefix, options.filterTag, options.content);
         console.log(result);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }
@@ -782,8 +779,7 @@ Note: For flat results with UIDs, use 'roam search' instead.
         }
 
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 

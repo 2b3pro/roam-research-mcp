@@ -284,8 +284,7 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
           exitWithError('Please provide search terms or use --tag to search by tag');
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }

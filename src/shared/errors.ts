@@ -45,6 +45,11 @@ export class RoamError extends Error {
   }
 }
 
+/** Preserve transport metadata through older operation-level error wrappers. */
+export function rethrowRoamError(error: unknown): void {
+  if (error instanceof RoamError) throw error;
+}
+
 /**
  * The MCP tool-result shape for a failure. The index signature is what makes
  * this assignable to the SDK's ServerResult without importing the SDK here —
@@ -103,7 +108,7 @@ export interface CommittedState {
 }
 
 export interface StructuredError {
-  code: ErrorCode;
+  code: AnyErrorCode;
   message: string;
   details?: ErrorDetails;
   recovery?: RecoveryHint;
@@ -189,6 +194,7 @@ export function createTransactionFailedError(
  * Checks if an error is a rate limit error based on error message.
  */
 export function isRateLimitError(error: unknown): boolean {
+  if (error instanceof RoamError) return error.code === 'RATE_LIMIT';
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
     return message.includes('too many requests') ||

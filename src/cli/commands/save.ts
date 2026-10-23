@@ -718,8 +718,7 @@ JSON format (--json):
         }
 
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }
