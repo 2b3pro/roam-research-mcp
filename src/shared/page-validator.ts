@@ -1,3 +1,4 @@
+import { withRateLimitRetry } from './retry.js';
 /**
  * Page existence validator for batch operations.
  *
@@ -14,7 +15,6 @@
 import { Graph, q, createPage as createRoamPage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { getPageUidCache } from '../cache/page-uid-cache.js';
-import { isRateLimitError } from './errors.js';
 
 // Daily page UID format: MM-DD-YYYY (e.g., "01-25-2026")
 const DAILY_PAGE_UID_REGEX = /^(\d{2})-(\d{2})-(\d{4})$/;
@@ -106,33 +106,9 @@ async function batchCheckExistence(
                   :in $ [?uid ...]
                   :where [?e :block/uid ?uid]]`;
 
-  let lastError: Error | undefined;
-  let delay = config.initialDelayMs;
-
-  for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
-    try {
-      const results = await q(graph, query, [uids]) as [string][];
-      const existingUids = new Set(results.map(([uid]) => uid));
-      return existingUids;
-    } catch (error) {
-      if (!isRateLimitError(error)) {
-        throw error;
-      }
-
-      lastError = error as Error;
-      if (attempt < config.maxRetries) {
-        const waitTime = Math.min(delay, config.maxDelayMs);
-        console.log(`[page-validator] Rate limited on existence check, retrying in ${waitTime}ms (attempt ${attempt + 1}/${config.maxRetries})`);
-        await sleep(waitTime);
-        delay *= config.backoffMultiplier;
-      }
-    }
-  }
-
-  throw new McpError(
-    ErrorCode.InternalError,
-    `Rate limit exceeded checking page existence after ${config.maxRetries} retries: ${lastError?.message || 'Unknown error'}`
-  );
+  const results = await withRateLimitRetry(() => q(graph, query, [uids]), config,
+    (attempt, wait) => console.error(`[page-validator] Existence check rate limited; retry ${attempt} in ${wait}ms`)) as [string][];
+  return new Set(results.map(([uid]) => uid));
 }
 
 /**
@@ -161,63 +137,22 @@ async function batchCreateDailyPages(
 ): Promise<void> {
   if (uids.length === 0) return;
 
-  // Create pages sequentially with small delays to avoid rate limits
-  // Roam's createPage doesn't support true batching
   for (const uid of uids) {
     const title = dailyUidToTitle(uid);
-
-    let lastError: Error | undefined;
-    let delay = config.initialDelayMs;
-
-    for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
-      try {
-        await createRoamPage(graph, {
-          action: 'create-page',
-          page: { title, uid }
-        });
-
-        // Cache the created page
-        getPageUidCache(graph).onPageCreated(title, uid);
-        console.log(`[page-validator] Created daily page: ${title} (${uid})`);
-
-        // Small delay between page creations to be rate-limit friendly
-        if (uids.indexOf(uid) < uids.length - 1) {
-          await sleep(200);
-        }
-        break; // Success, move to next page
-      } catch (error) {
-        if (!isRateLimitError(error)) {
-          // Non-rate-limit error - might be page already exists, which is OK
-          const msg = error instanceof Error ? error.message : String(error);
-          if (msg.includes('already exists') || msg.includes('duplicate')) {
-            getPageUidCache(graph).addUid(uid);
-            break;
-          }
-          throw error;
-        }
-
-        lastError = error as Error;
-        if (attempt < config.maxRetries) {
-          const waitTime = Math.min(delay, config.maxDelayMs);
-          console.log(`[page-validator] Rate limited creating ${uid}, retrying in ${waitTime}ms (attempt ${attempt + 1}/${config.maxRetries})`);
-          await sleep(waitTime);
-          delay *= config.backoffMultiplier;
-        }
-      }
+    try {
+      await withRateLimitRetry(() => createRoamPage(graph, {
+        action: 'create-page', page: { title, uid },
+      }), config, (attempt, wait) => console.error(`[page-validator] Daily page rate limited; retry ${attempt} in ${wait}ms`));
+      getPageUidCache(graph).onPageCreated(title, uid);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('already exists') || message.includes('duplicate')) getPageUidCache(graph).addUid(uid);
+      else throw error;
     }
-
-    if (lastError && !getPageUidCache(graph).hasUid(uid)) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Rate limit exceeded creating daily page ${uid} after ${config.maxRetries} retries: ${lastError.message}`
-      );
-    }
+    if (uids.indexOf(uid) < uids.length - 1) await sleep(200);
   }
-
-  // Final delay to let Roam's eventual consistency settle
-  if (uids.length > 0) {
-    await sleep(400);
-  }
+  // Preserve the settling delay before callers write under newly created pages.
+  await sleep(400);
 }
 
 /**

@@ -10,6 +10,7 @@
 
 import { initializeGraph, type Graph } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { roamHttpClient } from '../utils/roam-http-client.js';
 import { RoamError } from '../shared/errors.js';
 import { DEFAULT_GUIDELINES_PAGE } from '../tools/operations/guidelines.js';
 
@@ -168,6 +169,7 @@ export class GraphRegistry {
     const graph = initializeGraph({
       token: config.token,
       graph: config.graph,
+      httpClient: roamHttpClient,
     });
 
     this.initialized.set(resolvedKey, graph);

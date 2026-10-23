@@ -1,3 +1,4 @@
+import { rethrowRoamError } from '../../shared/errors.js';
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { RoamBlock, RoamAncestor, RoamBlockWithAncestors } from '../../types/roam.js';
@@ -202,6 +203,7 @@ export class BlockRetrievalOperations {
 
       return rootBlock;
     } catch (error) {
+      rethrowRoamError(error);
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to fetch block: ${error instanceof Error ? error.message : String(error)}`

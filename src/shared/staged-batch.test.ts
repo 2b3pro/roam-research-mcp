@@ -8,6 +8,7 @@ vi.mock('@roam-research/roam-api-sdk', () => ({
 
 import { batchActions } from '@roam-research/roam-api-sdk';
 import { executeStagedBatch, groupActionsByDependencyLevel } from './staged-batch.js';
+import { RoamError } from './errors.js';
 
 const mockGraph = {} as Graph;
 const batchMock = batchActions as unknown as ReturnType<typeof vi.fn>;
@@ -52,6 +53,28 @@ describe('groupActionsByDependencyLevel', () => {
 });
 
 describe('executeStagedBatch rate limiting', () => {
+  it('reports earlier levels and a confirmed prefix in original action order without replaying', async () => {
+    const actions = [
+      { action: 'create-block', block: { uid: 'child1', string: 'child' }, location: { 'parent-uid': 'parent1' } },
+      { action: 'create-block', block: { uid: 'parent1', string: 'parent' }, location: { 'parent-uid': 'page1' } },
+      { action: 'create-block', block: { uid: 'child2', string: 'child' }, location: { 'parent-uid': 'parent1' } },
+    ];
+    batchMock.mockResolvedValueOnce({ success: true }).mockRejectedValueOnce(new RoamError('partial', 'RATE_LIMIT', {
+      http_status: 429, num_actions_succeeded: 1, retry_after_ms: 10000,
+    }));
+    const error = await executeStagedBatch(mockGraph, actions, fast).catch(error => error);
+    expect(error.context).toMatchObject({ http_status: 429, failed_level: 1, outcome_unknown: false,
+      committed: { action_indices: [1, 0], uids: { parent1: 'parent1', child1: 'child1' } } });
+    expect(batchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps earlier confirmed writes distinct from an unknown later outcome', async () => {
+    batchMock.mockResolvedValueOnce({ success: true }).mockRejectedValueOnce(new RoamError('connection lost', 'NETWORK_ERROR', { outcome_unknown: true }));
+    const error = await executeStagedBatch(mockGraph, twoLevelActions(), fast).catch(error => error);
+    expect(error.context).toMatchObject({ outcome_unknown: true, committed: { action_indices: [0], uids: { parent1: 'parent1' } } });
+    expect(batchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('retries a rate-limited level instead of abandoning the batch', async () => {
     // Level 0 gets rate limited once, then succeeds. Level 1 succeeds.
     batchMock

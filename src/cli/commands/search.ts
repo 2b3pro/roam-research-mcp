@@ -235,8 +235,7 @@ Note: For hierarchical output with children, use 'roam get --tag/--text' instead
         if (!result.success) exitWithError(result.message || 'Search failed');
         console.log(formatSearchResults(result.matches, outputOptions));
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }

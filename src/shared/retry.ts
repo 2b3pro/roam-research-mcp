@@ -11,7 +11,7 @@
  * can reach for it.
  */
 
-import { isRateLimitError } from './errors.js';
+import { isRateLimitError, RoamError } from './errors.js';
 
 export interface RateLimitRetryConfig {
   /** Retries AFTER the initial attempt, so N means up to N+1 calls. */
@@ -57,11 +57,20 @@ export async function withRateLimitRetry<T>(
     try {
       return await fn();
     } catch (error) {
+      // A prefix may already exist, or the transport may not know the write
+      // outcome. Replaying in either case can duplicate mutations.
+      if (error instanceof RoamError &&
+          (error.context?.outcome_unknown === true || Number(error.context?.num_actions_succeeded) > 0)) throw error;
       if (!isRateLimitError(error)) throw error;
       lastError = error;
 
       if (attempt < maxRetries) {
-        const waitMs = Math.min(delay, maxDelayMs);
+        const requested = error instanceof RoamError ? error.context?.retry_after_ms : undefined;
+        const waitMs = Math.max(Math.min(delay, maxDelayMs),
+          typeof requested === 'number' && Number.isFinite(requested) && requested >= 0 ? requested : 0);
+        // Node timers overflow above this duration. Surface the hint instead
+        // of accidentally turning a very long Retry-After into a 1ms retry.
+        if (waitMs > 2_147_483_647) throw error;
         onRetry?.(attempt + 1, waitMs, error);
         await sleep(waitMs);
         delay *= backoffMultiplier;

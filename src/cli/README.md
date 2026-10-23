@@ -544,3 +544,15 @@ roam save -g work --write-key confirm "Meeting notes"
 ```
 
 See the main project documentation for environment variable configuration.
+
+### Transport failures and partial batches
+
+Transport failures preserve `http_status`, `retry_after_ms`, and the backend's
+`num_actions_succeeded` when present. CLI transport errors use JSON on stderr
+and a non-zero exit status. Failed batches also report `committed.action_indices`
+and any confirmed placeholder UIDs; `uid_map` remains success-only.
+
+Retries honor `Retry-After`. Writes with a confirmed successful prefix or an
+unknown outcome are surfaced without automatic replay. A confirmed zero-action
+rate-limit rejection can retry. Inspect the graph before resubmitting a failed
+batch whose outcome is partial or unknown.

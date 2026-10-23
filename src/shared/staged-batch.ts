@@ -9,6 +9,7 @@
 
 import { Graph, batchActions } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { RoamError, isRateLimitError } from './errors.js';
 import { withRateLimitRetry, type RateLimitRetryConfig } from './retry.js';
 
 /**
@@ -171,6 +172,8 @@ export async function executeStagedBatch(
   }
 
   const actionsByLevel = groupActionsByDependencyLevel(actions);
+  const indices = new Map(actions.map((action, index) => [action, index]));
+  const committed: number[] = [];
 
   for (let level = 0; level < actionsByLevel.length; level++) {
     const levelActions = actionsByLevel[level];
@@ -196,12 +199,21 @@ export async function executeStagedBatch(
           `Failed to execute ${context} at level ${level} - no result returned`
         );
       }
-    } catch (error: any) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Failed to execute ${context} at level ${level}: ${error.message}`
+    } catch (error) {
+      const metadata = error instanceof RoamError ? error.context : undefined;
+      const count = metadata?.num_actions_succeeded;
+      const known = typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 && count <= levelActions.length;
+      const confirmed = [...committed, ...(known ? levelActions.slice(0, count).map(action => indices.get(action)!) : [])];
+      throw new RoamError(
+        `Failed to execute ${options.context ?? 'batch operation'} at level ${level}: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof RoamError ? error.code : isRateLimitError(error) ? 'RATE_LIMIT' : 'TRANSACTION_FAILED',
+        { ...metadata, failed_level: level, outcome_unknown: !known,
+          committed: { action_indices: confirmed, uids: Object.fromEntries(confirmed
+            .map(index => actions[index]).filter(action => action.action === 'create-block' && action.block?.uid)
+            .map(action => [action.block!.uid!, action.block!.uid!])) } },
       );
     }
+    committed.push(...levelActions.map(action => indices.get(action)!));
 
     // Delay between levels to ensure parent blocks are committed
     if (level < actionsByLevel.length - 1) {

@@ -1,3 +1,4 @@
+import { RoamError, rethrowRoamError } from '../../shared/errors.js';
 import { Graph, q, createPage as createRoamPage, updatePage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { ANCESTOR_RULE } from '../../search/ancestor-rule.js';
@@ -123,6 +124,7 @@ export class PageOperations {
         message: `Found ${uniquePages.length} page(s) modified today`
       };
     } catch (error: any) {
+      rethrowRoamError(error);
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to find modified pages: ${error.message}`
@@ -211,6 +213,7 @@ export class PageOperations {
           // (fixes "Parent entity doesn't exist" error when adding content immediately)
           await new Promise(resolve => setTimeout(resolve, 400));
         } catch (error) {
+          rethrowRoamError(error);
           throw new McpError(
             ErrorCode.InternalError,
             `Failed to create page: ${error instanceof Error ? error.message : String(error)}`
@@ -390,7 +393,13 @@ export class PageOperations {
 
             const tableResult = await this.batchOps.processBatch(tableActions);
             if (!tableResult.success) {
-              throw new Error(`Failed to create table: ${typeof tableResult.error === 'string' ? tableResult.error : tableResult.error?.message}`);
+              if (tableResult.error && typeof tableResult.error !== 'string') {
+                const { code, message, ...metadata } = tableResult.error;
+                throw new RoamError(`Failed to create table: ${message}`, code, {
+                  ...metadata, ...(tableResult.committed && { committed: tableResult.committed }),
+                });
+              }
+              throw new Error(`Failed to create table: ${tableResult.error}`);
             }
 
             // Only increment top-level order for level 1 tables
@@ -406,6 +415,7 @@ export class PageOperations {
         // Flush any remaining text items
         await flushTextItems(currentOrder);
       } catch (error) {
+        rethrowRoamError(error);
         throw new McpError(
           ErrorCode.InternalError,
           `Failed to add content to page: ${error instanceof Error ? error.message : String(error)}`
@@ -1018,6 +1028,7 @@ export class PageOperations {
           delayBetweenLevels: 100
         });
       } catch (error) {
+        rethrowRoamError(error);
         throw new McpError(
           ErrorCode.InternalError,
           `Failed to apply changes: ${error instanceof Error ? error.message : String(error)}`
@@ -1085,6 +1096,7 @@ export class PageOperations {
         };
       }
     } catch (error) {
+      rethrowRoamError(error);
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to rename page: ${error instanceof Error ? error.message : String(error)}`

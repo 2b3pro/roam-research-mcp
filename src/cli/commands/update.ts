@@ -234,8 +234,7 @@ Examples:
           exitWithError(`Failed to update block: ${errorMsg}`);
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }

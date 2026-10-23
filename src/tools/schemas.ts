@@ -179,6 +179,14 @@ const BATCH_RESULT_FIELDS = {
   },
   validation_passed: { type: 'boolean' },
   actions_attempted: { type: 'number' },
+  committed: {
+    type: 'object', additionalProperties: true,
+    properties: {
+      action_indices: { type: 'array', items: { type: 'number' } },
+      uids: { type: 'object', additionalProperties: { type: 'string' } },
+    },
+    description: 'Confirmed successful actions from a failed batch; other actions may have an unknown outcome.',
+  },
   error: {
     anyOf: [{ type: 'string' }, STRUCTURED_ERROR],
     description: 'Present only when success is false.'

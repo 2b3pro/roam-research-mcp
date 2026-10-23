@@ -1,3 +1,4 @@
+import { rethrowRoamError } from '../../shared/errors.js';
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { generateBlockUid } from '../../markdown-utils.js';
@@ -197,6 +198,7 @@ export class MemoryOperations {
         memories: uniqueMemories
       };
     } catch (error: any) {
+      rethrowRoamError(error);
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to recall memories: ${error.message}`

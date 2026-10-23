@@ -60,8 +60,7 @@ Examples:
           exitWithError('Failed to rename page (API returned false)');
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }

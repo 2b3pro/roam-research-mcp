@@ -119,10 +119,13 @@ function validatePlaceholders(commands: BatchCommand[]): string[] {
 function outputPartialResults(
   pageResults: Array<{ title: string; uid: string }>,
   failedPage?: string,
-  batchError?: string
+  batchError?: string,
+  failure?: BatchResult,
 ): never {
   const output: Record<string, unknown> = {
     success: false,
+    ...(failure?.error && { error: failure.error }),
+    ...(failure?.committed && { committed: failure.committed }),
     partial: true,
     pages_created: pageResults.length,
     ...(failedPage && { failed_at: `page: ${failedPage}` }),
@@ -405,7 +408,7 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
               ? batchResult.error
               : batchResult.error?.message || 'Unknown error';
             // Report partial results (pages created before batch failed)
-            outputPartialResults(pageResults, undefined, errorMsg);
+            outputPartialResults(pageResults, undefined, errorMsg, batchResult);
           }
         }
 
@@ -433,8 +436,7 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
         console.log(JSON.stringify(output, null, 2));
 
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        exitWithError(message);
+        exitWithError(error);
       }
     });
 }
