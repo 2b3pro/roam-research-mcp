@@ -313,10 +313,11 @@ export class RoamServer {
           }
 
           case 'roam_search_for_tag': {
-            const { primary_tag, page_title_uid, near_tag } = cleanedArgs as {
+            const { primary_tag, page_title_uid, near_tag, case_sensitive } = cleanedArgs as {
               primary_tag: string;
               page_title_uid?: string;
               near_tag?: string;
+              case_sensitive?: boolean;
             };
             if (!primary_tag) {
               throw new McpError(
@@ -324,7 +325,7 @@ export class RoamServer {
                 'Missing required parameter: primary_tag (the tag to search for). Use page_title_uid to limit search to a specific page.'
               );
             }
-            const result = await toolHandlers.searchForTag(primary_tag, page_title_uid, near_tag);
+            const result = await toolHandlers.searchForTag(primary_tag, page_title_uid, near_tag, case_sensitive);
             return toolResult(request.params.name, result);
           }
 
@@ -382,6 +383,7 @@ export class RoamServer {
               text: string;
               page_title_uid?: string;
               scope?: 'blocks' | 'page_titles';
+              case_sensitive?: boolean;
             };
             const result = await toolHandlers.searchByText(params);
             return toolResult(request.params.name, result);
@@ -393,7 +395,7 @@ export class RoamServer {
               end_date?: string;
               type: 'created' | 'modified' | 'both';
               scope: 'blocks' | 'pages' | 'both';
-              include_content: boolean;
+              include_content?: boolean;
             };
             const result = await toolHandlers.searchByDate(params);
             return toolResult(request.params.name, result);

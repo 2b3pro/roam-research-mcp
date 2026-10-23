@@ -1,4 +1,5 @@
-import { Graph } from '@roam-research/roam-api-sdk';
+import { Graph, q } from '@roam-research/roam-api-sdk';
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import type { SearchResult } from '../../types/index.js';
 import type {
   TagSearchParams,
@@ -17,6 +18,7 @@ import {
 } from './handlers.js';
 import type { DatomicSearchParams } from './types.js';
 import { collectHiddenUids, filterHiddenMatches } from '../../helpers/hidden.js';
+import { resolveRefs } from '../../helpers/refs.js';
 
 export class SearchOperations {
   constructor(private graph: Graph) {}
@@ -103,12 +105,14 @@ export class SearchOperations {
   async searchForTag(
     primary_tag: string,
     page_title_uid?: string,
-    near_tag?: string
+    near_tag?: string,
+    case_sensitive?: boolean
   ): Promise<SearchHandlerResult> {
     const handler = new TagSearchHandlerImpl(this.graph, {
       primary_tag,
       page_title_uid,
       near_tag,
+      case_sensitive,
     });
     return this.withoutHidden(await handler.execute());
   }
@@ -141,7 +145,7 @@ export class SearchOperations {
     end_date?: string;
     type: 'created' | 'modified' | 'both';
     scope: 'blocks' | 'pages' | 'both';
-    include_content: boolean;
+    include_content?: boolean;
   }): Promise<{ 
     success: boolean; 
     matches: Array<{ 
@@ -153,40 +157,64 @@ export class SearchOperations {
     }>; 
     message: string 
   }> {
-    // Convert dates to timestamps
-    const startTimestamp = new Date(`${params.start_date}T00:00:00`).getTime();
-    const endTimestamp = params.end_date ? new Date(`${params.end_date}T23:59:59`).getTime() : undefined;
+    const parseDay = (value: string): Date => {
+      const day = new Date(`${value}T00:00:00`);
+      const parts = value.split('-').map(Number);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(day.getTime()) ||
+          day.getFullYear() !== parts[0] || day.getMonth() + 1 !== parts[1] || day.getDate() !== parts[2]) {
+        throw new McpError(ErrorCode.InvalidParams, `Invalid date "${value}"; expected YYYY-MM-DD.`);
+      }
+      return day;
+    };
+    const start = parseDay(params.start_date).getTime();
+    const endDay = params.end_date === undefined ? undefined : parseDay(params.end_date);
+    if (endDay && endDay.getTime() < start) {
+      throw new McpError(ErrorCode.InvalidParams, 'end_date must be on or after start_date.');
+    }
+    // Next calendar midnight includes the entire final day, including .999,
+    // and handles days shortened or lengthened by daylight-saving transitions.
+    endDay?.setDate(endDay.getDate() + 1);
+    const inputs = endDay ? [start, endDay.getTime()] : [start];
+    const timeClause = params.type === 'both'
+      ? '(or [?e :create/time ?time] [?e :edit/time ?time])'
+      : `[?e :${params.type === 'created' ? 'create' : 'edit'}/time ?time]`;
+    const scopes: Array<'block' | 'page'> = params.scope === 'both'
+      ? ['block', 'page'] : [params.scope === 'pages' ? 'page' : 'block'];
 
-    // Use text search handler for content-based filtering
-    const handler = new TextSearchHandlerImpl(this.graph, {
-      text: '', // Empty text to match all blocks
-    });
+    const results = await Promise.all(scopes.map(async type => {
+      const entityClause = type === 'block'
+        ? `[?e :block/string ?content]
+           [?e :block/page ?page]
+           [?page :node/title ?page-title]`
+        : `[?e :node/title ?content]
+           [?e :node/title ?page-title]`;
+      const query = `[:find ?uid ?content ?page-title ?time
+                      :in $ ?start ${endDay ? '?end' : ''}
+                      :where [?e :block/uid ?uid]
+                             ${entityClause}
+                             ${timeClause}
+                             [(>= ?time ?start)]
+                             ${endDay ? '[(< ?time ?end)]' : ''}]`;
+      const rows = await q(this.graph, query, inputs) as [string, string, string, number][];
+      return rows.map(([block_uid, content, page_title, time]) => ({ block_uid, content, page_title, time, type }));
+    }));
 
-    // Filtered before the map below, which renames block_uid -> uid; after it
-    // the hidden-UID closure would have nothing to match on.
-    const result = await this.withoutHidden(await handler.execute());
-
-    // Filter results by date
-    const matches = result.matches
-      .filter(match => {
-        const time = params.type === 'created' ? 
-          new Date(match.content || '').getTime() : // Use content date for creation time
-          Date.now(); // Use current time for modification time (simplified)
-        
-        return time >= startTimestamp && (!endTimestamp || time <= endTimestamp);
-      })
-      .map(match => ({
-        uid: match.block_uid,
-        type: 'block',
-        time: params.type === 'created' ? 
-          new Date(match.content || '').getTime() : 
-          Date.now(),
-        ...(params.include_content && { content: match.content }),
-        page_title: match.page_title
-      }));
-
-    // Sort by time
-    const sortedMatches = matches.sort((a, b) => b.time - a.time);
+    const hidden = await collectHiddenUids(this.graph);
+    const visible = filterHiddenMatches(results.flat(), hidden);
+    const matchesByUid = new Map<string, typeof visible[number]>();
+    for (const match of visible) {
+      const previous = matchesByUid.get(match.block_uid);
+      // With type=both an entity may match twice. Return it once, with the
+      // latest timestamp that actually falls inside the requested range.
+      if (!previous || match.time > previous.time) matchesByUid.set(match.block_uid, match);
+    }
+    const matches = await Promise.all([...matchesByUid.values()]
+      .map(async ({ block_uid, content, ...match }) => ({
+        uid: block_uid,
+        ...match,
+        ...(params.include_content !== false && { content: await resolveRefs(this.graph, content) }),
+      })));
+    const sortedMatches = matches.sort((a, b) => b.time - a.time || a.uid.localeCompare(b.uid));
 
     return {
       success: true,

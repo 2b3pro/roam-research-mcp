@@ -462,7 +462,7 @@ export const toolSchemas = {
         },
         case_sensitive: {
           type: 'boolean',
-          description: 'Optional: Whether the search should be case-sensitive. If false, it will search for the provided tag, capitalized versions, and first word capitalized versions.',
+          description: 'Optional: Whether the search should be case-sensitive. Defaults to Unicode-aware case-insensitive matching of the complete tag title.',
           default: false
         },
         limit: {
@@ -607,7 +607,7 @@ export const toolSchemas = {
         },
         case_sensitive: {
           type: 'boolean',
-          description: 'Optional: Whether the search should be case-sensitive. If false, it will search for the provided text, capitalized versions, and first word capitalized versions. Only used when scope is "blocks".',
+          description: 'Optional: Whether the search should be case-sensitive. Defaults to Unicode-aware case-insensitive matching of literal text. Only used when scope is "blocks".',
           default: false
         },
         limit: {
@@ -633,16 +633,16 @@ export const toolSchemas = {
       properties: withMultiGraphParams({
         start_date: {
           type: 'string',
-          description: 'Start date in ISO format (YYYY-MM-DD)',
+          description: 'Inclusive start date in ISO format (YYYY-MM-DD), in the server\'s local timezone.',
         },
         end_date: {
           type: 'string',
-          description: 'Optional: End date in ISO format (YYYY-MM-DD)',
+          description: 'Optional: Inclusive end date in ISO format (YYYY-MM-DD), in the server\'s local timezone. Omit for no upper bound.',
         },
         type: {
           type: 'string',
           enum: ['created', 'modified', 'both'],
-          description: 'Whether to search by creation date, modification date, or both',
+          description: 'Whether to search stored creation timestamps, modification timestamps, or either. With "both", each entity is returned once with its latest matching timestamp.',
         },
         scope: {
           type: 'string',
@@ -651,7 +651,7 @@ export const toolSchemas = {
         },
         include_content: {
           type: 'boolean',
-          description: 'Whether to include the content of matching blocks/pages',
+          description: 'Whether to include matching block text or page titles. Defaults to true.',
           default: true,
         }
       }),
