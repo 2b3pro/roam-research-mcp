@@ -5,7 +5,7 @@
 import { Graph, q } from '@roam-research/roam-api-sdk';
 import { capitalizeWords } from '../../tools/helpers/text.js';
 import { formatRoamDate } from '../../utils/helpers.js';
-import { pageUidCache } from '../../cache/page-uid-cache.js';
+import { getPageUidCache } from '../../cache/page-uid-cache.js';
 import type { BatchCommand, ResolutionContext } from './types.js';
 import { ednString } from '../../shared/datalog.js';
 
@@ -14,7 +14,7 @@ import { ednString } from '../../shared/datalog.js';
  */
 export async function resolvePageUid(graph: Graph, title: string): Promise<string | null> {
   // Check cache first
-  const cachedUid = pageUidCache.get(title);
+  const cachedUid = getPageUidCache(graph).get(title);
   if (cachedUid) {
     return cachedUid;
   }
@@ -36,7 +36,7 @@ export async function resolvePageUid(graph: Graph, title: string): Promise<strin
 
   // Cache the result
   if (uid) {
-    pageUidCache.set(title, uid);
+    getPageUidCache(graph).set(title, uid);
   }
 
   return uid;

@@ -13,7 +13,7 @@
 
 import { Graph, q, createPage as createRoamPage } from '@roam-research/roam-api-sdk';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { pageUidCache } from '../cache/page-uid-cache.js';
+import { getPageUidCache } from '../cache/page-uid-cache.js';
 import { isRateLimitError } from './errors.js';
 
 // Daily page UID format: MM-DD-YYYY (e.g., "01-25-2026")
@@ -141,12 +141,12 @@ async function batchCheckExistence(
  * not queried again when a batch then writes under it.
  */
 export async function uidExists(graph: Graph, uid: string): Promise<boolean> {
-  if (pageUidCache.hasUid(uid)) return true;
+  if (getPageUidCache(graph).hasUid(uid)) return true;
 
   const existing = await batchCheckExistence(graph, [uid]);
   if (!existing.has(uid)) return false;
 
-  pageUidCache.addUid(uid);
+  getPageUidCache(graph).addUid(uid);
   return true;
 }
 
@@ -177,7 +177,7 @@ async function batchCreateDailyPages(
         });
 
         // Cache the created page
-        pageUidCache.onPageCreated(title, uid);
+        getPageUidCache(graph).onPageCreated(title, uid);
         console.log(`[page-validator] Created daily page: ${title} (${uid})`);
 
         // Small delay between page creations to be rate-limit friendly
@@ -190,7 +190,7 @@ async function batchCreateDailyPages(
           // Non-rate-limit error - might be page already exists, which is OK
           const msg = error instanceof Error ? error.message : String(error);
           if (msg.includes('already exists') || msg.includes('duplicate')) {
-            pageUidCache.addUid(uid);
+            getPageUidCache(graph).addUid(uid);
             break;
           }
           throw error;
@@ -206,7 +206,7 @@ async function batchCreateDailyPages(
       }
     }
 
-    if (lastError && !pageUidCache.hasUid(uid)) {
+    if (lastError && !getPageUidCache(graph).hasUid(uid)) {
       throw new McpError(
         ErrorCode.InternalError,
         `Rate limit exceeded creating daily page ${uid} after ${config.maxRetries} retries: ${lastError.message}`
@@ -264,7 +264,7 @@ export async function ensurePagesExist(
   }
 
   // 2. Filter by cache - skip UIDs we know exist
-  const uncachedUids = parentUids.filter(uid => !pageUidCache.hasUid(uid));
+  const uncachedUids = parentUids.filter(uid => !getPageUidCache(graph).hasUid(uid));
   const cachedCount = parentUids.length - uncachedUids.length;
 
   if (uncachedUids.length === 0) {
@@ -276,7 +276,7 @@ export async function ensurePagesExist(
   const existingUids = await batchCheckExistence(graph, uncachedUids, config);
 
   // 4. Update cache with found UIDs
-  pageUidCache.addUids([...existingUids]);
+  getPageUidCache(graph).addUids([...existingUids]);
 
   // 5. Determine what's missing
   const missingUids = uncachedUids.filter(uid => !existingUids.has(uid));
