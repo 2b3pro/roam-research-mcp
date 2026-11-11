@@ -20,6 +20,12 @@ Whether you want to give Claude superpowers over your knowledge base or just wan
 
 ![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
 
+## What's New in v6.1
+
+**Deletes that delete nothing now say so.** Roam's API accepts a `delete-block` for a UID that does not exist and reports success, so a mistyped UID, a stale one, or the wrong graph used to look like a successful delete. `roam_process_batch_actions` and `roam batch` now check delete UIDs first and report missing ones as `BLOCK_NOT_FOUND`, with a `not_found` list naming each one. The rest of the batch still runs and is listed under `committed`.
+
+**Upgrading:** a batch that deletes an already-missing UID now returns `success: false`, and `roam batch` exits nonzero. Scripts that delete blocks idempotently ("remove it if it's there") should treat `BLOCK_NOT_FOUND` as done.
+
 ## What's New in v6.0
 
 Search pagination now works consistently across MCP and CLI, repeated reads use fewer API requests, and write failures carry the information needed to recover safely.
