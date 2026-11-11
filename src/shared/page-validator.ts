@@ -93,7 +93,7 @@ export function dailyUidToTitle(uid: string): string {
  * Batch check existence of multiple UIDs with a single Datomic query.
  * Returns the set of UIDs that exist.
  */
-async function batchCheckExistence(
+export async function batchCheckExistence(
   graph: Graph,
   uids: string[],
   config: RateLimitConfig = DEFAULT_RATE_LIMIT_CONFIG
