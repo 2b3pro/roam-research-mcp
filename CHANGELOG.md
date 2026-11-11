@@ -1,5 +1,24 @@
 # Changelog
 
+### v6.1.0 (2026-11-11)
+
+Batch deletes no longer report success when there was nothing to delete. This is a minor release because a call that used to succeed can now return a failure.
+
+- **Missing delete targets:** Roam's backend accepts `delete-block` for a UID that does not exist and returns success (verified against a live graph). `roam_process_batch_actions` and `roam batch` now look up every delete UID in one query before writing. Missing ones return `success: false` with `error.code: "BLOCK_NOT_FOUND"`, an `error.not_found` list of `{action_index, uid}`, and a do-not-retry suggestion. Other actions still run and are reported under `committed`. A UID created earlier in the same batch is not flagged. The extra query runs only when a batch contains a delete. [#31](https://github.com/2b3pro/roam-research-mcp/pull/31).
+- **Migration:** scripts that delete idempotently should treat `BLOCK_NOT_FOUND` as success. `roam batch` now exits nonzero in this case.
+- **Verification:** all 582 tests pass across 48 files, including a new server-level test covering a missing UID alone, a missing UID in a mixed batch, an existing block, and a block created and deleted in the same batch.
+
+### v6.0.0 (2026-10-23)
+
+Search results now honor pagination consistently, reads share API requests, and transport failures preserve recovery details. This is a major release because enforcing search limits can reduce returned results, CLI transport errors now use JSON on stderr, and writes with uncertain outcomes are no longer automatically replayed.
+
+- **Graph-scoped caches:** isolate page UID lookups by graph connection and invalidate that connection's cache after a successful page rename. Identical titles and daily-page UIDs in different graphs cannot share lookup evidence. [#27](https://github.com/2b3pro/roam-research-mcp/pull/27).
+- **Search pagination:** enforce MCP text/tag defaults of 50 and the CLI default of 20; add CLI `--offset`; support `-1` for all remaining results and `0` for none; reject invalid windows. Apply hidden-content and CLI tag filters before slicing, then expand references only for selected results. Use stable UID ordering for blocks and title ordering for namespaces, and include candidates from every OR tag. Pagination bounds output and reference expansion; the initial query still retrieves matching candidates. [#28](https://github.com/2b3pro/roam-research-mcp/pull/28).
+- **Batched reads:** resolve unique reference UIDs together, reuse content already fetched within an operation, and batch selected CLI blocks, child frontiers, and ancestors. Preserve ordering, headings, repeated references, and hidden-subtree filtering. [#29](https://github.com/2b3pro/roam-research-mcp/pull/29).
+- **Transport errors and recovery:** preserve `http_status`, `retry_after_ms`, and `num_actions_succeeded` when available. Failed batches can return `committed.action_indices` and `committed.uids` for confirmed work. Shared retry handling honors `Retry-After` and refuses to replay writes with confirmed progress or an unknown outcome. CLI transport failures emit a JSON error envelope on stderr and exit nonzero. [#30](https://github.com/2b3pro/roam-research-mcp/pull/30).
+- **Migration:** request additional pages or use `limit: -1` / `--limit -1` if you need all search results. Update scripts that parse CLI transport error text. Inspect the graph before resubmitting any write with `outcome_unknown: true`, including throttled writes whose response does not confirm progress.
+- **Verification:** all 578 tests pass across 47 files, with regression coverage for graph isolation, pagination, batched reads, HTTP metadata, retry decisions, and partial batch progress.
+
 ### v5.1.1 (2026-10-23)
 
 Date searches now use Roam's stored timestamps, and case-insensitive searches find arbitrary mixed capitalization, including Unicode. Fixes [#26](https://github.com/2b3pro/roam-research-mcp/pull/26).

@@ -20,6 +20,25 @@ Whether you want to give Claude superpowers over your knowledge base or just wan
 
 ![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
 
+## What's New in v6.1
+
+**Deletes that delete nothing now say so.** Roam's API accepts a `delete-block` for a UID that does not exist and reports success, so a mistyped UID, a stale one, or the wrong graph used to look like a successful delete. `roam_process_batch_actions` and `roam batch` now check delete UIDs first and report missing ones as `BLOCK_NOT_FOUND`, with a `not_found` list naming each one. The rest of the batch still runs and is listed under `committed`.
+
+**Upgrading:** a batch that deletes an already-missing UID now returns `success: false`, and `roam batch` exits nonzero. Scripts that delete blocks idempotently ("remove it if it's there") should treat `BLOCK_NOT_FOUND` as done.
+
+## What's New in v6.0
+
+Search pagination now works consistently across MCP and CLI, repeated reads use fewer API requests, and write failures carry the information needed to recover safely.
+
+- **Predictable search pages.** MCP text and tag searches enforce the documented default of 50 results; `roam search` defaults to 20 and adds `--offset`. Hidden blocks and tag filters are applied before pagination, and block references are expanded only for the selected results. Block results use UID order; namespace results use title order. Use `limit: -1` in MCP or `--limit -1` in the CLI to return all remaining results after the offset; `0` returns none. The backend still retrieves matching candidates, so pagination bounds output and reference expansion, not the initial search query.
+- **Fewer repeated reads.** Reference expansion batches unique UIDs and reuses content already fetched during that operation. CLI `roam get --tag` and `--text` fetch selected blocks, children, and ancestors in batches, preserving their order and context.
+- **Caches stay with their graph connection.** Page UID lookups cannot leak between graph connections, and successful page renames clear that connection's cached lookups.
+- **Useful failure details.** Transport errors preserve HTTP status, `Retry-After`, and the number of confirmed successful actions when the backend provides them. Failed batches can include `committed.action_indices` and `committed.uids` to identify confirmed work. Retries honor the server's delay and stop when a write may already have taken effect.
+
+**Upgrading from v5:** searches that previously ignored their limit may now return fewer results; request more pages or use `-1` when you need everything. CLI transport failures now write a JSON `{ "error": { ... } }` envelope to stderr and exit nonzero, so update scripts that parse error text. If a write reports `outcome_unknown: true`, inspect the graph before resubmitting it; a throttled write without confirmed progress is no longer automatically replayed. These observable changes are why this is a major release.
+
+See the [changelog](CHANGELOG.md) for the four merged changes and their regression coverage.
+
 ## What's New in v5.0
 
 **In one line:** `roam save` now has one flag for each way of naming a parent block, and neither one guesses. `--parent-uid` is always a UID; `--parent` is always text.
@@ -101,6 +120,10 @@ roam save -p "Changelog" --order first "v2.18.0 release"
 # Search your graph and pipe results to another tool
 roam search "important" --json | jq .
 
+# Fetch the next 20 matching blocks, or all matches after the offset
+roam search "important" --limit 20 --offset 20
+roam search "important" --limit -1 --offset 20 --json
+
 # Search for pages by namespace prefix
 roam search --namespace "Convention"    # Finds all Convention/* pages
 
@@ -163,10 +186,10 @@ The MCP server exposes these tools to AI assistants (like Claude), enabling them
 | `roam_create_page` | Create new pages, optionally with mixed text and table content. |
 | `roam_update_page_markdown` | Update a page using smart diff (preserves block UIDs). |
 | `roam_get_subpages` | List sub-pages under a namespace prefix (e.g. "Project/") with optional tag filter. |
-| `roam_search_by_text` | Full-text search across the graph or within specific pages. Supports namespace prefix search for page titles. |
+| `roam_search_by_text` | Search stored block text by literal substring, across the graph or within specific pages. Supports namespace prefix search for page titles. See [note-taking tips](#writing-notes-for-better-retrieval). |
 | `roam_search_block_refs` | Find blocks that reference a page, tag, or block UID. |
 | `roam_search_by_status` | Find TODO or DONE items. |
-| `roam_search_for_tag` | Find blocks containing specific tags (supports exclusion). |
+| `roam_search_for_tag` | Find blocks directly referencing a page or tag (supports exclusion). |
 | `roam_search_by_date` | Find blocks/pages by creation or modification date. |
 | `roam_find_pages_modified_today` | List pages modified since midnight. |
 | `roam_add_todo` | Add TODO items to today's daily page. |
@@ -200,6 +223,31 @@ Three things worth knowing:
 > **Upgrading to 4.0.0:** markdown reads of a page containing a soft line break (Shift+Enter) now render that break as `⏎` and carry a leading `<!-- roam:escaped-newlines -->` marker, so the page survives a write-back intact. Pages without multi-line blocks are byte-identical to 3.x. AI-assistant users need do nothing; scripts parsing markdown output of multi-line pages see the new encoding. See the [changelog](CHANGELOG.md).
 
 > **Upgrading from 2.x:** three write-result fields were renamed — `uid` → `page_uid` (`roam_create_page`), `created_uids` → `created_blocks` (`roam_create_outline`, `roam_import_markdown`) and `preservedUids` → `preserved_uids` (`roam_update_page_markdown`). This only affects code that reads those names; if you use the server through an AI assistant, nothing changes. See the [changelog](CHANGELOG.md) for why.
+
+---
+
+## Writing notes for better retrieval
+
+These tools work with ordinary Roam notes. For information you want to find and reuse later, this optional pattern makes search results more useful: **put the subject, insight or decision, and its essential qualification in one block**, with supporting detail underneath. Quick captures can stay informal.
+
+For example, a note about this project's search behavior could look like:
+
+```text
+- A note containing only a [[block reference]] will not match a text search for the referenced block's wording. #retrieval
+    - Evidence:: The text-search handler selects matching blocks before expanding block references.
+    - Source:: [Text search implementation](https://github.com/2b3pro/roam-research-mcp/blob/main/src/search/text-search.ts)
+    - **Practical implication:** Keep useful wording on the original knowledge block, then reference that block where you reuse it.
+```
+
+Adapt the children to the material: evidence, source location, limitations, steps, or an open question. Keep conditions that change the main claim's meaning in that main block too.
+
+- **Choose useful retrieval handles.** Use a few meaningful concept links or topic tags, reusing existing page names. `[[topic]]` and `#topic` both create references that tag search can match. Put them on the takeaway block you want returned; add references to a supporting child when it deserves its own search result.
+- **Use words you will remember searching for.** `roam_search_by_text` matches a literal, contiguous substring of stored block text, ignoring case by default. It resolves block references after matching; it does not search the expanded wording or automatically expand synonyms.
+- **Keep provenance clear.** Record a real source and a timestamp, page, or section when available. Keep quotations exact and attributed, and label your own interpretation. Include reusable properties such as `Source::` or `Status::` when helpful; use plain prose or `**Label:**` for local organization. A TODO should represent a real commitment.
+
+**Search, then expand:** use text or tag search to locate the takeaway, then fetch its subtree with `roam_fetch_block` to read the evidence and context. With the CLI, use `roam get <block-uid>`; add `-a` for ancestor context.
+
+In this project's tag-search tool, a parent's tags do not make its children match. Page-level metadata can help locate the source, then you can fetch that page's outline. These details describe this project's tools; native Roam queries can behave differently.
 
 ---
 

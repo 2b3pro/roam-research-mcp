@@ -13,7 +13,7 @@ import {
   createRateLimitError,
   type StructuredError
 } from '../../shared/errors.js';
-import { ensurePagesExist } from '../../shared/page-validator.js';
+import { ensurePagesExist, batchCheckExistence } from '../../shared/page-validator.js';
 import { withRateLimitRetry, type RateLimitRetryConfig } from '../../shared/retry.js';
 
 // Regex to match UID placeholders like {{uid:parent1}}, {{uid:section-a}}, etc.
@@ -50,6 +50,79 @@ function transportFailure(error: RoamError, actions: RoamBatchAction[], uidMap: 
       action_indices: Array.from({ length: count }, (_, index) => index),
       uids: Object.fromEntries(Object.entries(uidMap).filter(([, uid]) => created.has(uid))),
     } }),
+  };
+}
+
+interface MissingDelete {
+  action_index: number;
+  uid: string;
+}
+
+/**
+ * The `delete-block` actions whose UID names nothing in the graph.
+ *
+ * Roam's backend accepts a delete for a UID that does not exist and reports
+ * success, so without this check a typo, a stale UID or the wrong graph reads
+ * as "deleted" when nothing happened. A UID created by an earlier action in
+ * the same batch is skipped: it cannot exist yet, but it will by the time its
+ * delete runs.
+ */
+async function findMissingDeletes(
+  graph: Graph,
+  actions: RoamBatchAction[],
+  config: RateLimitConfig
+): Promise<MissingDelete[]> {
+  const createdEarlier = new Set<string>();
+  const candidates: MissingDelete[] = [];
+  actions.forEach((action, index) => {
+    const uid = action.block?.uid;
+    if (!uid) return;
+    if (action.action === 'create-block') createdEarlier.add(uid);
+    else if (action.action === 'delete-block' && !createdEarlier.has(uid)) {
+      candidates.push({ action_index: index, uid });
+    }
+  });
+  if (candidates.length === 0) return [];
+
+  const existing = await batchCheckExistence(graph, [...new Set(candidates.map(c => c.uid))], config);
+  return candidates.filter(c => !existing.has(c.uid));
+}
+
+/**
+ * Success for everything except deletes that had nothing to delete.
+ *
+ * Those deletes are still sent: the backend treats them as no-ops (verified),
+ * and leaving them in keeps every action index the caller sees identical to
+ * the one they sent. The report says which ones did nothing and why.
+ */
+function notFoundResult(
+  missing: MissingDelete[],
+  actions: RoamBatchAction[],
+  uidMap: Record<string, string>
+): BatchResult {
+  const missingIndices = new Set(missing.map(m => m.action_index));
+  const committedIndices = actions.map((_, index) => index).filter(index => !missingIndices.has(index));
+  const list = missing.map(m => m.uid).join(', ');
+  return {
+    success: false,
+    validation_passed: true,
+    actions_attempted: actions.length,
+    error: {
+      code: 'BLOCK_NOT_FOUND',
+      message: [
+        `Nothing was deleted for ${missing.length === 1 ? 'UID' : 'UIDs'} ${list}: no block or page with ` +
+          `${missing.length === 1 ? 'that UID' : 'those UIDs'} exists in this graph.`,
+        ...(committedIndices.length > 0 ? ['Every other action in the batch was committed.'] : []),
+      ].join(' '),
+      not_found: missing,
+      recovery: {
+        suggestion: 'Do not retry these deletes. If the block was meant to exist, check the UID for typos ' +
+          'and that you are on the right graph; if it was already deleted, there is nothing left to do.',
+      },
+    } as StructuredError,
+    ...(committedIndices.length > 0 && {
+      committed: { action_indices: committedIndices, uids: uidMap },
+    }),
   };
 }
 
@@ -260,9 +333,17 @@ export class BatchOperations {
       return roamAction;
     });
 
+    // Step 4: Find deletes with nothing to delete, before anything is written.
+    let missingDeletes: MissingDelete[];
     try {
-      await this.executeWithRetry(batchActions);
+      missingDeletes = await findMissingDeletes(this.graph, batchActions, this.rateLimitConfig);
+    } catch (error) {
+      if (error instanceof RoamError) return transportFailure(error, [], {}, this.rateLimitConfig.maxDelayMs);
+      throw error;
+    }
 
+    const succeeded = (): BatchResult => {
+      if (missingDeletes.length > 0) return notFoundResult(missingDeletes, batchActions, uidMap);
       // SUCCESS: Return uid_map only on success
       const result: BatchResult = {
         success: true,
@@ -273,6 +354,11 @@ export class BatchOperations {
         result.uid_map = uidMap;
       }
       return result;
+    };
+
+    try {
+      await this.executeWithRetry(batchActions);
+      return succeeded();
     } catch (error) {
       if (error instanceof RoamError && !(error.context?.num_actions_succeeded === 0 && error.message.includes("Parent entity doesn't exist"))) {
         return transportFailure(error, batchActions, uidMap, this.rateLimitConfig.maxDelayMs);
@@ -287,15 +373,7 @@ export class BatchOperations {
         try {
           await this.executeWithRetry(batchActions);
           // SUCCESS on retry
-          const result: BatchResult = {
-            success: true,
-            validation_passed: true,
-            actions_attempted: batchActions.length
-          };
-          if (hasPlaceholders) {
-            result.uid_map = uidMap;
-          }
-          return result;
+          return succeeded();
         } catch (retryError) {
           if (retryError instanceof RoamError) return transportFailure(retryError, batchActions, uidMap, this.rateLimitConfig.maxDelayMs);
           // Still failed after retry
