@@ -1,5 +1,15 @@
 # Changelog
 
+### v6.1.1 (2026-11-20)
+
+Renaming a page now renames it. In 6.1.0, `roam_rename_page` and `roam rename` reported success without changing the title when given a UID, and failed when given a title. This is a patch release because it restores what the tool is documented to do.
+
+- **Rename request:** the new title was sent beside the page object, where Roam's `update-page` does not read it. By UID, Roam accepted the request, changed nothing, and returned success. By title, it refused the request for having no UID. Both were verified against a live graph. The page is now looked up first, and the request carries its UID and the new title inside `page`. Fixes [#32](https://github.com/2b3pro/roam-research-mcp/issues/32) in [#33](https://github.com/2b3pro/roam-research-mcp/pull/33).
+- **Pages that are not there:** a title or UID that names no page returns `error.code: "PAGE_NOT_FOUND"` before anything is written, and `roam rename` exits nonzero. Titles are matched exactly, including case.
+- **CLI:** `roam rename --uid <uid> "New Title"` works. That is the form the help text shows; it used to stop at `missing required argument 'new-title'`.
+- **Coming from 5.1.1:** 6.0.0 and 6.1.0 were not published to npm, so this is the first 6.x version there. The v6.0.0 and v6.1.0 entries below apply to you as well, including their migration notes.
+- **Verification:** all 594 tests pass across 50 files, including new server-level and CLI tests that check the request Roam receives and the page under its old and new titles.
+
 ### v6.1.0 (2026-11-11)
 
 Batch deletes no longer report success when there was nothing to delete. This is a minor release because a call that used to succeed can now return a failure.
