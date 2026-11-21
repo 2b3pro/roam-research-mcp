@@ -98,13 +98,15 @@ declare module '@roam-research/roam-api-sdk' {
     options: RoamMoveBlock
   ): Promise<boolean>;
 
+  // Roam finds the page by `page.uid` and reads the new title from
+  // `page.title`. It reads nothing outside `page`: a title placed beside it is
+  // ignored and the call still succeeds.
   interface RoamUpdatePage {
     action?: 'update-page';
     page: {
-      uid?: string;
+      uid: string;
       title?: string;
     };
-    title: string;
   }
 
   export function updatePage(

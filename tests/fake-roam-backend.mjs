@@ -46,6 +46,11 @@ const PAGES = {
   'Paging/Middle': 'pagingPgM',
   aPiTag: 'mixedTag1',
   aPiTagExtra: 'mixedTag2',
+  // Pages for rename tests to rename. Nothing else reads them, so a rename
+  // that lands cannot disturb another test sharing the same server.
+  'Rename By Uid': 'renamePg1',
+  'Rename By Title': 'renamePg2',
+  'Rename With Blank Uid': 'renamePg3',
 };
 
 /**
@@ -140,6 +145,14 @@ const BLOCKS = {
     ['caseDate1', '2026-10-01', 5, 'searchPg1'],
     ['caseTag01', 'Tagged [[aPiTag]]', 6, 'searchPg1'],
     ['caseTag02', 'Tagged [[aPiTagExtra]]', 7, 'searchPg1'],
+  ],
+  // One block each, so reading a renamed page back under its new title shows
+  // which page answered.
+  renamePg1: [
+    ['renameBk1', 'Lives on the page renamed by UID', 0, 'renamePg1'],
+  ],
+  renamePg2: [
+    ['renameBk2', 'Lives on the page renamed by title', 0, 'renamePg2'],
   ],
 };
 
@@ -544,6 +557,14 @@ function answer(query, args) {
     return Object.entries(PAGES).filter(([title]) => title.startsWith(prefix)).map(([title, uid]) => [title, uid]);
   }
 
+  // Title of the page with this UID, the UID inlined in the query text. A
+  // scalar find, so null when the UID is a block's or nobody's: only a page
+  // has a :node/title.
+  if (/:find \?title \.\s*:where \[\?e :block\/uid "/.test(query)) {
+    const uid = literalsAfter(query, ':block/uid ')[0];
+    return Object.keys(PAGES).find((title) => PAGES[title] === uid) ?? null;
+  }
+
   // Page lookup by title. `:find ?uid .` is a scalar find — return the bare uid.
   if (query.includes(':node/title')) {
     const titles = literalsAfter(query, ':node/title ');
@@ -612,6 +633,29 @@ globalThis.fetch = async function fakeRoamFetch(input, init) {
     if (body?.action === 'create-page' && body?.page?.title) {
       PAGES[body.page.title] ??= `p${String(Object.keys(PAGES).length).padStart(8, '0')}`;
       BLOCKS[PAGES[body.page.title]] ??= [];
+    }
+
+    // `update-page` finds its page by `page.uid` and takes the new title from
+    // `page.title`, and reads nothing outside `page`. Confirmed against a live
+    // graph on 2026-11-20: with the title beside `page` the call returned
+    // success and the page kept its name; with no uid Roam answered HTTP 400
+    // with the message below. Applying the rename only when it is spelled the
+    // way Roam reads it lets a test tell a rename from a no-op that reports
+    // success.
+    if (body?.action === 'update-page') {
+      const uid = body.page?.uid;
+      if (typeof uid !== 'string' || uid === '') {
+        const message = 'Assert failed: `uid` argument was not passed or invalid. \n(common-u/safe-uid? uid)';
+        return new Response(JSON.stringify({ message }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const current = Object.keys(PAGES).find((title) => PAGES[title] === uid);
+      if (current !== undefined && typeof body.page.title === 'string') {
+        delete PAGES[current];
+        PAGES[body.page.title] = uid;
+      }
     }
 
     // Track create-block actions (bare, or bundled in a batch-actions call)
