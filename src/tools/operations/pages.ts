@@ -1059,7 +1059,13 @@ export class PageOperations {
   }
 
   /**
-   * Rename a page by updating its title
+   * Rename a page by updating its title.
+   *
+   * Roam's `update-page` finds the page by UID and reads the new title from
+   * the same `page` object, so a title is resolved to its UID first. A UID is
+   * looked up too: Roam's reply does not say whether anything was renamed (a
+   * request that changes nothing reports success as well), so "no such page"
+   * has to be established here, before the write.
    */
   async renamePage(params: { old_title?: string; uid?: string; new_title: string }): Promise<{ success: boolean; message: string }> {
     const { old_title, uid, new_title } = params;
@@ -1071,13 +1077,26 @@ export class PageOperations {
       );
     }
 
-    // Build the page identifier
-    const pageIdentifier = uid ? { uid } : { title: old_title };
-
     try {
+      // Asked fresh and matched exactly, unlike the cached, case-tolerant
+      // lookup reads use: this decides which page a write renames, and the
+      // cache does not hear about renames made in Roam itself.
+      const found = uid
+        ? await q(this.graph, `[:find ?title . :where [?e :block/uid ${ednString(uid)}] [?e :node/title ?title]]`, [])
+        : await q(this.graph, `[:find ?uid . :where [?e :node/title ${ednString(old_title!)}] [?e :block/uid ?uid]]`, []);
+
+      if (!found) {
+        throw uid
+          ? new RoamError(`No page has the UID "${uid}"`, 'PAGE_NOT_FOUND', { uid })
+          : new RoamError(
+              `No page is titled "${old_title}" (titles are matched exactly, including case)`,
+              'PAGE_NOT_FOUND',
+              { title: old_title }
+            );
+      }
+
       const success = await updatePage(this.graph, {
-        page: pageIdentifier,
-        title: new_title
+        page: { uid: uid || String(found), title: new_title }
       });
 
       if (success) {

@@ -40,28 +40,35 @@ describe('graph-scoped lookup evidence', () => {
     expect(q).toHaveBeenCalledTimes(2);
   });
 
-  it.each([{ old_title: 'Old title' }, { uid: 'page-a' }])('invalidates aliases after a successful rename: %j', async identifier => {
+  // A rename asks Roam for its page before writing: the UID for a title, the
+  // title for a UID. That is the first query in each test below.
+  it.each([
+    [{ old_title: 'Old title' }, 'page-a'],
+    [{ uid: 'page-a' }, 'Old title'],
+  ])('invalidates aliases after a successful rename: %j', async (identifier, lookupAnswer) => {
     const a = {} as Graph;
     const b = {} as Graph;
     getPageUidCache(a).set('Old title', 'page-a');
     getPageUidCache(a).set('Alternate lookup', 'page-a');
     getPageUidCache(b).set('Old title', 'page-b');
     vi.mocked(updatePage).mockResolvedValue(true);
-    vi.mocked(q).mockResolvedValue(null as any);
+    vi.mocked(q).mockResolvedValueOnce(lookupAnswer as any).mockResolvedValue(null as any);
 
     expect((await new PageOperations(a).renamePage({ ...identifier, new_title: 'New title' })).success).toBe(true);
     expect(await getPageUid(a, 'Old title')).toBeNull();
     expect(getPageUidCache(a).get('Alternate lookup')).toBeUndefined();
     expect(await getPageUid(b, 'Old title')).toBe('page-b');
-    expect(q).toHaveBeenCalledTimes(1);
+    expect(q).toHaveBeenCalledTimes(2);
   });
 
   it('keeps valid lookup evidence when a rename fails', async () => {
     const graph = {} as Graph;
     getPageUidCache(graph).set('Old title', 'page-a');
     vi.mocked(updatePage).mockResolvedValue(false);
+    vi.mocked(q).mockResolvedValueOnce('page-a' as any);
     await new PageOperations(graph).renamePage({ old_title: 'Old title', new_title: 'New title' });
     expect(await getPageUid(graph, 'Old title')).toBe('page-a');
-    expect(q).not.toHaveBeenCalled();
+    // Only the rename's own lookup: the read after it was answered from cache.
+    expect(q).toHaveBeenCalledTimes(1);
   });
 });
