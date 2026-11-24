@@ -58,6 +58,22 @@ export async function resolveDailyPageUid(graph: Graph): Promise<string | null> 
 }
 
 /**
+ * The `parent` value that means today's daily page. The help has always listed
+ * it, but nothing read it, so it was looked up, and created, as a page titled
+ * "daily" (issue #36).
+ */
+export const DAILY_PARENT = 'daily';
+
+/**
+ * What a plan shows in place of a page UID it does not have: `--simulate`
+ * looks nothing up, and `--dry-run` does not create a page that is missing.
+ * Never sent to Roam, and shaped so it cannot be read as a UID.
+ */
+export function pageStandIn(title: string): string {
+  return `<page: ${title}>`;
+}
+
+/**
  * Check if a string looks like a valid Roam UID (not a page title)
  */
 export function isUidFormat(ref: string): boolean {
@@ -87,7 +103,9 @@ export function collectPageTitles(commands: BatchCommand[]): Set<string> {
     // Commands that can have 'parent' param — if it looks like a page title, resolve it
     if ('parent' in params && typeof params.parent === 'string') {
       const parent = params.parent;
-      if (!isUidFormat(parent)) {
+      if (parent === DAILY_PARENT) {
+        titles.add(getDailyPageTitle());
+      } else if (!isUidFormat(parent)) {
         titles.add(parent);
       }
     }
@@ -175,6 +193,11 @@ export function resolveParentRef(
   if (placeholderMatch) {
     const name = placeholderMatch[1];
     return context.placeholders.get(name) || `{{uid:${name}}}`;
+  }
+
+  // "daily" is today's daily page, never a page title
+  if (ref === DAILY_PARENT) {
+    return context.dailyPageUid ?? context.pageUids.get(getDailyPageTitle()) ?? null;
   }
 
   // Check if it's a resolved page title

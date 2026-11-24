@@ -669,6 +669,15 @@ globalThis.fetch = async function fakeRoamFetch(input, init) {
       const parentUid = action.location?.['parent-uid'];
       const uid = action.block?.uid;
       const str = action.block?.string;
+      // Writing `[[Title]]` in a block makes Roam create that page, and
+      // `createPage` is built on it: it writes "Created page: [[Title]]" to
+      // today's daily page and then looks the title up. Without this a run
+      // that creates a page by title can only end in "Could not find created
+      // page". Flat links only; a nested `[[a [[b]]]]` is not modelled.
+      for (const [, title] of String(str ?? '').matchAll(/\[\[([^\[\]]+)\]\]/g)) {
+        PAGES[title] ??= `p${String(Object.keys(PAGES).length).padStart(8, '0')}`;
+        BLOCKS[PAGES[title]] ??= [];
+      }
       if (parentUid && uid && str !== undefined) {
         CREATED_BLOCKS.push([uid, str, createdBlockOrder++, parentUid]);
       }
