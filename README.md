@@ -20,6 +20,14 @@ Whether you want to give Claude superpowers over your knowledge base or just wan
 
 ![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
 
+## What's New in v6.2
+
+**`roam batch` does what its help says.** Outline items can be plain strings (`"items": ["Goal 1", "Goal 2"]`) or `{text, level?}` objects. `--dry-run` writes nothing: a page that does not exist yet is listed in the plan, not created. `parent: "daily"` means today's daily page. A page created with `as` can be used as a parent, so the example in `roam batch --help` runs as written.
+
+**Searches skip superseded block versions.** When you give a block a new version in Roam, the old text stays in the graph as a block of its own. Page reads never showed those, but searches did, so an old `{{[[TODO]]}}` could come back as an open task. Searches now return only the version in use. To see the others, fetch the block: `roam_fetch_block` and `roam get <uid>` list every version, oldest first, and mark the one in use.
+
+**Upgrading:** search results can shrink, since superseded versions and the blocks under them are no longer returned. `parent: "daily"` no longer reaches a page titled "daily"; use that page's UID. An outline `level` of 0 is refused; use 1. See the [changelog](CHANGELOG.md) for the full list.
+
 ## What's New in v6.1
 
 **Deletes that delete nothing now say so.** Roam's API accepts a `delete-block` for a UID that does not exist and reports success, so a mistyped UID, a stale one, or the wrong graph used to look like a successful delete. `roam_process_batch_actions` and `roam batch` now check delete UIDs first and report missing ones as `BLOCK_NOT_FOUND`, with a `not_found` list naming each one. The rest of the batch still runs and is listed under `committed`.
