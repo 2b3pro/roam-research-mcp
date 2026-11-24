@@ -13,6 +13,7 @@ import type {
   TodoCommand,
   TableCommand,
   OutlineCommand,
+  OutlineItem,
   RememberCommand,
   PageCommand,
   CodeblockCommand
@@ -40,7 +41,7 @@ export function translateCommand(
     case 'delete':
       return translateDelete(command);
     case 'move':
-      return translateMove(command);
+      return translateMove(command, context);
     case 'todo':
       return translateTodo(command, context);
     case 'table':
@@ -214,14 +215,16 @@ function translateDelete(cmd: DeleteCommand): BatchAction[] {
   }];
 }
 
-function translateMove(cmd: MoveCommand): BatchAction[] {
+function translateMove(cmd: MoveCommand, context: ResolutionContext): BatchAction[] {
   const { params } = cmd;
 
   return [{
     action: 'move-block',
     uid: params.uid,
     location: {
-      'parent-uid': params.parent,
+      // Resolved like every other parent. Passed through raw, a page title or
+      // "daily" reached the batch as a "UID" and was refused there.
+      'parent-uid': getParentUid({ parent: params.parent }, context),
       order: params.order ?? 'last'
     }
   }];
@@ -314,6 +317,45 @@ function translateTable(cmd: TableCommand, context: ResolutionContext): BatchAct
   return actions;
 }
 
+/**
+ * Check an outline's `items` and bring each one to `{text, level, ...}`.
+ *
+ * A plain string is a level-1 block, which is what the help has always shown,
+ * and a missing `level` is 1. Anything else is refused by name: a level that
+ * is not a whole number of 1 or more used to reach `levelStack.length = level`
+ * and surface as a bare "Invalid array length" (issue #34).
+ *
+ * Throws with the item's position, e.g. `items[2].level must be ...`.
+ */
+export function normalizeOutlineItems(items: unknown): OutlineItem[] {
+  if (!Array.isArray(items)) {
+    throw new Error(`'items' must be an array of strings or {text, level?} objects`);
+  }
+
+  return items.map((item, i) => {
+    if (typeof item === 'string') {
+      return { text: item, level: 1 };
+    }
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`items[${i}] must be a string or a {text, level?} object (got ${JSON.stringify(item)})`);
+    }
+
+    const { text, level: given } = item as Record<string, unknown>;
+    if (typeof text !== 'string') {
+      throw new Error(`items[${i}].text must be a string (got ${JSON.stringify(text)})`);
+    }
+    // "2" worked before by coercion, so it still does.
+    const level = given == null ? 1
+      : typeof given === 'string' && given.trim() !== '' ? Number(given)
+      : given;
+    if (typeof level !== 'number' || !Number.isInteger(level) || level < 1) {
+      throw new Error(`items[${i}].level must be a whole number, 1 or more (got ${JSON.stringify(given)})`);
+    }
+
+    return { ...(item as OutlineItem), text, level };
+  });
+}
+
 function translateOutline(cmd: OutlineCommand, context: ResolutionContext): BatchAction[] {
   const { params } = cmd;
   const parentUid = getParentUid(params, context);
@@ -323,7 +365,7 @@ function translateOutline(cmd: OutlineCommand, context: ResolutionContext): Batc
   context.currentParent = parentUid;
   context.levelStack = [];
 
-  for (const item of params.items) {
+  for (const item of normalizeOutlineItems(params.items)) {
     let itemParentUid: string;
 
     if (item.level === 1) {
@@ -433,6 +475,31 @@ function translateCodeblock(cmd: CodeblockCommand, context: ResolutionContext): 
   }
 
   return [action];
+}
+
+/**
+ * Point actions at pages created by `page` commands.
+ *
+ * A `page` command's `as` name stands for a page UID, and that UID exists only
+ * once the page does, which is after translation. Until then a parent of
+ * `{{name}}` is carried as `{{uid:name}}`, the form block placeholders use;
+ * left like that, the batch takes it for a block nobody defined and refuses
+ * the whole run. Called with the UIDs once the pages exist.
+ */
+export function bindPagePlaceholders(
+  actions: BatchAction[],
+  pageUidsByName: Map<string, string>
+): BatchAction[] {
+  const uidByPlaceholder = new Map(
+    Array.from(pageUidsByName, ([name, uid]) => [generatePlaceholder(name), uid] as const)
+  );
+
+  return actions.map(action => {
+    const parent = action.location?.['parent-uid'];
+    const pageUid = parent === undefined ? undefined : uidByPlaceholder.get(parent);
+    if (!action.location || pageUid === undefined) return action;
+    return { ...action, location: { ...action.location, 'parent-uid': pageUid } };
+  });
 }
 
 /**

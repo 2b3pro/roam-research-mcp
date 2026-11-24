@@ -4,7 +4,7 @@
 
 // Base params shared by commands that create blocks
 export interface BlockParamsBase {
-  parent?: string;         // Parent UID or {{placeholder}}
+  parent?: string;         // Parent UID, "daily", page title or {{placeholder}}
   page?: string;           // Page title (triggers lookup)
   pageUid?: string;        // Direct page UID
   as?: string;             // Placeholder name for referencing
@@ -73,16 +73,20 @@ export interface TableCommand {
   };
 }
 
-// Outline command
+// One outline item, as the translator works with it
+export interface OutlineItem {
+  text: string;
+  level: number;
+  heading?: 1 | 2 | 3;
+  as?: string;
+}
+
+// Outline command. An item is a plain string (a level-1 block) or an object;
+// `level` defaults to 1. See normalizeOutlineItems in translator.ts.
 export interface OutlineCommand {
   command: 'outline';
   params: BlockParamsBase & {
-    items: Array<{
-      text: string;
-      level: number;
-      heading?: 1 | 2 | 3;
-      as?: string;
-    }>;
+    items: Array<string | (Omit<OutlineItem, 'level'> & { level?: number })>;
   };
 }
 

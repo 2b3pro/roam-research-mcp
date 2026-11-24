@@ -12,9 +12,14 @@ import {
   resolveDailyPageUid,
   needsDailyPage,
   createResolutionContext,
-  getDailyPageTitle
+  getDailyPageTitle,
+  pageStandIn
 } from '../batch/resolver.js';
-import { translateAllCommands } from '../batch/translator.js';
+import {
+  translateAllCommands,
+  normalizeOutlineItems,
+  bindPagePlaceholders
+} from '../batch/translator.js';
 import { readStdin } from '../utils/input.js';
 
 interface BatchOptions extends GraphOptions {
@@ -71,6 +76,16 @@ function validateCommands(commands: unknown[]): BatchCommand[] {
     for (const param of required) {
       if (params[param] === undefined) {
         throw new Error(`[${i}] ${cmdType}: missing required param '${param}'`);
+      }
+    }
+
+    // Outline items are checked here, with the command's position, rather
+    // than left to fail somewhere inside the translation.
+    if (cmdType === 'outline') {
+      try {
+        normalizeOutlineItems(params.items);
+      } catch (err) {
+        throw new Error(`[${i}] outline: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
@@ -191,12 +206,16 @@ Command schemas:
   delete:    {uid}
   move:      {uid, parent, order?}
   page:      {title, as?, content?: [{text, level, heading?}...]}
-  outline:   {parent, items: [string...]}
+  outline:   {parent, items: [string | {text, level?, heading?, as?}...]}
   table:     {parent, headers: [string...], rows: [{label, cells: [string...]}...]}
   remember:  {text, categories?: [string...]}
   codeblock: {parent, code, language?}
 
-Parent accepts: block UID, "daily", page title, or {{placeholder}}
+Parent accepts: block UID, "daily" (today's daily page), page title, or {{placeholder}}
+
+A page title that does not exist yet is created. Creating a page also writes
+"Created page: [[Title]]" to today's daily page and "Processed: [[date]]" to
+the new page. --dry-run lists such pages and creates nothing.
 
 Example:
   [
@@ -259,6 +278,13 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
         // Simulate mode: validate structure without connecting to Roam
         if (options.simulate) {
           const context = createResolutionContext();
+          // Nothing is looked up offline, so every page a command names gets a
+          // stand-in UID. Without one, a page title, "daily" or a bare todo
+          // could not be translated and failed as if the input were wrong.
+          for (const title of collectPageTitles(commands)) {
+            context.pageUids.set(title, pageStandIn(title));
+          }
+          context.dailyPageUid = pageStandIn(getDailyPageTitle());
           const { actions, pageCommands } = translateAllCommands(commands, context);
 
           console.log('\n[SIMULATE] Validation passed\n');
@@ -283,6 +309,8 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
         // Phase 1: Collect and resolve page titles (from 'page' AND 'parent' params)
         const context = createResolutionContext();
         const pageTitles = collectPageTitles(commands);
+        // Pages a dry run found missing: reported in the plan, never created.
+        const missingPages: string[] = [];
 
         if (pageTitles.size > 0) {
           if (options.debug) {
@@ -296,7 +324,14 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
 
           // Auto-create unresolved pages (e.g., parent: "Page Title" for a page that doesn't exist yet)
           const unresolved = Array.from(pageTitles).filter(t => !context.pageUids.has(t));
-          if (unresolved.length > 0) {
+          if (options.dryRun) {
+            // A dry run writes nothing. This creation used to run before the
+            // dry-run exit below, so previewing a batch created its pages.
+            for (const title of unresolved) {
+              context.pageUids.set(title, pageStandIn(title));
+              missingPages.push(title);
+            }
+          } else if (unresolved.length > 0) {
             if (options.debug) {
               printDebug('Auto-creating pages', unresolved);
             }
@@ -321,7 +356,8 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
 
         // Resolve daily page if needed
         if (needsDailyPage(commands)) {
-          const dailyUid = await resolveDailyPageUid(graph);
+          // Phase 1 already has it: found, created, or a dry run's stand-in.
+          const dailyUid = context.pageUids.get(getDailyPageTitle()) ?? await resolveDailyPageUid(graph);
           if (!dailyUid) {
             exitWithError(`Daily page not found: "${getDailyPageTitle()}"`);
           }
@@ -345,11 +381,17 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
         if (options.dryRun) {
           console.log('\n[DRY RUN] Planned actions:\n');
 
-          if (pageCommands.length > 0) {
+          // A page both named by a `page` command and used as a parent is one page.
+          const impliedPages = missingPages.filter(t => !pageCommands.some(pc => pc.params.title === t));
+
+          if (pageCommands.length + impliedPages.length > 0) {
             console.log('Page creations:');
             for (const pc of pageCommands) {
               const as = pc.params.as ? ` (as: {{${pc.params.as}}})` : '';
               console.log(`  - "${pc.params.title}"${as}`);
+            }
+            for (const title of impliedPages) {
+              console.log(`  - "${title}" (does not exist yet)`);
             }
             console.log('');
           }
@@ -359,7 +401,7 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
             console.log(actions.map((a, i) => formatAction(a as unknown as Record<string, unknown>, i)).join('\n'));
           }
 
-          console.log(`\nTotal: ${pageCommands.length} page(s), ${actions.length} action(s)`);
+          console.log(`\nTotal: ${pageCommands.length + impliedPages.length} page(s), ${actions.length} action(s)`);
           return;
         }
 
@@ -401,7 +443,14 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
 
         if (actions.length > 0) {
           const batchOps = new BatchOperations(graph);
-          batchResult = await batchOps.processBatch(actions);
+          // The pages exist now, so a parent of {{name}} can become their UID.
+          const pagePlaceholders = new Map(
+            pageCommands.flatMap(pc => {
+              const uid = pc.params.as ? context.placeholders.get(pc.params.as) : undefined;
+              return pc.params.as && uid ? [[pc.params.as, uid] as const] : [];
+            })
+          );
+          batchResult = await batchOps.processBatch(bindPagePlaceholders(actions, pagePlaceholders));
 
           if (!batchResult.success) {
             const errorMsg = typeof batchResult.error === 'string'
