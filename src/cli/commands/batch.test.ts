@@ -301,3 +301,34 @@ describe('roam batch: parent "daily" (#36)', () => {
     expect(pageMove.location['parent-uid']).toBe('page00001');
   });
 });
+
+describe('roam batch: the example in --help', () => {
+  it('runs: a page placeholder works as a parent, and string outline items nest under a block', () => {
+    const run = batch([
+      { command: 'page', params: { title: 'Project X', as: 'proj' } },
+      { command: 'create', params: { parent: '{{proj}}', text: '# Overview', as: 'overview' } },
+      { command: 'outline', params: { parent: '{{overview}}', items: ['Goal 1', 'Goal 2'] } },
+      { command: 'todo', params: { text: 'Review project' } },
+    ]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    const output = JSON.parse(run.stdout);
+    expect(output.success).toBe(true);
+    expect(output.uid_map.proj).toMatch(/^p\d{8}$/);
+
+    // The batch turns a leading "# " into a level-1 heading on its way out.
+    const overview = blockWithText(run, 'Overview');
+    expect(overview.block.heading).toBe(1);
+    expect(overview.location['parent-uid']).toBe(output.uid_map.proj);
+    expect(overview.block.uid).toBe(output.uid_map.overview);
+    expect(blockWithText(run, 'Goal 1').location['parent-uid']).toBe(output.uid_map.overview);
+    expect(blockWithText(run, 'Goal 2').location['parent-uid']).toBe(output.uid_map.overview);
+
+    // The todo has no parent, so it belongs on today's daily page: the page
+    // the "Created page" link for Project X was written to.
+    const link = blockWithText(run, 'Created page: [[Project X]]');
+    expect(blockWithText(run, '{{[[TODO]]}} Review project').location['parent-uid'])
+      .toBe(link.location['parent-uid']);
+  });
+});

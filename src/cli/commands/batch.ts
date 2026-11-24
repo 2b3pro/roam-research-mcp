@@ -15,7 +15,11 @@ import {
   getDailyPageTitle,
   pageStandIn
 } from '../batch/resolver.js';
-import { translateAllCommands, normalizeOutlineItems } from '../batch/translator.js';
+import {
+  translateAllCommands,
+  normalizeOutlineItems,
+  bindPagePlaceholders
+} from '../batch/translator.js';
 import { readStdin } from '../utils/input.js';
 
 interface BatchOptions extends GraphOptions {
@@ -439,7 +443,14 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
 
         if (actions.length > 0) {
           const batchOps = new BatchOperations(graph);
-          batchResult = await batchOps.processBatch(actions);
+          // The pages exist now, so a parent of {{name}} can become their UID.
+          const pagePlaceholders = new Map(
+            pageCommands.flatMap(pc => {
+              const uid = pc.params.as ? context.placeholders.get(pc.params.as) : undefined;
+              return pc.params.as && uid ? [[pc.params.as, uid] as const] : [];
+            })
+          );
+          batchResult = await batchOps.processBatch(bindPagePlaceholders(actions, pagePlaceholders));
 
           if (!batchResult.success) {
             const errorMsg = typeof batchResult.error === 'string'

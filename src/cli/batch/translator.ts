@@ -478,6 +478,31 @@ function translateCodeblock(cmd: CodeblockCommand, context: ResolutionContext): 
 }
 
 /**
+ * Point actions at pages created by `page` commands.
+ *
+ * A `page` command's `as` name stands for a page UID, and that UID exists only
+ * once the page does, which is after translation. Until then a parent of
+ * `{{name}}` is carried as `{{uid:name}}`, the form block placeholders use;
+ * left like that, the batch takes it for a block nobody defined and refuses
+ * the whole run. Called with the UIDs once the pages exist.
+ */
+export function bindPagePlaceholders(
+  actions: BatchAction[],
+  pageUidsByName: Map<string, string>
+): BatchAction[] {
+  const uidByPlaceholder = new Map(
+    Array.from(pageUidsByName, ([name, uid]) => [generatePlaceholder(name), uid] as const)
+  );
+
+  return actions.map(action => {
+    const parent = action.location?.['parent-uid'];
+    const pageUid = parent === undefined ? undefined : uidByPlaceholder.get(parent);
+    if (!action.location || pageUid === undefined) return action;
+    return { ...action, location: { ...action.location, 'parent-uid': pageUid } };
+  });
+}
+
+/**
  * Translate all commands to batch actions
  */
 export function translateAllCommands(
