@@ -18,6 +18,7 @@ import {
 } from './handlers.js';
 import type { DatomicSearchParams } from './types.js';
 import { collectHiddenUids, filterHiddenMatches } from '../../helpers/hidden.js';
+import { collectSupersededUids, filterSupersededMatches } from '../../helpers/versions.js';
 import { resolveRefsMany } from '../../helpers/refs.js';
 
 export interface SearchPageOptions {
@@ -46,11 +47,19 @@ export class SearchOperations {
    * raw Datalog reads the database directly and stays raw, matching the
    * official Roam toolset. That is also why these tags are a convenience
    * filter, not a security boundary.
+   *
+   * Superseded block versions go the same way, for a different reason: they
+   * are not live content. Roam keeps a block's old versions as blocks of
+   * their own, which a search matches like any other; see
+   * `collectSupersededUids`.
    */
   private async withoutHidden(result: SearchHandlerResult): Promise<SearchHandlerResult> {
     if (!result?.matches?.length) return result;
-    const hidden = await collectHiddenUids(this.graph);
-    const matches = filterHiddenMatches(result.matches, hidden);
+    const [hidden, superseded] = await Promise.all([
+      collectHiddenUids(this.graph),
+      collectSupersededUids(this.graph),
+    ]);
+    const matches = filterSupersededMatches(filterHiddenMatches(result.matches, hidden), superseded);
     const removed = result.matches.length - matches.length;
     if (removed === 0) return result;
 
@@ -236,8 +245,11 @@ export class SearchOperations {
       return rows.map(([block_uid, content, page_title, time]) => ({ block_uid, content, page_title, time, type }));
     }));
 
-    const hidden = await collectHiddenUids(this.graph);
-    const visible = filterHiddenMatches(results.flat(), hidden);
+    const [hidden, superseded] = await Promise.all([
+      collectHiddenUids(this.graph),
+      collectSupersededUids(this.graph),
+    ]);
+    const visible = filterSupersededMatches(filterHiddenMatches(results.flat(), hidden), superseded);
     const matchesByUid = new Map<string, typeof visible[number]>();
     for (const match of visible) {
       const previous = matchesByUid.get(match.block_uid);

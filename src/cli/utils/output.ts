@@ -1,5 +1,5 @@
 import { RoamError } from '../../shared/errors.js';
-import type { RoamBlock } from '../../types/roam.js';
+import type { RoamBlock, RoamBlockVersion } from '../../types/roam.js';
 import type { GroupedResults } from './sort-group.js';
 import { escapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER } from '../../shared/block-escaping.js';
 
@@ -105,8 +105,21 @@ export function formatBlockOutput(
 
   const displayBlocks = options.flat ? flattenBlocks([block]) : [block];
   const escape = needsNewlineEscaping(collectBlockStrings(displayBlocks));
-  const body = blocksToMarkdown(displayBlocks, 0, escape);
+  const body = blocksToMarkdown(displayBlocks, 0, escape) + formatVersions(block);
   return escape ? `${ESCAPED_NEWLINES_MARKER}\n\n${body}` : body;
+}
+
+/**
+ * The versions of a fetched block, for the markdown output: one line each,
+ * oldest first, with the UID a reader needs to fetch that version. Empty for a
+ * block that has none, so its output is unchanged.
+ */
+function formatVersions(block: RoamBlock & { versions?: RoamBlockVersion[] }): string {
+  if (!block.versions?.length) return '';
+  const lines = block.versions.map(
+    (v) => `${v.active ? '*' : ' '} ((${v.uid})) ${v.string.replace(/\n/g, '⏎')}`
+  );
+  return `\n\nVersions (${lines.length}, oldest first, * marks the one in use):\n${lines.join('\n')}`;
 }
 
 /**

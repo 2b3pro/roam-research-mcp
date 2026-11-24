@@ -51,6 +51,9 @@ const PAGES = {
   'Rename By Uid': 'renamePg1',
   'Rename By Title': 'renamePg2',
   'Rename With Blank Uid': 'renamePg3',
+  // A page holding a block with several versions, and a page that block links to.
+  'Version Fixture': 'versnPg01',
+  'Version Target': 'versnPg02',
 };
 
 /**
@@ -166,6 +169,54 @@ BLOCKS.pagingPg1 = [
   ['pag000061', 'paging item only second tag [[OtherPagingTag]]', 61, 'pagingPg1'],
 ];
 
+/**
+ * Block versions. Giving a block a new version in Roam does not edit it: the
+ * old text stays behind as a block of its own, with its own UID and its own
+ * children, and a container entity lists every version under `:vc/blocks`.
+ *
+ * What makes a version superseded is that it is no longer in any
+ * `:block/children`. It keeps `:block/string`, `:block/page` and
+ * `:block/parents`, so a page read (which walks `:block/children`) never sees
+ * it, while anything that matches blocks by attribute does. That is why these
+ * live apart from BLOCKS: BLOCKS is what a page read returns.
+ *
+ * Shape confirmed against a live graph on 2026-11-24.
+ */
+BLOCKS.versnPg01 = [
+  ['verPlain1', 'Plain block, never versioned verneedle', 0, 'versnPg01'],
+  ['verActiv1', 'Final wording verneedle #[[VersionTag]] [[Version Target]]', 1, 'versnPg01'],
+  ['verActCh1', 'Note under the final wording verneedle', 0, 'verActiv1'],
+];
+BLOCKS.versnPg02 = [];
+const SUPERSEDED = {
+  versnPg01: [
+    ['verOld001', '{{[[TODO]]}} first draft verneedle', 1, 'versnPg01'],
+    ['verOld002', 'Second draft verneedle #[[VersionTag]] [[Version Target]]', 1, 'versnPg01'],
+    // An old version the user hid: it must not come back through `versions`.
+    ['verOldHid', 'Secret draft verneedle #.rm-hide', 1, 'versnPg01'],
+    // Old versions keep their own children; these are orphaned with them.
+    ['verOldCh1', 'Note under the first draft verneedle', 0, 'verOld001'],
+  ],
+};
+/** Each `:vc/blocks` set: every version of one block, in no particular order. */
+const VERSION_GROUPS = [['verOld002', 'verActiv1', 'verOldHid', 'verOld001']];
+
+const supersededBlocks = () => Object.values(SUPERSEDED).flat();
+/** Versions no `:block/children` points at any more. */
+const supersededRoots = () => {
+  const versioned = new Set(VERSION_GROUPS.flat());
+  return supersededBlocks().filter(([uid]) => versioned.has(uid));
+};
+/** Everything nested under a superseded version. */
+const supersededDescendants = () => {
+  const roots = new Set(supersededRoots().map(([uid]) => uid));
+  return supersededBlocks().filter(([uid]) => !roots.has(uid));
+};
+/** BLOCKS plus the superseded blocks of each page: what `[?b :block/string]` can match. */
+const blocksByAttribute = () => Object.fromEntries(
+  [...new Set([...Object.keys(BLOCKS), ...Object.keys(SUPERSEDED)])]
+    .map((pageUid) => [pageUid, [...(BLOCKS[pageUid] ?? []), ...(SUPERSEDED[pageUid] ?? [])]]));
+
 // Independent datoms for search tests. Their dates deliberately disagree with
 // block text, and a missing attribute stays missing (it is never "now").
 const TIMES = {
@@ -181,8 +232,16 @@ const TIMES = {
   caseDate1: { create: Date.parse('2026-09-01T12:00:00-07:00') },
   caseMix01: { create: Date.parse('2026-03-08T23:59:59.999-07:00') },
   caseLow01: { create: Date.parse('2026-03-09T00:00:00-07:00') },
+  // Version fixture: a range of its own, so no other date test sees these.
+  verOld001: { create: Date.parse('2026-05-01T12:00:00-07:00') },
+  verOldCh1: { create: Date.parse('2026-05-01T12:30:00-07:00') },
+  verOld002: { create: Date.parse('2026-05-02T12:00:00-07:00') },
+  verOldHid: { create: Date.parse('2026-05-02T13:00:00-07:00') },
+  verActiv1: { create: Date.parse('2026-05-03T12:00:00-07:00') },
+  verPlain1: { create: Date.parse('2026-05-03T13:00:00-07:00') },
 };
 const BLOCK_TAGS = { caseTag01: ['aPiTag'], caseTag02: ['aPiTagExtra'],
+  verActiv1: ['VersionTag'], verOld002: ['VersionTag'],
   ...Object.fromEntries(BLOCKS.pagingPg1.map(([uid, text]) => [uid,
     ['PagingTag', 'OtherPagingTag'].filter(tag => text.includes(`[[${tag}]]`))])),
 };
@@ -200,6 +259,11 @@ const BLOCK_TAGS = { caseTag01: ['aPiTag'], caseTag02: ['aPiTagExtra'],
  * escapes it like every other block string in that file.
  */
 const REFERRING_BLOCKS = {
+  // `:block/refs` survives on a superseded version, so both link here.
+  'Version Target': [
+    ['verOld002', 'Second draft verneedle #[[VersionTag]] [[Version Target]]', 'Version Fixture', 'versnPg01'],
+    ['verActiv1', 'Final wording verneedle #[[VersionTag]] [[Version Target]]', 'Version Fixture', 'versnPg01'],
+  ],
   'Nested Page': [
     ['linkref01', 'See [[Nested Page]] for the plan\nand a second line', 'Test Page', 'page00001'],
   ],
@@ -228,7 +292,7 @@ const HIDE_TAG = /(?:#\[\[|\[\[)\.rm-(?:hide|private)\]\]|#\.rm-(?:hide|private)
 const allBlocks = () => Object.values(BLOCKS).flat();
 
 /** Blocks whose own text carries a genuine hide tag. */
-const hiddenRoots = () => allBlocks().filter(([, str]) => HIDE_TAG.test(str));
+const hiddenRoots = () => [...allBlocks(), ...supersededBlocks()].filter(([, str]) => HIDE_TAG.test(str));
 
 /** Every descendant of a hidden root, as [rootText, descendantUid] pairs. */
 function hiddenDescendantPairs() {
@@ -369,17 +433,47 @@ function regexPredicate(query, variable) {
 function answer(query, args) {
   assertWellFormed(query);
 
+  // Block versions (src/tools/helpers/versions.ts). Checked first: every one
+  // of these names `:vc/blocks` or `?versionUid`, and nothing else does.
+  if (query.includes(':vc/blocks') && query.includes(':find ?rootUid ?versionUid')) {
+    const asked = Array.isArray(args?.[0]) ? args[0] : [];
+    const everyBlock = [...allBlocks(), ...supersededBlocks()];
+    return asked.flatMap((rootUid) =>
+      (VERSION_GROUPS.find((group) => group.includes(rootUid)) ?? []).map((uid) =>
+        [rootUid, uid, everyBlock.find(([blockUid]) => blockUid === uid)[1], TIMES[uid]?.create ?? 0]));
+  }
+  if (query.includes(':vc/blocks')) {
+    // Superseded versions, or with `:block/parents` everything nested under them.
+    const rows = query.includes(':block/parents') ? supersededDescendants() : supersededRoots();
+    return rows.map(([uid]) => [uid]);
+  }
+  if (query.includes(':find ?versionUid')) {
+    // Which of these are still somebody's child, i.e. the version in use.
+    const live = new Set(allBlocks().map(([uid]) => uid));
+    return (Array.isArray(args?.[0]) ? args[0] : []).filter((uid) => live.has(uid)).map((uid) => [uid]);
+  }
+
+  // Fetching by UID finds a superseded version: it is still an entity with a
+  // string and an order.
   if (query.includes(':find ?uid ?string ?order ?heading')) {
     const asked = new Set(args?.[0] ?? []);
-    return allBlocks().filter(([uid]) => asked.has(uid)).map(([uid, text, order]) => [uid, text, order, 0]);
+    return [...allBlocks(), ...supersededBlocks()].filter(([uid]) => asked.has(uid)).map(([uid, text, order]) => [uid, text, order, 0]);
+  }
+  // `roam_fetch_block`'s own lookup of the one block it was asked for
+  // (BlockRetrievalOperations.fetchBlock): string, order and heading by UID.
+  if (query.includes(':find ?string ?order ?heading')) {
+    const found = [...allBlocks(), ...supersededBlocks()].find(([uid]) => uid === args?.[0]);
+    return found ? [[found[1], found[2], 0]] : [];
   }
   if (query.includes(':find ?uid ?string')) {
     const asked = new Set(args?.[0] ?? []);
-    return allBlocks().filter(([uid]) => asked.has(uid)).map(([uid, text]) => [uid, text, 0]);
+    return [...allBlocks(), ...supersededBlocks()].filter(([uid]) => asked.has(uid)).map(([uid, text]) => [uid, text, 0]);
   }
+  // `:block/children` of a parent. A superseded version is nobody's child, but
+  // the blocks under it are still its children.
   if (query.includes(':find ?parentUid ?childUid ?childString')) {
     const asked = new Set(args?.[0] ?? []);
-    return allBlocks().filter(([, , , parent]) => asked.has(parent)).map(([uid, text, order, parent]) => [parent, uid, text, order, 0]);
+    return [...allBlocks(), ...supersededDescendants()].filter(([, , , parent]) => asked.has(parent)).map(([uid, text, order, parent]) => [parent, uid, text, order, 0]);
   }
 
   // Existence check for a set of UIDs (`batchCheckExistence` in
@@ -392,6 +486,7 @@ function answer(query, args) {
     const known = new Set([
       ...Object.values(PAGES),
       ...allBlocks().map(([uid]) => uid),
+      ...supersededBlocks().map(([uid]) => uid),
       ...CREATED_BLOCKS.map(([uid]) => uid),
     ]);
     return asked.filter((uid) => known.has(uid)).map((uid) => [uid]);
@@ -472,7 +567,7 @@ function answer(query, args) {
     const attributes = [...query.matchAll(/\[\?e :(create|edit)\/time \?time\]/g)].map(m => m[1]);
     const comparisons = [...query.matchAll(/\[\((>=|>|<=|<) \?time (\?[\w-]+)\)\]/g)];
     const entities = query.includes('[?e :block/string ?content]')
-      ? Object.entries(BLOCKS).flatMap(([pageUid, blocks]) => blocks.map(([uid, content]) =>
+      ? Object.entries(blocksByAttribute()).flatMap(([pageUid, blocks]) => blocks.map(([uid, content]) =>
           [uid, content, Object.keys(PAGES).find(title => PAGES[title] === pageUid)]))
       : Object.entries(PAGES).map(([title, uid]) => [uid, title, title]);
     return entities.flatMap(([uid, content, title]) => attributes.flatMap(attribute => {
@@ -513,7 +608,7 @@ function answer(query, args) {
     if (tested.length > 0 || textPredicate || tagPredicate || exactTags.length > 0) {
       const titleOf = Object.fromEntries(Object.entries(PAGES).map(([title, uid]) => [uid, title]));
       const scope = bound['?page-uid'] ?? bound['?target-page-uid'];
-      const rows = Object.entries(BLOCKS)
+      const rows = Object.entries(blocksByAttribute())
         .filter(([pageUid]) => scope === undefined || pageUid === scope)
         .flatMap(([pageUid, blocks]) =>
           blocks
