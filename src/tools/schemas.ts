@@ -847,7 +847,7 @@ export const toolSchemas = {
   roam_fetch_block: {
     name: 'roam_fetch_block',
     annotations: READ,
-    description: 'Fetch a block by its UID with optional children (down to a specified depth) and/or ancestors (up to page root). Returns the block\'s UID, text, order, children array, and optionally an ancestors array with the chain to the page root.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
+    description: 'Fetch a block by its UID with optional children (down to a specified depth) and/or ancestors (up to page root). Returns the block\'s UID, text, order, children array, and optionally an ancestors array with the chain to the page root. A block that has Roam versions also returns `versions`: every version as {uid, string, active}, oldest first, where `active` marks the one in use (the one a page read shows). Searches return only the version in use; an older one is read by fetching its uid from this list.\n\nIMPORTANT: call roam_get_guidelines for this graph once per session before using this tool, reads included — conventions change how results are read, not just written.',
     inputSchema: {
       type: 'object',
       properties: withMultiGraphParams({

@@ -5,6 +5,7 @@ import { RoamBlock, RoamAncestor, RoamBlockWithAncestors } from '../../types/roa
 import { resolveBlockRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import { collectHiddenUids, pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
+import { fetchBlockVersions } from '../helpers/versions.js';
 import { ednString } from '../../shared/datalog.js';
 
 export class BlockRetrievalOperations {
@@ -68,6 +69,11 @@ export class BlockRetrievalOperations {
     const visit = (block: RoamBlock) => { allBlocks.push(block); block.children.forEach(visit); };
     roots.forEach(visit);
     await resolveBlockRefs(this.graph, allBlocks, 2, hidden);
+
+    // One query for all the roots; a set with no versioned block stops there.
+    for (const [uid, versions] of await fetchBlockVersions(this.graph, [...roots.keys()], hidden)) {
+      roots.get(uid)!.versions = versions;
+    }
     return requested.map(uid => roots.get(uid) ?? null);
   }
 
@@ -200,6 +206,11 @@ export class BlockRetrievalOperations {
 
       // Resolve references (max depth 2)
       await resolveBlockRefs(this.graph, allBlocks, 2);
+
+      // Nothing else in a fetch says a block has versions: the text above is
+      // the one in use if this UID is, and an old one if it is not.
+      const versions = (await fetchBlockVersions(this.graph, [block_uid], await collectHiddenUids(this.graph))).get(block_uid);
+      if (versions) rootBlock.versions = versions;
 
       return rootBlock;
     } catch (error) {

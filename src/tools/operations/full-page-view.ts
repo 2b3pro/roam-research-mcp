@@ -4,6 +4,7 @@ import { getPageUid as getPageUidHelper } from '../helpers/page-resolution.js';
 import { resolveRefs } from '../helpers/refs.js';
 import { fetchChildrenByDepth } from '../helpers/fetch-children.js';
 import { collectHiddenUids, pruneHiddenBlocks, isHiddenBlockString } from '../helpers/hidden.js';
+import { collectSupersededUids } from '../helpers/versions.js';
 import { escapeBlockString } from '../../shared/block-escaping.js';
 import type { RoamBlock } from '../types/index.js';
 import type { PageOperations } from './pages.js';
@@ -55,9 +56,14 @@ export class FullPageViewOperations {
     // elsewhere — hence the UID closure rather than a text check alone.
     // Filtered BEFORE the max_references cap so truncation counts what the
     // caller can actually see.
-    const hiddenUids = await collectHiddenUids(this.graph);
+    // A superseded version keeps its `:block/refs`, so an old version of a
+    // block that links here is a backlink too. Only the version in use counts.
+    const [hiddenUids, supersededUids] = await Promise.all([
+      collectHiddenUids(this.graph),
+      collectSupersededUids(this.graph),
+    ]);
     const allUniqueRefs = dedupedRefs.filter(
-      r => !hiddenUids.has(r.block_uid) && !isHiddenBlockString(r.block_str)
+      r => !hiddenUids.has(r.block_uid) && !isHiddenBlockString(r.block_str) && !supersededUids.has(r.block_uid)
     );
     const truncated = allUniqueRefs.length > max_references;
     const uniqueRefs = truncated ? allUniqueRefs.slice(0, max_references) : allUniqueRefs;
