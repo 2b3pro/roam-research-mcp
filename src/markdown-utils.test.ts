@@ -219,6 +219,63 @@ And this--too`;
     });
   });
 
+  describe('convertToRoamMarkdown - a marker with a space inside it is not a marker', () => {
+    // Emphasis and highlight open with a marker that touches the text it wraps
+    // and close with one that touches it too: "*word*", not "* word *". The
+    // converter matched any two markers on a line, so arithmetic, comparisons
+    // and star bullets were rewritten on their way into the graph.
+    it.each([
+      ['spaced asterisks, as in arithmetic', '2 * 3 * 4'],
+      ['asterisks around a bracketed sum', '5 * (3 + 2) * 7'],
+      ['a lone asterisk and a later one that opens nothing', 'wild * card and *glob'],
+      ['an asterisk with a space after it and one at the end of a word', 'a space * inside*'],
+      ['an opening asterisk whose closer has a space before it', '*inside space *'],
+      ['spaced underscores', 'a _ b _ c'],
+      ['an underscore with a space after it', '_ leading space_'],
+      ['an underscore with a space before its closer', '_trailing space _'],
+      ['spaced double equals, as in comparisons', 'if a == b and c == d'],
+      ['double equals with spaces on the inside', '== spaced == text =='],
+    ])('leaves %s as typed', (_label, line) => {
+      expect(convertToRoamMarkdown(line)).toBe(line);
+    });
+
+    it.each([
+      ['a rule made of equals signs', '====='],
+      ['a longer one', '=========='],
+      ['triple equals, as in strict comparisons', 'a === b and c === d'],
+      ['triple equals with nothing around it', 'a===b and c===d'],
+    ])('does not read %s as a highlight', (_label, line) => {
+      expect(convertToRoamMarkdown(line)).toBe(line);
+    });
+
+    it('keeps the bullet of a star-bulleted line that also has emphasis', () => {
+      // The bullet's own asterisk was paired with the opening one of the
+      // emphasis, and the line stopped being a bullet.
+      expect(convertToRoamMarkdown('* item with *emphasis*')).toBe('* item with __emphasis__');
+      expect(parseMarkdown('* item with *emphasis*\n* second item').map((n) => n.content))
+        .toEqual(['item with __emphasis__', 'second item']);
+    });
+
+    it.each([
+      ['asterisk emphasis', 'real *emphasis* here', 'real __emphasis__ here'],
+      ['underscore emphasis', 'real _emphasis_ here', 'real __emphasis__ here'],
+      ['a highlight', 'real ==highlight== here', 'real ^^highlight^^ here'],
+      ['two of each on one line', '*a* and *b*, ==c== and ==d==', '__a__ and __b__, ^^c^^ and ^^d^^'],
+      ['emphasis in brackets and before punctuation', '(*one*) and *two*.', '(__one__) and __two__.'],
+      ['emphasis whose text has a spaced asterisk in it', '*a * b*', '__a * b__'],
+      ['a highlight next to a spaced double equals', '==a== == ==b==', '^^a^^ == ^^b^^'],
+      ['emphasis beside bold', '**bold** and *italic*', '**bold** and __italic__'],
+    ])('still converts %s', (_label, line, expected) => {
+      expect(convertToRoamMarkdown(line)).toBe(expected);
+    });
+
+    it('still leaves bold, and bold wrapped around a spaced asterisk, alone', () => {
+      for (const line of ['**bold**', '***both***', '**bold with * star inside**']) {
+        expect(convertToRoamMarkdown(line)).toBe(line);
+      }
+    });
+  });
+
   describe('nestUnderHeadings', () => {
     const node = (content: string, heading_level = 0, children: MarkdownNode[] = []): MarkdownNode =>
       ({ content, level: 1, heading_level, children });
