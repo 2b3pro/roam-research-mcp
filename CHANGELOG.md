@@ -1,5 +1,16 @@
 # Changelog
 
+### v6.3.1 (2026-11-25)
+
+Reading a page as markdown and writing it back no longer rewrites the headings nested inside it. This is a patch release because it restores what `roam_update_page_markdown` is documented to do: change only what the markdown changes.
+
+- **Nested headings on write-back:** the markdown read renders a heading as its hashes with no bullet, indented to its depth. The parser read that shape as a heading only at the left margin; one level down it kept the hashes as text and set no heading. So a page read with `roam_fetch_page_by_title` and handed back to `roam_update_page_markdown`, with nothing edited, had every heading below the top level turned into a plain block reading `## ...`. A second write-back turned it into a heading again. A heading is now read from its line without the indentation, so it is a heading at any depth. Headings at the top level of a page were not affected, and this is not new in 6.3.0. [#46](https://github.com/2b3pro/roam-research-mcp/pull/46).
+- **Blocks already rewritten:** a block left as `## Inner heading` with no heading is turned back into a heading the next time its page is written back, and now stays one.
+- **Indented headings in imports and saves:** `roam_import_markdown` wrote an indented line of one to three hashes with no bullet as text, hashes included. It is now a heading, as it already was through `roam save`. In both, the lines after it at the same depth go under it, as they do under any heading.
+- **The title line of a read:** a markdown read starts with `# <page title>`. Written back as it was read, on a page with no multi-line block, that line is kept and becomes a new heading block at the top of the page. That is unchanged and deliberate, since a hand-written page may open with a heading that repeats its title. What is new is that `roam_update_page_markdown` says so: its description tells the caller to leave that line out and to keep the rest as it is.
+- **Migration:** none for write-back. A file saved with `roam save`, or content sent to `roam_import_markdown`, that has a heading on an indented line with no bullet now gets the lines after it at that depth nested under it; pass `--flatten` to `roam save` to keep them beside it.
+- **Verification:** all 699 tests pass across 57 files. The test backend had no headings in it, which is why the round-trip tests never met one; it now has two pages with headings, and a new test reads one and writes it back over the real transport. These changes were not run against a live graph.
+
 ### v6.3.0 (2026-11-25)
 
 The CLI and the MCP tools now build tables, headings and nesting the same way, and text that only looks like markup is stored as it was sent. This is a minor release because some inputs behave differently: a batch `table` with uneven rows is refused, text that starts with hashes becomes a heading in two more places, and `roam save` nests what follows a heading in files where it did not before.
