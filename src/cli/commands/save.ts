@@ -4,7 +4,7 @@ import { basename } from 'path';
 import { PageOperations } from '../../tools/operations/pages.js';
 import { TodoOperations } from '../../tools/operations/todos.js';
 import { BatchOperations } from '../../tools/operations/batch.js';
-import { parseMarkdown, generateBlockUid, parseMarkdownHeadingLevel } from '../../markdown-utils.js';
+import { parseMarkdown, nestUnderHeadings, generateBlockUid, parseMarkdownHeadingLevel } from '../../markdown-utils.js';
 import { printDebug, exitWithError } from '../utils/output.js';
 import { resolveGraph, type GraphOptions } from '../utils/graph.js';
 import { readStdin } from '../utils/input.js';
@@ -41,68 +41,6 @@ function flattenNodes(
 
     if (node.children.length > 0) {
       result.push(...flattenNodes(node.children, baseLevel + 1));
-    }
-  }
-
-  return result;
-}
-
-/**
- * Infer hierarchy from heading levels when all blocks are at the same level.
- * This handles prose-style markdown where headings (# ## ###) define structure
- * without explicit indentation.
- *
- * Example: "# Title\n## Chapter\nContent" becomes:
- *   - Title (level 1, H1)
- *     - Chapter (level 2, H2)
- *       - Content (level 3)
- */
-function adjustLevelsForHeadingHierarchy(
-  blocks: Array<{ text: string; level: number; heading?: number }>
-): Array<{ text: string; level: number; heading?: number }> {
-  if (blocks.length === 0) return blocks;
-
-  // Only apply heading-based adjustment when:
-  // 1. All blocks are at the same level (no indentation-based hierarchy)
-  // 2. There are headings present
-  const allSameLevel = blocks.every(b => b.level === blocks[0].level);
-  const hasHeadings = blocks.some(b => b.heading);
-
-  if (!allSameLevel || !hasHeadings) {
-    // Indentation-based hierarchy exists, preserve it
-    return blocks;
-  }
-
-  const result: Array<{ text: string; level: number; heading?: number }> = [];
-
-  // Track heading stack: each entry is { headingLevel: 1|2|3, adjustedLevel: number }
-  const headingStack: Array<{ headingLevel: number; adjustedLevel: number }> = [];
-
-  for (const block of blocks) {
-    if (block.heading) {
-      // Pop headings of same or lower priority (higher h-number)
-      while (
-        headingStack.length > 0 &&
-        headingStack[headingStack.length - 1].headingLevel >= block.heading
-      ) {
-        headingStack.pop();
-      }
-
-      // New heading level is one deeper than parent heading (or 1 if no parent)
-      const adjustedLevel =
-        headingStack.length > 0
-          ? headingStack[headingStack.length - 1].adjustedLevel + 1
-          : 1;
-
-      headingStack.push({ headingLevel: block.heading, adjustedLevel });
-      result.push({ ...block, level: adjustedLevel });
-    } else {
-      // Content: nest under current heading context
-      const adjustedLevel =
-        headingStack.length > 0
-          ? headingStack[headingStack.length - 1].adjustedLevel + 1
-          : 1;
-      result.push({ ...block, level: adjustedLevel });
     }
   }
 
@@ -406,10 +344,12 @@ JSON format (--json):
           }
         } else if (isFile || content.includes('\n')) {
           // Multi-line content: parse as markdown
-          const nodes = parseMarkdown(content) as MarkdownNode[];
-          const flattened = flattenNodes(nodes);
-          // Apply heading hierarchy unless --flatten is specified
-          contentBlocks = options.flatten ? flattened : adjustLevelsForHeadingHierarchy(flattened);
+          const nodes = parseMarkdown(content);
+          // What follows a heading goes under it, unless --flatten asks for
+          // only the nesting the indentation gives. This is the rule
+          // roam_import_markdown uses. `save` had one of its own, which gave
+          // up as soon as any line in the file was indented.
+          contentBlocks = flattenNodes(options.flatten ? nodes : nestUnderHeadings(nodes));
         } else {
           // Single line text: detect heading syntax and strip hashes
           const { heading_level, content: strippedContent } = parseMarkdownHeadingLevel(content);

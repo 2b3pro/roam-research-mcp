@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,7 +25,7 @@ interface Write {
   action: string;
   page?: { title: string };
   location?: { 'parent-uid': string };
-  block?: { uid: string; string: string };
+  block?: { uid: string; string: string; heading?: number };
   actions?: Write[];
 }
 
@@ -336,5 +336,100 @@ describe('roam save --help', () => {
     expect(text).toMatch(/--parent[^.]*never a UID/i);
     expect(text).toMatch(/\(\(uid\)\)[^.]*(containing|contains) that reference/i);
     expect(text).toContain('--parent-uid');
+  });
+});
+
+describe('roam save: what follows a heading goes under it', () => {
+  let fileCount = 0;
+
+  /** Save `markdown` from a file, which is how multi-line content reaches `save`. */
+  function saveMarkdown(markdown: string, ...flags: string[]): Run {
+    const file = join(scratch, `nesting-${fileCount++}.md`);
+    writeFileSync(file, markdown);
+    return save(file, ...flags);
+  }
+
+  /** The one block this run created with this text. */
+  function created(run: Run, text: string): Write {
+    const found = run.blocks.filter((b) => b.block?.string === text);
+    expect(found, `blocks with text "${text}"`).toHaveLength(1);
+    return found[0];
+  }
+
+  const parentOf = (run: Run, text: string) => created(run, text).location?.['parent-uid'];
+  const uidOf = (run: Run, text: string) => created(run, text).block?.uid;
+
+  // roam_import_markdown has always nested whatever follows a heading under
+  // it. `save` had a narrower rule of its own, which only applied when nothing
+  // in the file was indented: one indented line anywhere and every heading was
+  // left with nothing under it.
+  const headingThenBullets = '# Title\n- Point one\n  - Detail\n- Point two';
+
+  it('nests indented bullets under the heading above them', () => {
+    const run = saveMarkdown(headingThenBullets, '--page', 'Test Page');
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(created(run, 'Title').block?.heading).toBe(1);
+    expect(parentOf(run, 'Title')).toBe('page00001');
+    expect(parentOf(run, 'Point one')).toBe(uidOf(run, 'Title'));
+    expect(parentOf(run, 'Detail')).toBe(uidOf(run, 'Point one'));
+    expect(parentOf(run, 'Point two')).toBe(uidOf(run, 'Title'));
+  });
+
+  it('does the same when the file becomes a new page', () => {
+    const run = saveMarkdown(headingThenBullets, '--title', 'Save Nesting Page');
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(parentOf(run, 'Point one')).toBe(uidOf(run, 'Title'));
+    expect(parentOf(run, 'Detail')).toBe(uidOf(run, 'Point one'));
+    expect(parentOf(run, 'Point two')).toBe(uidOf(run, 'Title'));
+  });
+
+  it('nests under a heading that sits inside indented structure', () => {
+    const run = saveMarkdown('- Group\n  - ## Inner heading\n  - Inner line', '--page', 'Test Page');
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(parentOf(run, 'Group')).toBe('page00001');
+    expect(parentOf(run, 'Inner heading')).toBe(uidOf(run, 'Group'));
+    expect(parentOf(run, 'Inner line')).toBe(uidOf(run, 'Inner heading'));
+  });
+
+  it('still nests flush-left paragraphs and deeper headings under their headings', () => {
+    const run = saveMarkdown(
+      '## Section A\nPara under A\n### Sub A1\nPara under A1\n## Section B\nPara under B',
+      '--page', 'Test Page',
+    );
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(parentOf(run, 'Section A')).toBe('page00001');
+    expect(parentOf(run, 'Para under A')).toBe(uidOf(run, 'Section A'));
+    expect(parentOf(run, 'Sub A1')).toBe(uidOf(run, 'Section A'));
+    expect(parentOf(run, 'Para under A1')).toBe(uidOf(run, 'Sub A1'));
+    expect(parentOf(run, 'Section B')).toBe('page00001');
+    expect(parentOf(run, 'Para under B')).toBe(uidOf(run, 'Section B'));
+  });
+
+  it('leaves what comes before the first heading at the top', () => {
+    const run = saveMarkdown('Intro line\n# Title\nBody line', '--page', 'Test Page');
+
+    expect(run.code).toBe(0);
+    expect(parentOf(run, 'Intro line')).toBe('page00001');
+    expect(parentOf(run, 'Title')).toBe('page00001');
+    expect(parentOf(run, 'Body line')).toBe(uidOf(run, 'Title'));
+  });
+
+  it('--flatten keeps every block where its indentation puts it', () => {
+    const run = saveMarkdown(headingThenBullets, '--page', 'Test Page', '--flatten');
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(parentOf(run, 'Title')).toBe('page00001');
+    expect(parentOf(run, 'Point one')).toBe('page00001');
+    expect(parentOf(run, 'Detail')).toBe(uidOf(run, 'Point one'));
+    expect(parentOf(run, 'Point two')).toBe('page00001');
   });
 });
