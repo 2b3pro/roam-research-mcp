@@ -167,6 +167,7 @@ interface SaveOptions extends GraphOptions {
   todo?: string | boolean;   // TODO item text or flag for stdin
   json?: boolean;            // Force JSON format interpretation
   flatten?: boolean;         // Disable heading hierarchy inference
+  nest?: boolean;            // With --update: nest what follows a heading under it
   lines?: boolean;           // Treat each non-empty line as a separate block (skip markdown parsing)
   order?: string;            // Insertion position: "first", "last", or integer (default: "last")
 }
@@ -191,6 +192,7 @@ export function createSaveCommand(): Command {
     .option('-t, --todo [text]', 'Add TODO item(s) to daily page. Accepts inline text or stdin')
     .option('--json', 'Force JSON array format: [{text, level, heading?}, ...]')
     .option('--flatten', 'Disable heading hierarchy inference (all blocks at root level)')
+    .option('--nest', 'With --update: put what follows a heading under it, as a save without --update does')
     .option('--lines', 'Treat each non-empty line as a separate block (bypass markdown parsing)')
     .option('--order <position>', 'Insertion position for top-level blocks: "first", "last", or integer (default: "last")')
     .option('-g, --graph <name>', 'Target graph key (multi-graph mode)')
@@ -254,6 +256,12 @@ JSON format (--json):
 `)
     .action(async (input: string | undefined, options: SaveOptions) => {
       try {
+        // --nest only changes how --update reads a file. Anywhere else it would be
+        // accepted and do nothing, which reads as if it had worked.
+        if (options.nest && !options.update) {
+          exitWithError('--nest only applies with --update. A save without --update already puts what follows a heading under it; --flatten turns that off.');
+        }
+
         // TODO mode: add a TODO item to today's daily page
         if (options.todo !== undefined) {
           let todoText: string;
@@ -460,7 +468,9 @@ JSON format (--json):
             if (isJson) {
               exitWithError('--update is not supported with JSON content');
             }
-            const result = await pageOps.updatePageMarkdown(pageTitle, content, false);
+            const result = await pageOps.updatePageMarkdown(pageTitle, content, false, {
+              nestUnderHeadings: options.nest === true
+            });
 
             if (result.success) {
               console.log(`Updated page '${pageTitle}'`);

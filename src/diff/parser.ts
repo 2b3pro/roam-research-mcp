@@ -6,7 +6,7 @@
  */
 
 import type { ExistingBlock, RoamApiBlock, NewBlock, BlockRef } from './types.js';
-import { generateBlockUid, parseMarkdown, convertToRoamMarkdown } from '../markdown-utils.js';
+import { generateBlockUid, parseMarkdown, nestUnderHeadings, convertToRoamMarkdown } from '../markdown-utils.js';
 import { isHiddenBlockString } from '../tools/helpers/hidden.js';
 
 /**
@@ -133,11 +133,20 @@ export function flattenExistingBlocks(blocks: ExistingBlock[]): ExistingBlock[] 
  *
  * @param markdown - GFM markdown content
  * @param pageUid - UID of the page (used as root parent)
+ * @param options.nestUnderHeadings - Put what follows a heading under it, as
+ *   the create paths do. Off by default: a page that was read and is being
+ *   written back may keep blocks beside a heading on purpose, and the read
+ *   shows those at the same depth as the heading.
  * @returns Array of NewBlock structures representing desired state
  */
-export function markdownToBlocks(markdown: string, pageUid: string): NewBlock[] {
+export function markdownToBlocks(
+  markdown: string,
+  pageUid: string,
+  options: { nestUnderHeadings?: boolean } = {}
+): NewBlock[] {
   // Parse markdown into nested structure
-  const nodes = parseMarkdown(markdown);
+  const parsed = parseMarkdown(markdown);
+  const nodes = options.nestUnderHeadings ? nestUnderHeadings(parsed) : parsed;
   const blocks: NewBlock[] = [];
 
   // Track parent refs by level for nesting
