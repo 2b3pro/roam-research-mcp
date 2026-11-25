@@ -310,13 +310,21 @@ export class PageOperations {
           }
 
           // Convert to node format with level info
-          const nodes = normalizedContent.map(block => ({
-            content: convertToRoamMarkdown(block.text.replace(/^#+\s+/, '')),
-            level: block.level,
-            ...(block.heading && { heading_level: block.heading }),
-            ...(block.numbered_children && { children_view_type: 'numbered' as const }),
-            children: [] as any[]
-          }));
+          const nodes = normalizedContent.map(block => {
+            // One to three hashes at the start of the text are a heading, as
+            // they are wherever else block text is written; `heading` decides
+            // when both are given. The hashes used to be removed and the
+            // heading with them, leaving a plain block.
+            const hashes = block.text.match(/^(#{1,3})\s+/);
+            const heading = block.heading || hashes?.[1].length;
+            return {
+              content: convertToRoamMarkdown(block.text.replace(/^#+\s+/, '')),
+              level: block.level,
+              ...(heading && { heading_level: heading }),
+              ...(block.numbered_children && { children_view_type: 'numbered' as const }),
+              children: [] as any[]
+            };
+          });
 
           // Create hierarchical structure based on levels
           const rootNodes: any[] = [];
