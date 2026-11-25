@@ -395,3 +395,41 @@ describe('a page with headings reads and writes back unchanged', () => {
     expect(actions, `unexpected actions: ${JSON.stringify(actions, null, 2)}`).toEqual([]);
   });
 });
+
+describe('the title line of a markdown read', () => {
+  // The read starts with `# <page title>`. On a page with no multi-line block
+  // nothing marks the text as the renderer's own, and the write path will not
+  // guess: a hand-written page may open with a heading that repeats its title,
+  // and dropping that line would delete the block. So the line is kept, and a
+  // caller who hands the read straight back gets a new heading block at the
+  // top. The caller is the one who knows where the text came from, so the tool
+  // has to say what to do with that line.
+  it('becomes a heading block when the read is written back with it', async () => {
+    const markdown = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', { title: 'Top Heading Fixture', format: 'markdown' })
+    );
+    expect(markdown.split('\n')[0]).toBe('# Top Heading Fixture');
+
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_update_page_markdown', {
+          title: 'Top Heading Fixture',
+          markdown,
+          dry_run: true,
+        })
+      )
+    );
+
+    const creates = result.actions.filter((a: { action: string }) => a.action === 'create-block');
+    expect(creates).toHaveLength(1);
+    expect(creates[0].block).toMatchObject({ string: 'Top Heading Fixture', heading: 1 });
+    expect(result.stats).toMatchObject({ updates: 0, deletes: 0 });
+  });
+
+  it('is something roam_update_page_markdown tells the caller to leave out', async () => {
+    const tool = (await harness.list()).find((t) => t.name === 'roam_update_page_markdown');
+
+    expect(tool?.description).toContain('roam_fetch_page_by_title');
+    expect(tool?.description).toContain('`# <page title>`');
+  });
+});
