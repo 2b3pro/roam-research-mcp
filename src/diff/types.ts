@@ -16,6 +16,8 @@ export interface ExistingBlock {
   text: string;
   order: number;
   heading: number | null;
+  /** How the block shows its children, when Roam has it set: "numbered", "document" or "bullet". */
+  childrenViewType?: string | null;
   children: ExistingBlock[];
   parentUid: string | null;
 }
@@ -39,6 +41,12 @@ export interface NewBlock {
   order: number | 'last';
   open: boolean;
   heading: number | null;
+  /**
+   * Set when the markdown wrote this block's children as a numbered list.
+   * Never set to say "not numbered": the markdown read shows every list as
+   * bullets, so bullets in the markdown say nothing about the setting.
+   */
+  childrenViewType?: 'numbered';
 }
 
 /**
@@ -74,6 +82,7 @@ export interface RoamApiBlock {
   ':block/string'?: string;
   ':block/order'?: number;
   ':block/heading'?: number | null;
+  ':children/view-type'?: string | null;
   ':block/children'?: RoamApiBlock[];
   [key: string]: unknown;
 }

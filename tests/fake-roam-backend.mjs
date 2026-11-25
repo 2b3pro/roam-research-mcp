@@ -58,6 +58,8 @@ const PAGES = {
   // writing it back. The second has headings at the top level only.
   'Heading Fixture': 'headPg001',
   'Top Heading Fixture': 'headPg002',
+  // A page with one numbered list and one plain one.
+  'Numbered Fixture': 'numPg0001',
 };
 
 /**
@@ -215,6 +217,24 @@ BLOCKS.headPg002 = [
   ['hdtop0002', 'Control section two', 1, 'headPg002'],
 ];
 
+/**
+ * A numbered list is a setting on the PARENT: its `:children/view-type` is
+ * "numbered", and the items under it are ordinary blocks with no number in
+ * their text.
+ */
+BLOCKS.numPg0001 = [
+  ['numsteps1', 'Numbered steps', 0, 'numPg0001'],
+  ['numone001', 'Step one', 0, 'numsteps1'],
+  ['numtwo001', 'Step two', 1, 'numsteps1'],
+  ['numplain1', 'Plain list', 1, 'numPg0001'],
+  ['numitem01', 'Item one', 0, 'numplain1'],
+];
+
+/** uid -> how the block shows its children. Unlisted means bullets. */
+const VIEW_TYPES = {
+  numsteps1: 'numbered',
+};
+
 /** uid -> heading level (1-3). A block that is not listed is not a heading. */
 const HEADINGS = {
   hdinner01: 2,
@@ -371,6 +391,7 @@ function pullTree(uid) {
         ':block/string': str,
         ':block/order': order,
         ...(HEADINGS[childUid] && { ':block/heading': HEADINGS[childUid] }),
+        ...(VIEW_TYPES[childUid] && { ':children/view-type': VIEW_TYPES[childUid] }),
       };
       const grandchildren = pullTree(childUid);
       if (grandchildren.length > 0) node[':block/children'] = grandchildren;
