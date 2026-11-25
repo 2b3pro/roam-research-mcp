@@ -112,6 +112,15 @@ export function diffBlockTrees(
         }
       }
 
+      // A numbered list in the markdown makes its parent numbered. Set-only:
+      // items written as bullets never clear the setting, because the read
+      // shows every list as bullets and a page written back as it was read
+      // would lose its numbered lists.
+      if (newBlock.childrenViewType === 'numbered' && existBlock.childrenViewType !== 'numbered') {
+        (updateAction as any).block['children-view-type'] = 'numbered';
+        needsUpdate = true;
+      }
+
       if (needsUpdate) {
         result.updates.push(updateAction);
       }
@@ -150,6 +159,9 @@ export function diffBlockTrees(
       }
       if (newBlock.open !== undefined) {
         (createAction as any).block.open = newBlock.open;
+      }
+      if (newBlock.childrenViewType === 'numbered') {
+        (createAction as any).block['children-view-type'] = 'numbered';
       }
 
       result.creates.push(createAction);

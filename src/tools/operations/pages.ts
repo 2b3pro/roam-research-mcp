@@ -882,6 +882,7 @@ export class PageOperations {
                             :block/string
                             :block/order
                             :block/heading
+                            :children/view-type
                             {:block/children ...}
                           ]) .
                           :where [?page :block/uid ${ednString(pageUid)}]]`;

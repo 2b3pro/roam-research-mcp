@@ -34,6 +34,8 @@ export function parseExistingBlock(
     text: roamBlock[':block/string'] ?? '',
     order: roamBlock[':block/order'] ?? 0,
     heading: roamBlock[':block/heading'] ?? null,
+    // A keyword in Roam; it has been seen as "numbered" and is accepted as ":numbered" too.
+    childrenViewType: roamBlock[':children/view-type']?.replace(/^:/, '') ?? null,
     children,
     parentUid,
   };
@@ -147,6 +149,7 @@ export function markdownToBlocks(markdown: string, pageUid: string): NewBlock[] 
     content: string;
     level: number;
     heading_level?: number;
+    children_view_type?: 'bullet' | 'document' | 'numbered';
     children: MarkdownNode[];
   }
 
@@ -168,6 +171,7 @@ export function markdownToBlocks(markdown: string, pageUid: string): NewBlock[] 
       order: siblingIndex,
       open: true,
       heading: node.heading_level ?? null,
+      ...(node.children_view_type === 'numbered' && { childrenViewType: 'numbered' as const }),
     };
 
     blocks.push(newBlock);
