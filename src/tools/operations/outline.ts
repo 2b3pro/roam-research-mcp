@@ -11,6 +11,7 @@ import {
   convertToRoamActions,
   convertToRoamActionsWithBlocks,
   convertToRoamMarkdown,
+  parseMarkdownHeadingLevel,
   hasMarkdownTable,
   type BatchAction,
   type BlockInfo,
@@ -541,24 +542,29 @@ export class OutlineOperations {
         created_blocks: blockInfoToNestedBlocks(blocks)
       };
     } else {
-      // Create a simple block for non-nested content
+      // Create a simple block for non-nested content. One line can still be a
+      // heading: "## Title" is one in longer content, and was written here as
+      // typed, hashes and all. Anything else is still written as typed.
+      const { heading_level, content: headingText } = parseMarkdownHeadingLevel(content);
+      const text = heading_level > 0 ? headingText : content;
+
       await executeBatch(this.graph, [{
         action: 'create-block',
         location: {
           "parent-uid": targetParentUid,
           "order": order
         },
-        block: { string: content }
+        block: { string: text, ...(heading_level > 0 && { heading: heading_level }) }
       }], 'create content block');
 
       // For single-line content, we still need to fetch the UID and construct a NestedBlock
       const createdBlocks: NestedBlock[] = [];
       try {
-        const foundUid = await this.findBlockWithRetry(targetParentUid, content);
+        const foundUid = await this.findBlockWithRetry(targetParentUid, text);
         if (foundUid) {
           createdBlocks.push({
             uid: foundUid,
-            text: content,
+            text,
             level: 0,
             order: 0,
             children: []
