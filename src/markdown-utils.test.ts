@@ -276,6 +276,43 @@ And this--too`;
     });
   });
 
+  describe('parseMarkdown - a heading on an indented line', () => {
+    // The markdown read writes a heading as its hashes with no bullet, indented
+    // to its depth. That shape was read as a heading only at the left margin.
+    const shape = (nodes: MarkdownNode[]): unknown[] =>
+      nodes.map((n) => [n.content, n.heading_level ?? 0, shape(n.children)]);
+
+    it('reads hashes on an indented line with no bullet as a heading', () => {
+      const nodes = parseMarkdown('- Group\n  ## Inner heading\n    - Inner line\n- Tail');
+
+      expect(shape(nodes)).toEqual([
+        ['Group', 0, [['Inner heading', 2, [['Inner line', 0, []]]]]],
+        ['Tail', 0, []],
+      ]);
+    });
+
+    it('reads one under another heading', () => {
+      const nodes = parseMarkdown('## Section\n  ### Subsection\n    - Paragraph');
+
+      expect(shape(nodes)).toEqual([
+        ['Section', 2, [['Subsection', 3, [['Paragraph', 0, []]]]]],
+      ]);
+    });
+
+    it('still reads a heading at the left margin, and one written after a bullet', () => {
+      expect(shape(parseMarkdown('## Flush left\n- Parent\n  - ### After a bullet'))).toEqual([
+        ['Flush left', 2, []],
+        ['Parent', 0, [['After a bullet', 3, []]]],
+      ]);
+    });
+
+    it('does not make a heading of four hashes or of a tag, indented or not', () => {
+      expect(shape(parseMarkdown('- Parent\n  #### Too deep\n  #tag first'))).toEqual([
+        ['Parent', 0, [['#### Too deep', 0, []], ['#tag first', 0, []]]],
+      ]);
+    });
+  });
+
   describe('nestUnderHeadings', () => {
     const node = (content: string, heading_level = 0, children: MarkdownNode[] = []): MarkdownNode =>
       ({ content, level: 1, heading_level, children });

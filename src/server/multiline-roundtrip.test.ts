@@ -341,3 +341,57 @@ describe('a zero-block parse of non-empty markdown refuses to write, rather than
     expect(() => JSON.parse(text)).toThrow();
   });
 });
+
+describe('a page with headings reads and writes back unchanged', () => {
+  // The fixture had no headings at all until these two pages, so nothing above
+  // ever handed a heading to the write path.
+  //
+  // The markdown read renders a heading as its hashes with no bullet, indented
+  // to its depth. The parser read that shape as a heading only at the left
+  // margin: one level down it kept the hashes as text and dropped the heading,
+  // so writing a page back turned every nested heading into a plain block
+  // reading "## ...". No edit was needed for it to happen.
+  const roundTrip = async (title: string) => {
+    const markdown = McpHarness.text(
+      await harness.call('roam_fetch_page_by_title', { title, format: 'markdown' })
+    );
+    const result = JSON.parse(
+      McpHarness.text(
+        await harness.call('roam_update_page_markdown', {
+          title,
+          markdown: bodyOf(markdown),
+          dry_run: true,
+        })
+      )
+    );
+    return { markdown, actions: result.actions as { action: string; block?: { string?: string } }[] };
+  };
+
+  it('is read with a nested heading as an indented line of hashes, no bullet', async () => {
+    const { markdown } = await roundTrip('Heading Fixture');
+
+    expect(markdown.split('\n')).toEqual([
+      '# Heading Fixture',
+      '',
+      '- Roundtrip group',
+      '  ## Roundtrip inner heading',
+      '    - Line under the inner heading',
+      '## Roundtrip section',
+      '  ### Roundtrip subsection',
+      '    - Paragraph under the subsection',
+      '- Roundtrip tail',
+    ]);
+  });
+
+  it('plans nothing for a heading nested under a plain block or under another heading', async () => {
+    const { actions } = await roundTrip('Heading Fixture');
+
+    expect(actions, `unexpected actions: ${JSON.stringify(actions, null, 2)}`).toEqual([]);
+  });
+
+  it('plans nothing when every heading is at the top level', async () => {
+    const { actions } = await roundTrip('Top Heading Fixture');
+
+    expect(actions, `unexpected actions: ${JSON.stringify(actions, null, 2)}`).toEqual([]);
+  });
+});
