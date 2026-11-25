@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { BatchOperations } from '../../tools/operations/batch.js';
 import { PageOperations } from '../../tools/operations/pages.js';
 import { printDebug, exitWithError } from '../utils/output.js';
-import { resolveGraph, type GraphOptions } from '../utils/graph.js';
+import { resolveGraph, getRegistry, type GraphOptions } from '../utils/graph.js';
 import type { BatchCommand, PageCommand } from '../batch/types.js';
 import type { BatchResult } from '../../tools/operations/batch.js';
 import {
@@ -223,7 +223,7 @@ Command schemas:
   page:      {title, as?, content?: [{text, level, heading?}...]}
   outline:   {parent, items: [string | {text, level?, heading?, as?}...]}
   table:     {parent, headers: [string...], rows: [{label, cells: [string...]}...]}
-  remember:  {text, categories?: [string...]}
+  remember:  {text, categories?: [string...], include_memories_tag?}
   codeblock: {parent, code, language?}
 
 Parent accepts: block UID, "daily" (today's daily page), page title, or {{placeholder}}
@@ -293,6 +293,7 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
         // Simulate mode: validate structure without connecting to Roam
         if (options.simulate) {
           const context = createResolutionContext();
+          context.memoriesTag = getRegistry().getMemoriesTag(options.graph);
           // Nothing is looked up offline, so every page a command names gets a
           // stand-in UID. Without one, a page title, "daily" or a bare todo
           // could not be translated and failed as if the input were wrong.
@@ -323,6 +324,7 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
 
         // Phase 1: Collect and resolve page titles (from 'page' AND 'parent' params)
         const context = createResolutionContext();
+        context.memoriesTag = getRegistry().getMemoriesTag(options.graph);
         const pageTitles = collectPageTitles(commands);
         // Pages a dry run found missing: reported in the plan, never created.
         const missingPages: string[] = [];

@@ -465,3 +465,43 @@ describe('roam batch: codeblock', () => {
     expect(blockWithText(run, '```python\nx = 1\n```').location['parent-uid']).toBe('page00001');
   });
 });
+
+describe('roam batch: remember', () => {
+  // roam_remember ends a memory with the graph's memories tag, which is how
+  // roam_recall finds it again. `remember` in a batch wrote the text and the
+  // categories and left the tag off, so the memory was saved where recall
+  // would not look.
+  it('ends the memory with the memories tag, as roam_remember does', () => {
+    const run = batch([{ command: 'remember', params: { text: 'Likes green tea' } }]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    blockWithText(run, 'Likes green tea #Memories');
+  });
+
+  it('writes categories the way roam_remember does, before the memories tag', () => {
+    const run = batch([
+      { command: 'remember', params: { text: 'Prefers trains', categories: ['travel', 'long trips'] } },
+    ]);
+
+    expect(run.code).toBe(0);
+    blockWithText(run, 'Prefers trains #travel #[[long trips]] #Memories');
+  });
+
+  it('leaves the tag off when include_memories_tag is false', () => {
+    const run = batch([
+      { command: 'remember', params: { text: 'Untagged note', categories: ['misc'], include_memories_tag: false } },
+    ]);
+
+    expect(run.code).toBe(0);
+    blockWithText(run, 'Untagged note #misc');
+  });
+
+  it('plans the tag offline too', () => {
+    const run = batch([{ command: 'remember', params: { text: 'Planned memory' } }], '--dry-run');
+
+    expect(run.code).toBe(0);
+    expect(run.writes).toEqual([]);
+    expect(run.stdout).toContain('text: "Planned memory #Memories"');
+  });
+});

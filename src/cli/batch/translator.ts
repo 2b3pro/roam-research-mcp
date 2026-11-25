@@ -23,8 +23,8 @@ import {
   generatePlaceholder,
   getDailyPageTitle
 } from './resolver.js';
-import { sanitizeTagName } from '../../utils/helpers.js';
 import { buildTableActions } from '../../tools/operations/table.js';
+import { formatMemoryText } from '../../tools/operations/memory.js';
 
 /**
  * Translate a single command to batch actions
@@ -376,18 +376,13 @@ function translateOutline(cmd: OutlineCommand, context: ResolutionContext): Batc
 function translateRemember(cmd: RememberCommand, context: ResolutionContext): BatchAction[] {
   const { params } = cmd;
 
-  // Build memory text with categories (strip any pre-existing # or [[ ]] wrappers)
-  let memoryText = params.text;
-  if (params.categories && params.categories.length > 0) {
-    const tags = params.categories.map(raw => {
-      const cat = sanitizeTagName(raw);
-      return `#[[${cat}]]`;
-    }).join(' ');
-    memoryText = `${params.text} ${tags}`;
-  }
-
-  // Add ROAM_MEMORIES_TAG if configured (we'll handle this in the CLI command)
-  // For now, just create the block
+  // The same text roam_remember writes: categories, then the memories tag
+  // roam_recall finds the memory by.
+  const memoryText = formatMemoryText(
+    params.text,
+    params.categories,
+    params.include_memories_tag === false ? null : context.memoriesTag
+  );
 
   let parentUid: string;
 

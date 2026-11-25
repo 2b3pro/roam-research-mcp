@@ -178,7 +178,8 @@ export function createResolutionContext(): ResolutionContext {
     levelStack: [],
     currentParent: null,
     dailyPageUid: null,
-    internalNames: 0
+    internalNames: 0,
+    memoriesTag: null
   };
 }
 

@@ -11,6 +11,33 @@ import { executeBatch } from '../helpers/batch-utils.js';
 import { SearchOperations } from './search/index.js';
 import type { SearchResult } from '../types/index.js';
 
+/**
+ * The text of a memory block: the memory, its categories as tags, then the
+ * memories tag that roam_recall finds it by. `memoriesTag` is null when the
+ * graph has the tag turned off or the caller asked to leave it out.
+ *
+ * One function, so roam_remember and `remember` in `roam batch` write the same
+ * block. The batch command had its own copy, which left the memories tag off.
+ */
+export function formatMemoryText(
+  memory: string,
+  categories: string[] | undefined,
+  memoriesTag: string | null
+): string {
+  const memoriesTagFormatted = memoriesTag
+    ? (memoriesTag.includes(' ') || memoriesTag.includes('/') ? `#[[${memoriesTag}]]` : `#${memoriesTag}`)
+    : undefined;
+
+  // Strip any pre-existing # or [[ ]] wrappers from the categories
+  const categoryTags = categories?.map(raw => {
+    const cat = sanitizeTagName(raw);
+    return cat.includes(' ') ? `#[[${cat}]]` : `#${cat}`;
+  }) ?? [];
+
+  const tags = memoriesTagFormatted ? [...categoryTags, memoriesTagFormatted] : categoryTags;
+  return [memory, ...tags].join(' ').trim();
+}
+
 export class MemoryOperations {
   private searchOps: SearchOperations;
   private memoriesTag: string | null;
@@ -64,23 +91,8 @@ export class MemoryOperations {
       targetParentUid = pageUid;
     }
 
-    // Get memories tag (use instance property) and format as Roam tag
     // If memoriesTag is null (disabled for this graph), treat as if include_memories_tag is false
-    const memoriesTagFormatted: string | undefined = (include_memories_tag && this.memoriesTag)
-      ? (this.memoriesTag.includes(' ') || this.memoriesTag.includes('/')
-          ? `#[[${this.memoriesTag}]]`
-          : `#${this.memoriesTag}`)
-      : undefined;
-
-    // Format categories as Roam tags if provided (strip any pre-existing # or [[ ]] wrappers)
-    const categoryTags = categories?.map(raw => {
-      const cat = sanitizeTagName(raw);
-      return cat.includes(' ') ? `#[[${cat}]]` : `#${cat}`;
-    }) ?? [];
-
-    // Create block with memory, then all tags together at the end
-    const tags = memoriesTagFormatted ? [...categoryTags, memoriesTagFormatted] : categoryTags;
-    const blockContent = [memory, ...tags].join(' ').trim();
+    const blockContent = formatMemoryText(memory, categories, include_memories_tag ? this.memoriesTag : null);
 
     // Pre-generate UID so we can return it
     const blockUid = generateBlockUid();
