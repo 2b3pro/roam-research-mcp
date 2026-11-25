@@ -129,14 +129,22 @@ function convertToRoamMarkdown(text: string): string {
   text = text.replace(/\*\*(.+?)\*\*/g, '**$1**');  // Preserve double asterisks
 
   // Handle single asterisks/underscores (italic)
-  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '__$1__');  // Single asterisk to double underscore
+  //
+  // A marker only opens emphasis when the text it wraps starts right after it,
+  // and only closes it when that text ends right before it: "*word*", never
+  // "* word *". Without that rule any two markers on a line were a pair, so
+  // "2 * 3 * 4" became "2 __ 3 __ 4", and a star bullet's own asterisk was
+  // paired with the emphasis later on its line. The same holds for highlights
+  // below ("if a == b and c == d").
+  text = text.replace(/(?<!\*)\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)/g, '__$1__');  // Single asterisk to double underscore
   // Single underscore to italic, but only at word boundaries. Underscores flanked by
   // word chars (\w includes _) are literal per CommonMark, so snake_case filenames and
   // URLs like /wiki/Ning_Li_(physicist) are left intact instead of becoming __Li__.
-  text = text.replace(/(?<!\w)_(?!_)(.+?)_(?!\w)/g, '__$1__');
+  text = text.replace(/(?<!\w)_(?![\s_])(.+?)(?<!\s)_(?!\w)/g, '__$1__');
 
-  // Handle highlights
-  text = text.replace(/==(.+?)==/g, '^^$1^^');
+  // Handle highlights. Exactly two equals signs make a marker: a longer run is
+  // a rule ("=====") or a comparison ("a === b"), not a highlight.
+  text = text.replace(/(?<!=)==(?![\s=])(.+?)(?<![\s=])==(?!=)/g, '^^$1^^');
 
   // Convert tasks
   text = text.replace(/- \[ \]/g, '- {{[[TODO]]}}');
