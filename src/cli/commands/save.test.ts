@@ -37,6 +37,8 @@ interface Run {
   blocks: Write[];
   /** Every create-page the process sent. */
   pages: Write[];
+  /** Every move-block the process sent. */
+  moves: Write[];
 }
 
 let scratch: string;
@@ -87,6 +89,7 @@ function save(...args: string[]): Run {
     stderr: result.stderr,
     blocks: flat.filter((w) => w.action === 'create-block'),
     pages: flat.filter((w) => w.action === 'create-page'),
+    moves: flat.filter((w) => w.action === 'move-block'),
   };
 }
 
@@ -431,5 +434,51 @@ describe('roam save: what follows a heading goes under it', () => {
     expect(parentOf(run, 'Point one')).toBe('page00001');
     expect(parentOf(run, 'Detail')).toBe(uidOf(run, 'Point one'));
     expect(parentOf(run, 'Point two')).toBe('page00001');
+  });
+});
+
+describe('roam save --update --nest', () => {
+  // A save without --update puts what follows a heading under it. --update
+  // takes the file as written, because it also has to write back a page that
+  // was read, and such a page may keep blocks beside a heading on purpose. So
+  // a file with its headings at the left margin, saved and then updated, had
+  // every block moved out from under its heading. --nest asks the update to
+  // read the file the way the first save did.
+  //
+  // Fixture: "Top Heading Fixture" has "Paragraph under control section one"
+  // nested under the heading "Control section one".
+  const flushLeft = '## Control section one\nParagraph under control section one\n## Control section two';
+  let fileCount = 0;
+
+  function update(...flags: string[]): Run {
+    const file = join(scratch, `nest-${fileCount++}.md`);
+    writeFileSync(file, flushLeft);
+    return save(file, '--title', 'Top Heading Fixture', '--update', ...flags);
+  }
+
+  it('without --nest, moves the paragraph out from under its heading', () => {
+    const run = update();
+
+    expect(run.code).toBe(0);
+    expect(run.moves.map((w) => w.block?.uid)).toContain('hdtoppar1');
+  });
+
+  it('with --nest, leaves the page as it is', () => {
+    const run = update('--nest');
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(run.moves).toEqual([]);
+    expect(run.blocks).toEqual([]);
+  });
+
+  it('refuses --nest without --update, where it would mean nothing', () => {
+    const file = join(scratch, `nest-${fileCount++}.md`);
+    writeFileSync(file, flushLeft);
+    const run = save(file, '--page', 'Test Page', '--nest');
+
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain('--nest');
+    expect(run.blocks).toEqual([]);
   });
 });

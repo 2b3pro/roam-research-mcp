@@ -846,7 +846,8 @@ export class PageOperations {
   async updatePageMarkdown(
     title: string,
     markdown: string,
-    dryRun: boolean = false
+    dryRun: boolean = false,
+    options: { nestUnderHeadings?: boolean } = {}
   ): Promise<{
     success: boolean;
     actions: any[];
@@ -983,7 +984,7 @@ export class PageOperations {
     // parsing. Decoding the document first would turn every `\n` into a real
     // newline and then split on newlines, which is exactly the flattening
     // bug this whole effort exists to fix.
-    const newBlocks = markdownToBlocks(effectiveMarkdown, pageUid);
+    const newBlocks = markdownToBlocks(effectiveMarkdown, pageUid, options);
 
     // Submitting empty/whitespace markdown is the documented way to clear a
     // page, and stays untouched below. This guards the DIFFERENT case: markdown
