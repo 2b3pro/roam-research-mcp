@@ -21,6 +21,7 @@ import {
   bindPagePlaceholders
 } from '../batch/translator.js';
 import { readStdin } from '../utils/input.js';
+import { validateTableInput, type TableInput } from '../../tools/operations/table.js';
 
 interface BatchOptions extends GraphOptions {
   debug?: boolean;
@@ -86,6 +87,20 @@ function validateCommands(commands: unknown[]): BatchCommand[] {
         normalizeOutlineItems(params.items);
       } catch (err) {
         throw new Error(`[${i}] outline: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    // A table is checked the way roam_create_table checks it, so the two
+    // refuse the same tables, and here rather than partway through a write.
+    if (cmdType === 'table') {
+      const check = validateTableInput({
+        parent_uid: String(params.parent),
+        headers: params.headers,
+        rows: params.rows
+      } as TableInput);
+      if (!check.valid) {
+        const problems = check.errors.map(e => `${e.field}: ${e.message}`).join('; ');
+        throw new Error(`[${i}] table: ${problems}`);
       }
     }
 

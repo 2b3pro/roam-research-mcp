@@ -177,7 +177,8 @@ export function createResolutionContext(): ResolutionContext {
     placeholders: new Map(),
     levelStack: [],
     currentParent: null,
-    dailyPageUid: null
+    dailyPageUid: null,
+    internalNames: 0
   };
 }
 
