@@ -96,6 +96,7 @@ export interface RememberCommand {
   params: BlockParamsBase & {
     text: string;
     categories?: string[];
+    include_memories_tag?: boolean;  // Default true, as in roam_remember
     heading?: string;       // Heading text to nest under
   };
 }
@@ -165,6 +166,8 @@ export interface ResolutionContext {
   dailyPageUid: string | null;
   // How many names the translator has made up for blocks nobody named with `as`
   internalNames: number;
+  // The graph's memories tag, for `remember`; null when the graph has it turned off
+  memoriesTag: string | null;
 }
 
 // Batch result
