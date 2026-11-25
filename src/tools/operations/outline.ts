@@ -13,7 +13,8 @@ import {
   convertToRoamMarkdown,
   hasMarkdownTable,
   type BatchAction,
-  type BlockInfo
+  type BlockInfo,
+  type MarkdownNode
 } from '../../markdown-utils.js';
 import { executeStagedBatch } from '../../shared/staged-batch.js';
 import type { OutlineItem, NestedBlock } from '../types/index.js';
@@ -35,6 +36,11 @@ function blockInfoToNestedBlocks(blocks: BlockInfo[], level = 0): NestedBlock[] 
     order: index,
     children: block.children.length > 0 ? blockInfoToNestedBlocks(block.children, level + 1) : undefined
   }));
+}
+
+/** A parsed markdown tree as a flat list, parents before their children. */
+function inDocumentOrder(nodes: MarkdownNode[]): MarkdownNode[] {
+  return nodes.flatMap(node => [node, ...inDocumentOrder(node.children)]);
 }
 
 export class OutlineOperations {
@@ -325,32 +331,46 @@ export class OutlineOperations {
         prevLevel = item.level;
       }
 
-      // Convert outline items to markdown-like structure
-      const markdownContent = validOutline
-        .map(item => {
-          const indent = '  '.repeat(item.level - 1);
-          // If the item text starts with a markdown heading (e.g., #, ##, ###),
-          // treat it as a direct heading without adding a bullet or outline indentation.
-          // NEW CHANGE: Handle standalone code blocks - do not prepend bullet
-          const isCodeBlock = item.text?.startsWith('```') && item.text.endsWith('```') && item.text.includes('\n');
-          return isCodeBlock ? `${indent}${item.text?.trim()}` : `${indent}- ${item.text?.trim()}`;
-        })
-        .join('\n');
+      // Convert outline items to markdown-like structure, one chunk per item
+      const chunks = validOutline.map(item => {
+        const indent = '  '.repeat(item.level - 1);
+        // If the item text starts with a markdown heading (e.g., #, ##, ###),
+        // treat it as a direct heading without adding a bullet or outline indentation.
+        // NEW CHANGE: Handle standalone code blocks - do not prepend bullet
+        const isCodeBlock = item.text?.startsWith('```') && item.text.endsWith('```') && item.text.includes('\n');
+        return isCodeBlock ? `${indent}${item.text?.trim()}` : `${indent}- ${item.text?.trim()}`;
+      });
 
       // Convert to Roam markdown format
-      const convertedContent = convertToRoamMarkdown(markdownContent);
+      const convertedContent = convertToRoamMarkdown(chunks.join('\n'));
 
       // Parse markdown into hierarchical structure
-      // We pass the original OutlineItem properties (heading, children_view_type)
-      // along with the parsed content to the nodes.
-      const nodes = parseMarkdown(convertedContent).map((node, index) => {
-        const outlineItem = validOutline[index];
-        return {
-          ...node,
-          ...(outlineItem?.heading && { heading_level: outlineItem.heading }),
-          ...(outlineItem?.children_view_type && { children_view_type: outlineItem.children_view_type })
-        };
-      });
+      const nodes = parseMarkdown(convertedContent);
+
+      // Give each item's `heading` and `children_view_type` to the block that
+      // item became. The parser returns a tree, in the order the lines were
+      // written, so walking it depth-first meets the blocks in item order; an
+      // item is one block unless its text spans several lines, and parsing its
+      // chunk alone says how many. These used to be copied by position onto the
+      // top-level blocks only, which put a nested item's settings on a later
+      // top-level block and gave nested blocks none.
+      const blocksInOrder = inDocumentOrder(nodes);
+      const firstBlockOf: number[] = [];
+      let nextBlock = 0;
+      for (const chunk of chunks) {
+        firstBlockOf.push(nextBlock);
+        nextBlock += inDocumentOrder(parseMarkdown(chunk)).length;
+      }
+      // The counts can disagree when a code fence left open in one item takes
+      // in the items after it. No block can be traced to its item then, so
+      // none is given settings that may belong to another.
+      if (nextBlock === blocksInOrder.length) {
+        validOutline.forEach((item, index) => {
+          const node = blocksInOrder[firstBlockOf[index]];
+          if (item.heading) node.heading_level = item.heading;
+          if (item.children_view_type) node.children_view_type = item.children_view_type;
+        });
+      }
 
       // Convert nodes to batch actions (flat list)
       const resolvedOrder: 'first' | 'last' | number = order !== undefined ? order : 'last';
