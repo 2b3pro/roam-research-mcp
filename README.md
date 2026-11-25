@@ -20,6 +20,14 @@ Whether you want to give Claude superpowers over your knowledge base or just wan
 
 ![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
 
+## What's New in v6.3
+
+**The CLI and the MCP tools agree on tables, headings and nesting.** A `table` in `roam batch` was laid out column by column; it now uses the same row-by-row layout as `roam_create_table`. `roam save` nests what follows a heading by the same rule as `roam_import_markdown`, including when the content under the heading is an indented list. In `roam_create_outline`, `heading` and `children_view_type` now land on the item that asked for them at any depth, where a nested item's heading used to end up on a later top-level block.
+
+**Text that only looks like markup is stored as you wrote it.** `2 * 3 * 4` used to be stored as `2 __ 3 __ 4`, and `if a == b and c == d` as `if a ^^ b and c ^^ d`, because any two markers on a line were read as emphasis or a highlight. A marker now counts only when it touches the text it wraps: `*word*` is emphasis, `* word *` is not.
+
+**Upgrading:** a `table` row in `roam batch` needs a `label` and one cell for each header after the first, or the batch is refused before anything is written. Text that starts with `# `, `## ` or `### ` is now a heading in `roam_create_page` content and in a one-line `roam_import_markdown`. `roam save` of a file with a heading and indented content now nests that content under the heading; `--flatten` keeps the old result. See the [changelog](CHANGELOG.md) for the full list.
+
 ## What's New in v6.2
 
 **`roam batch` does what its help says.** Outline items can be plain strings (`"items": ["Goal 1", "Goal 2"]`) or `{text, level?}` objects. `--dry-run` writes nothing: a page that does not exist yet is listed in the plan, not created. `parent: "daily"` means today's daily page. A page created with `as` can be used as a parent, so the example in `roam batch --help` runs as written.
