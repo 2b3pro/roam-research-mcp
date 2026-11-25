@@ -73,29 +73,53 @@ export function validateTableInput(input: TableInput): TableValidationResult {
 }
 
 /**
+ * The placeholder names a table's blocks are created under.
+ *
+ * One batch resolves every `{{uid:name}}` it holds to one UID per name, so two
+ * tables built with the same names would be created on top of each other. A
+ * batch that can hold more than one table gives each its own names.
+ */
+export interface TablePlaceholderNames {
+  /** Name of the table block itself; the key it is reported under in `uid_map`. */
+  table: string;
+  /** Prefix for the names of the header and cell blocks. */
+  cellPrefix: string;
+}
+
+const SINGLE_TABLE_NAMES: TablePlaceholderNames = { table: 'table', cellPrefix: '' };
+
+/**
  * Builds batch actions for creating a Roam table structure.
  *
  * Roam tables have a specific nested structure:
  * - The table container block contains {{[[table]]}}
  * - Header row is nested deeply (each column nested under the previous)
  * - Data rows follow the same nesting pattern
+ *
+ * This is the one place a table's layout is decided: `roam_create_table`,
+ * tables in `roam_create_page` content and `roam batch` all build through it.
  */
-export function buildTableActions(input: TableInput): any[] {
+export function buildTableActions(
+  input: TableInput,
+  names: TablePlaceholderNames = SINGLE_TABLE_NAMES
+): any[] {
   const actions: any[] = [];
+  const tableUid = `{{uid:${names.table}}}`;
+  const cellUid = (name: string) => `{{uid:${names.cellPrefix}${name}}}`;
 
   // Create table container
   actions.push({
     action: 'create-block',
-    uid: '{{uid:table}}',
+    uid: tableUid,
     string: '{{[[table]]}}',
     location: { 'parent-uid': input.parent_uid, order: input.order ?? 'last' }
   });
 
   // Create header row with nested structure
   // In Roam tables, each column is nested under the previous column
-  let headerParent = '{{uid:table}}';
+  let headerParent = tableUid;
   for (let i = 0; i < input.headers.length; i++) {
-    const uid = `{{uid:header_${i}}}`;
+    const uid = cellUid(`header_${i}`);
     const headerText = input.headers[i] || ' ';  // Convert empty to space
     actions.push({
       action: 'create-block',
@@ -112,27 +136,27 @@ export function buildTableActions(input: TableInput): any[] {
     const row = input.rows[rowIdx];
 
     // Row label (first column) - child of table at position rowIdx + 1 (after header)
-    const labelUid = `{{uid:row_${rowIdx}_label}}`;
+    const labelUid = cellUid(`row_${rowIdx}_label`);
     const labelText = row.label || ' ';  // Convert empty to space
     actions.push({
       action: 'create-block',
       uid: labelUid,
       string: labelText,
-      location: { 'parent-uid': '{{uid:table}}', order: rowIdx + 1 }
+      location: { 'parent-uid': tableUid, order: rowIdx + 1 }
     });
 
     // Row cells - each cell is nested under the previous
     let cellParent = labelUid;
     for (let cellIdx = 0; cellIdx < row.cells.length; cellIdx++) {
-      const cellUid = `{{uid:row_${rowIdx}_cell_${cellIdx}}}`;
+      const uid = cellUid(`row_${rowIdx}_cell_${cellIdx}`);
       const cellText = row.cells[cellIdx] || ' ';  // Convert empty to space
       actions.push({
         action: 'create-block',
-        uid: cellUid,
+        uid,
         string: cellText,
         location: { 'parent-uid': cellParent, order: 0 }
       });
-      cellParent = cellUid;
+      cellParent = uid;
     }
   }
 

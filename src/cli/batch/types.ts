@@ -118,7 +118,7 @@ export interface PageCommand {
 export interface CodeblockCommand {
   command: 'codeblock';
   params: BlockParamsBase & {
-    language: string;
+    language?: string;
     code: string;
   };
 }
@@ -163,6 +163,8 @@ export interface ResolutionContext {
   currentParent: string | null;
   // Daily page UID (resolved once, cached)
   dailyPageUid: string | null;
+  // How many names the translator has made up for blocks nobody named with `as`
+  internalNames: number;
 }
 
 // Batch result

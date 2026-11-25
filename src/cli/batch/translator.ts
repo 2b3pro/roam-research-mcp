@@ -24,6 +24,7 @@ import {
   getDailyPageTitle
 } from './resolver.js';
 import { sanitizeTagName } from '../../utils/helpers.js';
+import { buildTableActions } from '../../tools/operations/table.js';
 
 /**
  * Translate a single command to batch actions
@@ -102,6 +103,19 @@ function registerPlaceholder(name: string, context: ResolutionContext): string {
   const placeholder = generatePlaceholder(name);
   context.placeholders.set(name, placeholder);
   return placeholder;
+}
+
+/**
+ * A name for a block the caller did not name with `as`, unique in this batch.
+ *
+ * These were stamped with `Date.now()`. Commands are translated in one
+ * synchronous pass, so two of a kind got the same stamp and the same names,
+ * and the batch created the second command's blocks under the first one's
+ * UIDs. A count held by the batch cannot repeat.
+ */
+function internalName(kind: string, context: ResolutionContext): string {
+  context.internalNames += 1;
+  return `_${kind}_${context.internalNames}`;
 }
 
 /**
@@ -253,68 +267,23 @@ function translateTodo(cmd: TodoCommand, context: ResolutionContext): BatchActio
 function translateTable(cmd: TableCommand, context: ResolutionContext): BatchAction[] {
   const { params } = cmd;
   const parentUid = getParentUid(params, context);
-  const actions: BatchAction[] = [];
 
-  // Table container
-  const tableContainerPlaceholder = params.as
-    ? registerPlaceholder(params.as, context)
-    : registerPlaceholder(`_table_${Date.now()}`, context);
+  // The layout is roam_create_table's: one builder, so the CLI and the MCP
+  // tool cannot disagree about it. This used to hang every cell under its
+  // column's header, which Roam reads as a table turned on its side (#40).
+  const scope = internalName('table', context);
+  const tableName = params.as ?? scope;
+  registerPlaceholder(tableName, context);
 
-  actions.push({
-    action: 'create-block',
-    uid: tableContainerPlaceholder,
-    string: '{{[[table]]}}',
-    location: {
-      'parent-uid': parentUid,
-      order: params.order ?? 'last'
-    }
-  });
-
-  // Create columns (headers)
-  const columnPlaceholders: string[] = [];
-  for (let i = 0; i < params.headers.length; i++) {
-    const colPlaceholder = registerPlaceholder(`_col_${i}_${Date.now()}`, context);
-    columnPlaceholders.push(colPlaceholder);
-
-    actions.push({
-      action: 'create-block',
-      uid: colPlaceholder,
-      string: params.headers[i] || ' ',
-      location: {
-        'parent-uid': tableContainerPlaceholder,
-        order: i
-      }
-    });
-  }
-
-  // Create rows under each column
-  for (let rowIdx = 0; rowIdx < params.rows.length; rowIdx++) {
-    const row = params.rows[rowIdx];
-
-    // First column gets the row label
-    actions.push({
-      action: 'create-block',
-      string: row.label || ' ',
-      location: {
-        'parent-uid': columnPlaceholders[0],
-        order: rowIdx
-      }
-    });
-
-    // Remaining columns get the cells
-    for (let cellIdx = 0; cellIdx < row.cells.length; cellIdx++) {
-      actions.push({
-        action: 'create-block',
-        string: row.cells[cellIdx] || ' ',
-        location: {
-          'parent-uid': columnPlaceholders[cellIdx + 1],
-          order: rowIdx
-        }
-      });
-    }
-  }
-
-  return actions;
+  return buildTableActions(
+    {
+      parent_uid: parentUid,
+      order: params.order,
+      headers: params.headers,
+      rows: params.rows
+    },
+    { table: tableName, cellPrefix: `${scope}_` }
+  );
 }
 
 /**
@@ -388,7 +357,7 @@ function translateOutline(cmd: OutlineCommand, context: ResolutionContext): Batc
     };
 
     // Register placeholder
-    const placeholderName = item.as || `_outline_${actions.length}_${Date.now()}`;
+    const placeholderName = item.as || internalName('outline', context);
     action.uid = registerPlaceholder(placeholderName, context);
 
     if (item.heading) {
@@ -458,8 +427,9 @@ function translateCodeblock(cmd: CodeblockCommand, context: ResolutionContext): 
   const { params } = cmd;
   const parentUid = getParentUid(params, context);
 
-  // Format code with triple backticks
-  const codeContent = '```' + params.language + '\n' + params.code + '\n```';
+  // Format code with triple backticks. `language` is optional: left out, it
+  // used to be written into the fence as the word "undefined".
+  const codeContent = '```' + (params.language ?? '') + '\n' + params.code + '\n```';
 
   const action: BatchAction = {
     action: 'create-block',

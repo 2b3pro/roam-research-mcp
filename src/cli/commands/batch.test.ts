@@ -332,3 +332,136 @@ describe('roam batch: the example in --help', () => {
       .toBe(link.location['parent-uid']);
   });
 });
+
+describe('roam batch: table (#40)', () => {
+  /** The text of each block under `parentUid`, in the order Roam is told to put them. */
+  function childrenOf(run: Run, parentUid: string): string[] {
+    return blockActions(run)
+      .filter((action) => action.location?.['parent-uid'] === parentUid)
+      .sort((a, b) => a.location.order - b.location.order)
+      .map((action) => action.block.string);
+  }
+
+  it('makes each row a child of the table block, each further column one level down', () => {
+    // The table from the report. Roam reads a table row by row: a child of the
+    // table block starts a row, and each cell after the first is the child of
+    // the cell before it.
+    const run = batch([
+      {
+        command: 'table',
+        params: {
+          parent: 'Test Page',
+          headers: ['', 'H1', 'H2'],
+          rows: [
+            { label: 'R1', cells: ['a', 'b'] },
+            { label: 'R2', cells: ['c', 'd'] },
+          ],
+        },
+      },
+    ]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    const table = blockWithText(run, '{{[[table]]}}');
+    expect(table.location['parent-uid']).toBe('page00001');
+    expect(childrenOf(run, table.block.uid)).toEqual([' ', 'R1', 'R2']);
+
+    const under = (text: string) => childrenOf(run, blockWithText(run, text).block.uid);
+    expect(under(' ')).toEqual(['H1']);
+    expect(under('H1')).toEqual(['H2']);
+    expect(under('H2')).toEqual([]);
+    expect(under('R1')).toEqual(['a']);
+    expect(under('a')).toEqual(['b']);
+    expect(under('R2')).toEqual(['c']);
+    expect(under('c')).toEqual(['d']);
+  });
+
+  it('keeps two tables in one batch apart', () => {
+    const table = (corner: string, header: string, label: string, cell: string) => ({
+      command: 'table',
+      params: { parent: 'Test Page', headers: [corner, header], rows: [{ label, cells: [cell] }] },
+    });
+    const run = batch([table('first', 'P', 'p-row', 'p-cell'), table('second', 'Q', 'q-row', 'q-cell')]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    const tables = blockActions(run).filter((action) => action.block?.string === '{{[[table]]}}');
+    expect(tables).toHaveLength(2);
+    expect(tables[0].block.uid).not.toBe(tables[1].block.uid);
+    expect(childrenOf(run, tables[0].block.uid)).toEqual(['first', 'p-row']);
+    expect(childrenOf(run, tables[1].block.uid)).toEqual(['second', 'q-row']);
+    const uids = blockActions(run).map((action) => action.block.uid);
+    expect(new Set(uids).size).toBe(uids.length);
+  });
+
+  it('names the table block with `as`, so a later command can use it as a parent', () => {
+    const run = batch([
+      {
+        command: 'table',
+        params: { parent: 'Test Page', as: 'tbl', headers: ['', 'H1'], rows: [{ label: 'R1', cells: ['a'] }] },
+      },
+      { command: 'create', params: { parent: '{{tbl}}', text: 'a row added afterwards' } },
+    ]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    const table = blockWithText(run, '{{[[table]]}}');
+    expect(JSON.parse(run.stdout).uid_map.tbl).toBe(table.block.uid);
+    expect(blockWithText(run, 'a row added afterwards').location['parent-uid']).toBe(table.block.uid);
+  });
+
+  it.each([
+    ['more cells than the headers leave room for', { label: 'R1', cells: ['a', 'b'] }, 'rows[0].cells'],
+    ['fewer cells than the headers call for', { label: 'R1', cells: [] }, 'rows[0].cells'],
+    ['no label', { cells: ['a'] }, 'rows[0].label'],
+    ['no cells', { label: 'R1' }, 'rows[0].cells'],
+  ])('refuses a row with %s, naming it, before anything is written', (_label, row, where) => {
+    // The same check roam_create_table makes, so the two refuse the same tables.
+    const run = batch([
+      { command: 'table', params: { parent: 'Test Page', headers: ['', 'H1'], rows: [row] } },
+    ]);
+
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain(`[0] table: ${where}`);
+    expect(run.writes).toEqual([]);
+  });
+});
+
+describe('roam batch: commands of one kind in one batch do not share blocks', () => {
+  it('gives each of two outlines its own blocks', () => {
+    // Blocks without an `as` were named with the clock, and two outlines
+    // translated in the same millisecond got the same names: the second
+    // outline's blocks were created under the first one's UIDs.
+    const run = batch([
+      { command: 'outline', params: { parent: 'Test Page', items: ['A-top', { text: 'A-child', level: 2 }] } },
+      { command: 'outline', params: { parent: 'Test Page', items: ['B-top', { text: 'B-child', level: 2 }] } },
+    ]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    const uid = (text: string) => blockWithText(run, text).block.uid;
+    expect(new Set(['A-top', 'A-child', 'B-top', 'B-child'].map(uid)).size).toBe(4);
+    expect(blockWithText(run, 'A-child').location['parent-uid']).toBe(uid('A-top'));
+    expect(blockWithText(run, 'B-child').location['parent-uid']).toBe(uid('B-top'));
+  });
+});
+
+describe('roam batch: codeblock', () => {
+  it('writes a bare fence when no language is given, as the help allows', () => {
+    const run = batch([{ command: 'codeblock', params: { parent: 'Test Page', code: 'x = 1' } }]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(blockWithText(run, '```\nx = 1\n```').location['parent-uid']).toBe('page00001');
+  });
+
+  it('puts a given language on the fence', () => {
+    const run = batch([
+      { command: 'codeblock', params: { parent: 'Test Page', code: 'x = 1', language: 'python' } },
+    ]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(blockWithText(run, '```python\nx = 1\n```').location['parent-uid']).toBe('page00001');
+  });
+});
