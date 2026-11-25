@@ -401,7 +401,12 @@ function parseMarkdown(markdown: string): MarkdownNode[] {
       contentToParse = trimmedLine.substring(bulletMatch[0].length);
     } else {
       indentation = line.match(/^\s*/)?.[0].length ?? 0;
-      contentToParse = trimmedLine;
+      // Without its indentation, so that a heading is a heading at any depth.
+      // The markdown read writes a nested heading as an indented line of
+      // hashes with no bullet; read with its leading spaces, that line was not
+      // a heading, and writing a page back turned each nested heading into a
+      // plain block with the hashes in its text.
+      contentToParse = trimmedLine.trimStart();
     }
 
     const level = getLevel(indentation);

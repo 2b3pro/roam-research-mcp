@@ -54,6 +54,10 @@ const PAGES = {
   // A page holding a block with several versions, and a page that block links to.
   'Version Fixture': 'versnPg01',
   'Version Target': 'versnPg02',
+  // Pages whose blocks carry heading levels, for reading a page as markdown and
+  // writing it back. The second has headings at the top level only.
+  'Heading Fixture': 'headPg001',
+  'Top Heading Fixture': 'headPg002',
 };
 
 /**
@@ -188,6 +192,37 @@ BLOCKS.versnPg01 = [
   ['verActCh1', 'Note under the final wording verneedle', 0, 'verActiv1'],
 ];
 BLOCKS.versnPg02 = [];
+
+/**
+ * Pages with headings. A heading is a block like any other, with a level kept
+ * beside its string (HEADINGS below), and it can sit at any depth: here one is
+ * nested under a plain block and one under another heading. Those are the
+ * shapes the markdown read renders as an indented line of hashes with no
+ * bullet, which the parser has to read back as the same heading.
+ */
+BLOCKS.headPg001 = [
+  ['hdgrp0001', 'Roundtrip group', 0, 'headPg001'],
+  ['hdinner01', 'Roundtrip inner heading', 0, 'hdgrp0001'],
+  ['hdline001', 'Line under the inner heading', 0, 'hdinner01'],
+  ['hdsec0001', 'Roundtrip section', 1, 'headPg001'],
+  ['hdsub0001', 'Roundtrip subsection', 0, 'hdsec0001'],
+  ['hdpara001', 'Paragraph under the subsection', 0, 'hdsub0001'],
+  ['hdtail001', 'Roundtrip tail', 2, 'headPg001'],
+];
+BLOCKS.headPg002 = [
+  ['hdtop0001', 'Control section one', 0, 'headPg002'],
+  ['hdtoppar1', 'Paragraph under control section one', 0, 'hdtop0001'],
+  ['hdtop0002', 'Control section two', 1, 'headPg002'],
+];
+
+/** uid -> heading level (1-3). A block that is not listed is not a heading. */
+const HEADINGS = {
+  hdinner01: 2,
+  hdsec0001: 2,
+  hdsub0001: 3,
+  hdtop0001: 2,
+  hdtop0002: 2,
+};
 const SUPERSEDED = {
   versnPg01: [
     ['verOld001', '{{[[TODO]]}} first draft verneedle', 1, 'versnPg01'],
@@ -335,6 +370,7 @@ function pullTree(uid) {
         ':block/uid': childUid,
         ':block/string': str,
         ':block/order': order,
+        ...(HEADINGS[childUid] && { ':block/heading': HEADINGS[childUid] }),
       };
       const grandchildren = pullTree(childUid);
       if (grandchildren.length > 0) node[':block/children'] = grandchildren;
@@ -457,13 +493,13 @@ function answer(query, args) {
   // string and an order.
   if (query.includes(':find ?uid ?string ?order ?heading')) {
     const asked = new Set(args?.[0] ?? []);
-    return [...allBlocks(), ...supersededBlocks()].filter(([uid]) => asked.has(uid)).map(([uid, text, order]) => [uid, text, order, 0]);
+    return [...allBlocks(), ...supersededBlocks()].filter(([uid]) => asked.has(uid)).map(([uid, text, order]) => [uid, text, order, HEADINGS[uid] ?? 0]);
   }
   // `roam_fetch_block`'s own lookup of the one block it was asked for
   // (BlockRetrievalOperations.fetchBlock): string, order and heading by UID.
   if (query.includes(':find ?string ?order ?heading')) {
     const found = [...allBlocks(), ...supersededBlocks()].find(([uid]) => uid === args?.[0]);
-    return found ? [[found[1], found[2], 0]] : [];
+    return found ? [[found[1], found[2], HEADINGS[found[0]] ?? 0]] : [];
   }
   if (query.includes(':find ?uid ?string')) {
     const asked = new Set(args?.[0] ?? []);
@@ -473,7 +509,7 @@ function answer(query, args) {
   // the blocks under it are still its children.
   if (query.includes(':find ?parentUid ?childUid ?childString')) {
     const asked = new Set(args?.[0] ?? []);
-    return [...allBlocks(), ...supersededDescendants()].filter(([, , , parent]) => asked.has(parent)).map(([uid, text, order, parent]) => [parent, uid, text, order, 0]);
+    return [...allBlocks(), ...supersededDescendants()].filter(([, , , parent]) => asked.has(parent)).map(([uid, text, order, parent]) => [parent, uid, text, order, HEADINGS[uid] ?? 0]);
   }
 
   // Existence check for a set of UIDs (`batchCheckExistence` in
@@ -515,9 +551,9 @@ function answer(query, args) {
     return { ':block/uid': pageUid, ':block/children': pullTree(pageUid) };
   }
 
-  // Heading levels. Nothing in the fixture carries one.
+  // Heading levels of the blocks on a page: [uid, level] for each heading.
   if (query.includes(':find ?block-uid ?heading')) {
-    return [];
+    return (BLOCKS[args?.[1]] ?? []).filter(([uid]) => HEADINGS[uid]).map(([uid]) => [uid, HEADINGS[uid]]);
   }
 
   // Hidden-root candidates, as collectHiddenUids asks for them.

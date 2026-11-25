@@ -93,3 +93,16 @@ describe('roam_import_markdown: content that is one line', () => {
     expect(created[0].block.heading).toBeUndefined();
   });
 });
+
+
+describe('roam_import_markdown: a heading on an indented line', () => {
+  it('reads hashes on an indented line with no bullet as a heading', async () => {
+    // The shape the markdown read gives a heading nested under another block.
+    const created = await importMarkdown('- Imported group\n  ## Imported inner heading\n    - Imported inner line');
+
+    const inner = created.find((action) => action.block.string === 'Imported inner heading');
+    expect(inner, JSON.stringify(created.map((action) => action.block))).toBeDefined();
+    expect(inner!.block.heading).toBe(2);
+    expect(created.map((action) => action.block.string)).not.toContain('## Imported inner heading');
+  });
+});
