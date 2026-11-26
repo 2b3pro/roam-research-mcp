@@ -328,6 +328,11 @@ export const toolSchemas = {
             required: ['level']
           }
         },
+        log: {
+          type: 'boolean',
+          description: 'Log the page creation (default true): a new page is created by writing "Created page: [[Title]]" to today\'s daily page, and "Processed: [[today]]" is added to the page. Set false to create the page with neither line. Today\'s daily page never gets these lines.',
+          default: true
+        },
       }),
       required: ['title'],
     },

@@ -258,6 +258,43 @@ describe('roam batch: --simulate needs no graph', () => {
   });
 });
 
+describe('roam batch: page creation log lines (#52)', () => {
+  const logLines = (run: Run) => blockActions(run)
+    .map((action) => action.block?.string)
+    .filter((text) => /^(Created page|Processed): /.test(text ?? ''));
+
+  it('writes no log lines when the page it creates is today\'s daily page', () => {
+    const run = batch([{ command: 'todo', params: { text: 'Review project' } }]);
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(createdPageTitles(run)).toEqual([today()]);
+    expect(logLines(run)).toEqual([]);
+  });
+
+  it('logs the creation of any other page by default', () => {
+    const run = batch([{ command: 'create', params: { parent: 'Logged Page', text: 'x' } }]);
+
+    expect(run.code).toBe(0);
+    expect(logLines(run)).toEqual(['Created page: [[Logged Page]]', `Processed: [[${today()}]]`]);
+  });
+
+  it('creates pages without log lines under --no-log', () => {
+    const run = batch(
+      [
+        { command: 'create', params: { parent: 'Quiet Parent', text: 'x' } },
+        { command: 'page', params: { title: 'Quiet Page', content: [{ text: 'y', level: 1 }] } },
+      ],
+      '--no-log',
+    );
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(createdPageTitles(run)).toEqual(['Quiet Parent', 'Quiet Page']);
+    expect(logLines(run)).toEqual([]);
+  });
+});
+
 describe('roam batch: parent "daily" (#36)', () => {
   it('plans against today\'s daily page, not a page titled "daily"', () => {
     const run = batch([{ command: 'create', params: { parent: 'daily', text: 'x' } }], '--dry-run');
@@ -278,9 +315,10 @@ describe('roam batch: parent "daily" (#36)', () => {
     // the only page it may create.
     expect(createdPageTitles(run)).toEqual([today()]);
     expect(JSON.stringify(run.writes)).not.toContain('[[daily]]');
-    // Every block of this run sits on that one page, the new block included.
-    const parents = new Set(blockActions(run).map((action) => action.location['parent-uid']));
-    expect(parents.size).toBe(1);
+    // The new block is the only block written. This used to check only that
+    // every block sat on one page, which the "Created page" and "Processed"
+    // lines also did (#52).
+    expect(blockActions(run).map((action) => action.block?.string)).toEqual(['x']);
     expect(blockWithText(run, 'x').location['parent-uid']).toMatch(/^p\d{8}$/);
   });
 

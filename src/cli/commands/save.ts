@@ -170,6 +170,7 @@ interface SaveOptions extends GraphOptions {
   nest?: boolean;            // With --update: nest what follows a heading under it
   lines?: boolean;           // Treat each non-empty line as a separate block (skip markdown parsing)
   order?: string;            // Insertion position: "first", "last", or integer (default: "last")
+  log?: boolean;             // With --title: log the page creation (false with --no-log)
 }
 
 interface ContentBlock {
@@ -195,6 +196,7 @@ export function createSaveCommand(): Command {
     .option('--nest', 'With --update: put what follows a heading under it, as a save without --update does')
     .option('--lines', 'Treat each non-empty line as a separate block (bypass markdown parsing)')
     .option('--order <position>', 'Insertion position for top-level blocks: "first", "last", or integer (default: "last")')
+    .option('--no-log', 'With --title: create the page without writing "Created page: [[Title]]" to today\'s daily page or "Processed: [[date]]" to the page')
     .option('-g, --graph <name>', 'Target graph key (multi-graph mode)')
     .option('--write-key <key>', 'Write confirmation key (non-default graphs)')
     .option('--debug', 'Show debug information')
@@ -482,7 +484,7 @@ JSON format (--json):
               exitWithError(`Failed to update page '${pageTitle}'`);
             }
           } else {
-            const result = await pageOps.createPage(pageTitle, contentBlocks);
+            const result = await pageOps.createPage(pageTitle, contentBlocks, { log: options.log });
 
             if (result.success) {
               console.log(`Created page '${pageTitle}' (uid: ${result.page_uid})`);
