@@ -1,5 +1,14 @@
 # Changelog
 
+### v6.5.0 (2026-11-25)
+
+Creating today's daily page no longer writes two lines onto it that point back at itself, and page creation logging can be turned off. This is a minor release because `roam_create_page` gains a parameter; nothing changes unless you pass it.
+
+- **Today's daily page:** a new page is logged by writing "Created page: [[Title]]" to today's daily page and "Processed: [[date]]" to the new page. When the page being created was today's daily page, both lines landed on it. `roam batch` did this with `parent: "daily"`, or with a `todo` or `remember` that names no page, on a day with no daily page yet; so did `roam_create_page` and `roam save --title` given today's title. Today's daily page now never gets either line. Reported with a full trace by Danyal Aytekin in [#52](https://github.com/2b3pro/roam-research-mcp/issues/52); fixed in [#53](https://github.com/2b3pro/roam-research-mcp/pull/53).
+- **Page creation logging is optional:** `log: false` on `roam_create_page`, or `--no-log` on `roam save --title` and `roam batch`, creates the page directly with neither line. Logging stays on by default. A daily-note title created this way still gets its date UID (`MM-DD-YYYY`) from Roam.
+- **Migration:** none. Every page except today's daily page is logged exactly as before. `createPage` on today's daily page when it already exists no longer appends "Processed: [[date]]" to it.
+- **Verification:** all 718 tests pass across 59 files, including new tests that run the server and the `roam batch` and `roam save` binaries against a fixtured backend and check the requests Roam receives. Five of them fail against the code before the fix. `roam save --title --no-log` was run against a live graph for a plain title and a daily-note title: each page held only its content, nothing referenced it, and the daily-note page got its date UID. Both pages were then deleted.
+
 ### v6.4.0 (2026-11-25)
 
 Updates can make a list numbered, a memory saved through `roam batch` is one `roam_recall` can find, and `roam save --update` can nest under headings the way the first save did. This is a minor release because `remember` in a batch now writes a different block by default.

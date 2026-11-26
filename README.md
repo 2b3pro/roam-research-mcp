@@ -18,6 +18,14 @@ Whether you want to give Claude superpowers over your knowledge base or just wan
 
 ![Before and after: copy-pasting notes into Roam by hand, versus Claude and your terminal reading and writing the graph directly — install with npm i -g roam-research-mcp, then `roam save "idea"` or pipe with `echo "Buy milk" | roam save --todo`](./roam-research-mcp-sketchnote.png)
 
+## What's New in v6.5
+
+**Today's daily page no longer logs its own creation.** Creating a page writes "Created page: [[Title]]" to today's daily page and "Processed: [[date]]" to the new page. When the new page was today's daily page, it got both lines pointing back at itself. It now gets neither.
+
+**Page creation logging is optional.** Pass `log: false` to `roam_create_page`, or `--no-log` to `roam save --title` and `roam batch`, to create a page without those lines. Logging stays on by default.
+
+**Upgrading:** nothing to change. See the [changelog](CHANGELOG.md) for the full list.
+
 ## What's New in v6.4
 
 **Updates can make a list numbered.** Write `1. First` under a block in `roam_update_page_markdown` or `roam save --update` and that block's children become a numbered list. Before, the number was dropped and the item arrived as a plain bullet. Bullets never undo it, so a page you read and write back keeps its numbered lists.
