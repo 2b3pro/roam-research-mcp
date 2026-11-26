@@ -1,23 +1,51 @@
-name: Publish to npm
+name: Stage npm release
+
+# Publishing a GitHub release stages that version on npm. It does not go
+# live until a maintainer approves it with 2FA, on npmjs.com (Staged
+# Packages tab) or with `npm stage approve roam-research-mcp@<version>`.
+#
+# Users install with `npx -y roam-research-mcp` and no version pin, so every
+# published version reaches every user. The 2FA approval is the review step
+# before that happens.
+#
+# Authentication is npm trusted publishing (OIDC): no token is stored. The
+# trusted publisher on npmjs.com names this repository and this file
+# (`publish.yml`) and allows `npm stage publish` only.
 
 on:
   release:
     types: [published]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
-  publish:
+  stage:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      # Staged publishing needs npm 11.15.0 or later.
+      - run: npm install -g npm@11
+      # Stage only the version the release names.
+      - name: Check the tag matches package.json
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Release tag $GITHUB_REF_NAME does not match package.json $version"
+            exit 1
+          fi
       - run: npm ci
-      - run: npm run build
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm test
+      # The same steps as prepublishOnly, run explicitly: npm's docs do not say
+      # whether `npm stage publish` runs that script. Run in CI,
+      # CUSTOM_INSTRUCTIONS_PREFIX is unset, so only the public cheatsheet
+      # layer is bundled.
+      - run: npm run clean && npm run build && node scripts/check-bundled-cheatsheet.mjs
+      # Provenance is generated automatically under trusted publishing.
+      - run: npm stage publish
