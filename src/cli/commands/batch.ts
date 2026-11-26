@@ -27,6 +27,7 @@ interface BatchOptions extends GraphOptions {
   debug?: boolean;
   dryRun?: boolean;
   simulate?: boolean;
+  log?: boolean;
 }
 
 // Required params per command type
@@ -201,6 +202,7 @@ export function createBatchCommand(): Command {
     .option('--debug', 'Show debug information')
     .option('--dry-run', 'Validate and show planned actions without executing')
     .option('--simulate', 'Validate structure offline (no API calls)')
+    .option('--no-log', 'Create pages without the "Created page" and "Processed" log lines')
     .option('-g, --graph <name>', 'Target graph key (for multi-graph mode)')
     .option('--write-key <key>', 'Write confirmation key (for non-default graphs)')
     .addHelpText('after', `
@@ -230,7 +232,8 @@ Parent accepts: block UID, "daily" (today's daily page), page title, or {{placeh
 
 A page title that does not exist yet is created. Creating a page also writes
 "Created page: [[Title]]" to today's daily page and "Processed: [[date]]" to
-the new page. --dry-run lists such pages and creates nothing.
+the new page, unless --no-log is given. Today's daily page never gets these
+lines. --dry-run lists such pages and creates nothing.
 
 Example:
   [
@@ -354,7 +357,7 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
             }
             const pageOps = new PageOperations(graph);
             for (const title of unresolved) {
-              const result = await pageOps.createPage(title);
+              const result = await pageOps.createPage(title, undefined, { log: options.log });
               if (result.success && result.page_uid) {
                 context.pageUids.set(title, result.page_uid);
                 if (options.debug) {
@@ -435,7 +438,8 @@ Output (JSON): { success, pages_created, actions_executed, uid_map? }
                 text: item.text,
                 level: item.level,
                 heading: item.heading
-              }))
+              })),
+              { log: options.log }
             );
 
             if (!result.success) {

@@ -254,11 +254,12 @@ export class RoamServer {
           }
 
           case 'roam_create_page': {
-            const { title, content } = cleanedArgs as {
+            const { title, content, log } = cleanedArgs as {
               title: string;
               content?: ContentItem[];
+              log?: boolean;
             };
-            const result = await toolHandlers.createPage(title, content);
+            const result = await toolHandlers.createPage(title, content, { log });
             return toolResult(request.params.name, result);
           }
 

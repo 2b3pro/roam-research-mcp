@@ -16,6 +16,7 @@ import {
 import { executeStagedBatch } from '../../shared/staged-batch.js';
 import { escapeBlockString, unescapeBlockString, needsNewlineEscaping, ESCAPED_NEWLINES_MARKER, SOFT_BREAK_SENTINEL } from '../../shared/block-escaping.js';
 import { getPageUidCache } from '../../cache/page-uid-cache.js';
+import { formatRoamDate } from '../../utils/helpers.js';
 import { buildTableActions, type TableRow } from './table.js';
 import { BatchOperations } from './batch.js';
 import {
@@ -51,17 +52,6 @@ export interface TableContentItem {
 }
 
 export type ContentItem = TextContentItem | TableContentItem;
-
-// Helper to get ordinal suffix for dates
-function getOrdinalSuffix(day: number): string {
-  if (day > 3 && day < 21) return 'th'; // Handles 11th, 12th, 13th
-  switch (day % 10) {
-    case 1: return 'st';
-    case 2: return 'nd';
-    case 3: return 'rd';
-    default: return 'th';
-  }
-}
 
 export class PageOperations {
   private batchOps: BatchOperations;
@@ -132,9 +122,21 @@ export class PageOperations {
     }
   }
 
+  /**
+   * Create a page, or find it if it exists, and add `content` to it.
+   *
+   * By default (`log: true`) a new page is created by writing
+   * "Created page: [[Title]]" to today's daily page, and "Processed: [[today]]"
+   * is added to the page. `log: false` creates the page directly and writes
+   * neither line.
+   *
+   * Today's daily page never gets either line: both would land on the page
+   * itself and only point back at it (issue #52).
+   */
   async createPage(
     title: string,
-    content?: ContentItem[]
+    content?: ContentItem[],
+    options: { log?: boolean } = {}
   ): Promise<{
     success: boolean;
     /**
@@ -147,6 +149,9 @@ export class PageOperations {
   }> {
     // Ensure title is properly formatted
     const pageTitle = String(title).trim();
+    const dailyPageTitle = formatRoamDate(new Date());
+    // The log lines are skipped on today's daily page whatever `log` says.
+    const log = (options.log ?? true) && pageTitle !== dailyPageTitle;
 
     let pageUid: string | undefined;
 
@@ -164,17 +169,33 @@ export class PageOperations {
         // Page exists, use its UID and cache it
         pageUid = findResults[0][0];
         getPageUidCache(this.graph).set(pageTitle, pageUid);
+      } else if (!log) {
+        // Create the page directly. Roam gives a daily-note title its date UID
+        // (MM-DD-YYYY) itself, so the UID is read back rather than chosen here.
+        try {
+          await createRoamPage(this.graph, {
+            action: 'create-page',
+            page: { title: pageTitle }
+          });
+          // Small delay for the new page to be available to queries and as a parent
+          await new Promise(resolve => setTimeout(resolve, 400));
+          const results = await q(this.graph, findQuery, [pageTitle]) as FindResult[];
+          if (!results || results.length === 0) {
+            throw new Error(`Could not find created page "${pageTitle}"`);
+          }
+          pageUid = results[0][0];
+          getPageUidCache(this.graph).onPageCreated(pageTitle, pageUid);
+        } catch (error) {
+          rethrowRoamError(error);
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Failed to create page: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
       } else {
         // Create new page by adding a page reference to today's daily page
         // This leverages Roam's native behavior: [[Page Title]] creates the page instantly
         try {
-          // Get today's daily page title
-          const today = new Date();
-          const day = today.getDate();
-          const month = today.toLocaleString('en-US', { month: 'long' });
-          const year = today.getFullYear();
-          const dailyPageTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
-
           // Get or create daily page UID
           const dailyPageQuery = `[:find ?uid . :where [?e :node/title ${ednString(dailyPageTitle)}] [?e :block/uid ?uid]]`;
           let dailyPageUid = await q(this.graph, dailyPageQuery, []) as unknown as string | null;
@@ -431,18 +452,14 @@ export class PageOperations {
       }
     }
 
-    // Add a "Processed: [[date]]" block as the last block of the newly created page
-    const today = new Date();
-    const day = today.getDate();
-    const month = today.toLocaleString('en-US', { month: 'long' });
-    const year = today.getFullYear();
-    const formattedTodayTitle = `${month} ${day}${getOrdinalSuffix(day)}, ${year}`;
-
-    await executeBatchSafe(this.graph, [{
-      action: 'create-block',
-      location: { 'parent-uid': pageUid, order: 'last' },
-      block: { string: `Processed: [[${formattedTodayTitle}]]` }
-    }], 'add Processed block');
+    // Add a "Processed: [[date]]" block as the last block of the page
+    if (log) {
+      await executeBatchSafe(this.graph, [{
+        action: 'create-block',
+        location: { 'parent-uid': pageUid, order: 'last' },
+        block: { string: `Processed: [[${dailyPageTitle}]]` }
+      }], 'add Processed block');
+    }
 
     return { success: true, page_uid: pageUid };
   }

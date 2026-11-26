@@ -57,8 +57,8 @@ export class ToolHandlers {
     return this.pageOps.findPagesModifiedToday(limit, offset, sort_order);
   }
 
-  async createPage(title: string, content?: ContentItem[]) {
-    return this.pageOps.createPage(title, content);
+  async createPage(title: string, content?: ContentItem[], options?: { log?: boolean }) {
+    return this.pageOps.createPage(title, content, options);
   }
 
   async fetchPageByTitle(title: string, format?: 'markdown' | 'raw' | 'structure') {

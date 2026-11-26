@@ -319,6 +319,28 @@ describe('roam save --page', () => {
   });
 });
 
+describe('roam save --title: page creation log lines (#52)', () => {
+  const logLines = (run: Run) => run.blocks
+    .map((b) => b.block?.string)
+    .filter((text) => /^(Created page|Processed): /.test(text ?? ''));
+
+  it('logs the new page by default', () => {
+    const run = save('logged text', '--title', 'Save Logged Page');
+
+    expect(run.code).toBe(0);
+    expect(logLines(run)).toHaveLength(2);
+  });
+
+  it('creates the page with neither line under --no-log', () => {
+    const run = save('quiet text', '--title', 'Save Quiet Page', '--no-log');
+
+    expect(run.stderr).toBe('');
+    expect(run.code).toBe(0);
+    expect(run.pages.map((p) => p.page?.title)).toEqual(['Save Quiet Page']);
+    expect(logLines(run)).toEqual([]);
+  });
+});
+
 describe('roam save --help', () => {
   const help = () => {
     const run = save('--help');
